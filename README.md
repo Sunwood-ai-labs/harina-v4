@@ -1,100 +1,97 @@
+<div align="center">
+  <img src="./docs/public/brand/harina-hero.svg" alt="Harina Receipt Bot hero" width="100%" />
+  <h1>Harina Receipt Bot</h1>
+  <p>Discord receipt intake for Gemini, Google Drive, and Google Sheets.</p>
+</div>
+
 [日本語](./README.ja.md)
 
-# Harina Receipt Bot
+![Python](https://img.shields.io/badge/Python-3.12-1E3A34?style=for-the-badge&logo=python&logoColor=white)
+![Gemini](https://img.shields.io/badge/Gemini-Receipt%20Extraction-E68B2C?style=for-the-badge)
+![Docker Compose](https://img.shields.io/badge/Docker%20Compose-Self--Hosted-36544C?style=for-the-badge&logo=docker&logoColor=white)
+![CI](https://img.shields.io/github/actions/workflow/status/Sunwood-ai-labs/harina-v4/ci.yml?branch=main&style=for-the-badge&label=CI)
+![License](https://img.shields.io/github/license/Sunwood-ai-labs/harina-v4?style=for-the-badge)
 
-Discord bot that watches uploaded receipt images, extracts structured data with Gemini, stores the original image in Google Drive, and appends the parsed result to Google Sheets. The runtime is Python, managed with `uv`, and shipped with Docker Compose for home-server deployment.
+## ✨ Overview
 
-## Features
+Harina Receipt Bot is a Python Discord bot for self-hosted receipt capture workflows. Drop a receipt image into Discord, let Gemini extract the structured fields, archive the original image in Google Drive, and append the normalized result to Google Sheets.
 
-- Detects receipt images posted in a Discord channel
-- Extracts merchant, total, date, taxes, payment method, and line items with Gemini
-- Uploads the original image to a Google Drive folder
-- Appends normalized receipt data to a Google Spreadsheet
-- Creates the spreadsheet header row automatically on first boot
-- Runs with `uv` locally and `docker compose` on the server
+## 🚀 Highlights
 
-## Architecture
+- Watches receipt images posted in Discord channels
+- Extracts merchant, date, totals, tax, payment method, OCR-like text, and line items with Gemini
+- Uploads the original image into a Google Drive folder
+- Appends one receipt row per image into Google Sheets
+- Runs locally with `uv` and on home servers with Docker Compose
 
-1. A Discord user uploads a receipt image.
+## 🧭 Flow
+
+1. A user uploads a receipt image in Discord.
 2. The bot downloads the attachment and sends it to Gemini.
-3. Gemini returns structured JSON for the receipt.
-4. The bot uploads the source image to Google Drive.
-5. The bot appends one row per receipt to Google Sheets.
-6. The bot replies in Discord with a short processing summary.
+3. Gemini returns normalized JSON.
+4. The source image is stored in Google Drive.
+5. A matching row is appended to Google Sheets.
+6. Discord receives a short processing summary.
 
-## Setup
-
-### 1. Discord bot
-
-- Create an application in the [Discord Developer Portal](https://discord.com/developers/applications)
-- Create a bot user and copy the bot token
-- Enable the `MESSAGE CONTENT INTENT`
-- Invite the bot with permissions to read messages, read attachments, add reactions, and send messages
-
-### 2. Gemini API
-
-- Create an API key in [Google AI Studio](https://aistudio.google.com/)
-- Put the key into `GEMINI_API_KEY`
-- The default model is `gemini-3-flash-preview`
-
-### 3. Google Drive and Sheets
-
-- Create a Google Cloud service account with Drive and Sheets API enabled
-- Download the JSON key or store its JSON text in an environment variable
-- Create a Drive folder for receipt images
-- Create a Google Spreadsheet for receipt rows
-- Share both the folder and spreadsheet with the service account email
-
-### 4. Environment variables
-
-Copy `.env.example` to `.env` and fill in:
+## ⚡ Quick Start
 
 ```bash
-DISCORD_TOKEN=...
-DISCORD_CHANNEL_IDS=123456789012345678,234567890123456789
-GEMINI_API_KEY=...
-GEMINI_MODEL=gemini-3-flash-preview
-GOOGLE_SERVICE_ACCOUNT_JSON={"type":"service_account",...}
-GOOGLE_DRIVE_FOLDER_ID=...
-GOOGLE_SHEETS_SPREADSHEET_ID=...
-GOOGLE_SHEETS_SHEET_NAME=Receipts
-```
-
-You can use `GOOGLE_SERVICE_ACCOUNT_KEY_FILE` instead of `GOOGLE_SERVICE_ACCOUNT_JSON`.
-When using Docker Compose with a JSON key file, mount it under `./secrets` and set the path to `/app/secrets/your-key.json`.
-
-## Development with uv
-
-```bash
+cp .env.example .env
 uv sync
 uv run pytest
 uv run python -m app.main
 ```
 
-## Docker Compose
+Required environment variables:
+
+- `DISCORD_TOKEN`
+- `GEMINI_API_KEY`
+- `GOOGLE_DRIVE_FOLDER_ID`
+- `GOOGLE_SHEETS_SPREADSHEET_ID`
+- `GOOGLE_SERVICE_ACCOUNT_JSON` or `GOOGLE_SERVICE_ACCOUNT_KEY_FILE`
+
+## 🐳 Docker Compose
 
 ```bash
 docker compose up -d --build
 docker compose logs -f
 ```
 
-## Spreadsheet columns
+If you use a file-based Google service account key, place it under `./secrets` and set `GOOGLE_SERVICE_ACCOUNT_KEY_FILE=/app/secrets/your-key.json`.
 
-The bot writes these columns:
+## 📚 Documentation
 
-- Discord source metadata
-- Original attachment information
-- Google Drive file information
-- Merchant fields from Gemini
-- Totals, tax, currency, payment method, and receipt number
-- Raw OCR-like text and serialized line items
+- [Docs site](https://sunwood-ai-labs.github.io/harina-v4/)
+- [Overview](./docs/guide/overview.md)
+- [Google setup](./docs/guide/google-setup.md)
+- [Deployment guide](./docs/guide/deployment.md)
 
-## Notes
+## 🧱 Repository Layout
 
-- Restrict channels with `DISCORD_CHANNEL_IDS`. Leave it empty to process every accessible channel.
-- If Gemini cannot read a field confidently, the bot leaves the field blank instead of guessing.
-- For production, prefer storing the service account JSON in a secret manager rather than a plaintext `.env`.
+```text
+app/                  Python bot implementation
+docs/                 VitePress documentation site
+.github/workflows/    CI and GitHub Pages deployment
+Dockerfile            Container image definition
+docker-compose.yml    Self-hosted runtime
+```
 
-## License
+## 🔐 Operations Notes
+
+- Leave `DISCORD_CHANNEL_IDS` empty to process every accessible channel
+- Use a comma-separated `DISCORD_CHANNEL_IDS` value to restrict intake
+- The bot creates the destination sheet header row automatically on startup
+- Startup fails fast when required Google settings are missing
+
+## 🛠 Development
+
+```bash
+uv sync
+uv run pytest
+npm --prefix docs install
+npm --prefix docs run docs:build
+```
+
+## 📄 License
 
 [MIT](./LICENSE)

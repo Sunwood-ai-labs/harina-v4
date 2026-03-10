@@ -3,6 +3,9 @@ dist/
 .venv/
 __pycache__/
 .pytest_cache/
+docs/node_modules/
+docs/.vitepress/cache/
+docs/.vitepress/dist/
 .env
 .env.local
 secrets/

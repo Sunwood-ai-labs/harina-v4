@@ -1,0 +1,20 @@
+<svg width="1200" height="630" viewBox="0 0 1200 630" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1200" height="630" rx="48" fill="#F5EEE2"/>
+  <circle cx="1020" cy="120" r="110" fill="#EFD8B3"/>
+  <circle cx="160" cy="530" r="120" fill="#E7B97B" fill-opacity="0.22"/>
+  <rect x="92" y="96" width="228" height="228" rx="44" fill="#FFF8EE" stroke="#1E3A34" stroke-width="10"/>
+  <path d="M162 136H224L260 172V280C260 291.046 251.046 300 240 300H164C152.954 300 144 291.046 144 280V154C144 144.059 152.059 136 162 136Z" fill="#FDF4E7" stroke="#1E3A34" stroke-width="10"/>
+  <path d="M224 136V165C224 173.837 231.163 181 240 181H260" stroke="#1E3A34" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M170 204H236" stroke="#E68B2C" stroke-width="10" stroke-linecap="round"/>
+  <path d="M170 230H236" stroke="#E68B2C" stroke-width="10" stroke-linecap="round"/>
+  <path d="M170 256H214" stroke="#E68B2C" stroke-width="10" stroke-linecap="round"/>
+  <path d="M285 118L293.5 136.5L312 145L293.5 153.5L285 172L276.5 153.5L258 145L276.5 136.5L285 118Z" fill="#E68B2C" stroke="#1E3A34" stroke-width="8" stroke-linejoin="round"/>
+  <text x="370" y="212" fill="#1E3A34" font-family="Segoe UI, Arial, sans-serif" font-size="70" font-weight="700">Harina Receipt Bot</text>
+  <text x="370" y="286" fill="#36544C" font-family="Segoe UI, Arial, sans-serif" font-size="30">Discord receipt capture with Gemini, Google Drive, and Google Sheets</text>
+  <rect x="370" y="346" width="204" height="52" rx="26" fill="#1E3A34"/>
+  <text x="410" y="380" fill="#FFF8EE" font-family="Segoe UI, Arial, sans-serif" font-size="24" font-weight="700">Python + uv</text>
+  <rect x="592" y="346" width="238" height="52" rx="26" fill="#E68B2C"/>
+  <text x="626" y="380" fill="#1E3A34" font-family="Segoe UI, Arial, sans-serif" font-size="24" font-weight="700">Docker Compose</text>
+  <rect x="848" y="346" width="220" height="52" rx="26" fill="#D8E7E0"/>
+  <text x="876" y="380" fill="#1E3A34" font-family="Segoe UI, Arial, sans-serif" font-size="24" font-weight="700">Self-hosted</text>
+</svg>

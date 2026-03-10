@@ -7,9 +7,10 @@ ENV PYTHONUNBUFFERED=1 \
 WORKDIR /app
 
 COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-dev
+RUN uv sync --frozen --no-dev --no-install-project
 
 COPY app ./app
 COPY README.md README.ja.md ./
+RUN uv sync --frozen --no-dev
 
 CMD ["uv", "run", "--no-dev", "python", "-m", "app.main"]

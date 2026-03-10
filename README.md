@@ -2,15 +2,16 @@
 
 # Harina Receipt Bot
 
-Discord bot that watches uploaded receipt images, extracts structured data with Gemini 3, stores the original image in Google Drive, and appends the parsed result to Google Sheets.
+Discord bot that watches uploaded receipt images, extracts structured data with Gemini, stores the original image in Google Drive, and appends the parsed result to Google Sheets. The runtime is Python, managed with `uv`, and shipped with Docker Compose for home-server deployment.
 
 ## Features
 
 - Detects receipt images posted in a Discord channel
-- Extracts merchant, total, date, taxes, payment method, and line items with Gemini 3
+- Extracts merchant, total, date, taxes, payment method, and line items with Gemini
 - Uploads the original image to a Google Drive folder
 - Appends normalized receipt data to a Google Spreadsheet
 - Creates the spreadsheet header row automatically on first boot
+- Runs with `uv` locally and `docker compose` on the server
 
 ## Architecture
 
@@ -60,14 +61,21 @@ GOOGLE_SHEETS_SHEET_NAME=Receipts
 ```
 
 You can use `GOOGLE_SERVICE_ACCOUNT_KEY_FILE` instead of `GOOGLE_SERVICE_ACCOUNT_JSON`.
+When using Docker Compose with a JSON key file, mount it under `./secrets` and set the path to `/app/secrets/your-key.json`.
 
-## Development
+## Development with uv
 
 ```bash
-npm install
-npm run test
-npm run build
-npm run dev
+uv sync
+uv run pytest
+uv run python -m app.main
+```
+
+## Docker Compose
+
+```bash
+docker compose up -d --build
+docker compose logs -f
 ```
 
 ## Spreadsheet columns

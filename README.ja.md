@@ -2,21 +2,22 @@
 
 # Harina Receipt Bot
 
-Discord に投稿されたレシート画像を監視し、Gemini 3 で内容を抽出して、元画像を Google Drive に保存し、抽出データを Google スプレッドシートへ追記する bot です。
+Discord に投稿されたレシート画像を監視し、Gemini で内容を抽出して、元画像を Google Drive に保存し、抽出データを Google スプレッドシートへ追記する bot です。実行環境は Python で、依存管理は `uv`、配備は `docker compose` 前提です。
 
 ## できること
 
 - Discord チャンネルにアップロードされたレシート画像を検知
-- Gemini 3 で店舗名、日付、合計、税額、支払方法、明細を抽出
+- Gemini で店舗名、日付、合計、税額、支払方法、明細を抽出
 - 元画像を Google Drive の指定フォルダへ保存
 - 抽出結果を Google スプレッドシートへ 1 レシート 1 行で追記
 - 初回起動時にスプレッドシートのヘッダー行を自動作成
+- `uv` ローカル実行と `docker compose` 常駐に対応
 
 ## 処理の流れ
 
 1. Discord にレシート画像を投稿
 2. bot が添付画像をダウンロード
-3. Gemini 3 へ画像を送って構造化データを生成
+3. Gemini へ画像を送って構造化データを生成
 4. 元画像を Google Drive にアップロード
 5. 抽出結果を Google スプレッドシートに追記
 6. Discord に処理結果の要約を返信
@@ -61,14 +62,21 @@ GOOGLE_SHEETS_SHEET_NAME=Receipts
 ```
 
 `GOOGLE_SERVICE_ACCOUNT_JSON` の代わりに `GOOGLE_SERVICE_ACCOUNT_KEY_FILE` も使えます。
+Docker Compose で JSON キーファイルを使う場合は `./secrets` に置き、パスは `/app/secrets/your-key.json` を指定してください。
 
 ## 開発コマンド
 
 ```bash
-npm install
-npm run test
-npm run build
-npm run dev
+uv sync
+uv run pytest
+uv run python -m app.main
+```
+
+## Docker Compose
+
+```bash
+docker compose up -d --build
+docker compose logs -f
 ```
 
 ## 補足

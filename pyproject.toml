@@ -1,5 +1,5 @@
 [project]
-name = "harina-v3"
+name = "harina-v4"
 version = "0.2.0"
 description = "Discord receipt recognition bot powered by Gemini, Google Drive, and Google Sheets."
 readme = "README.md"

@@ -1,3 +1,5 @@
+name: harina-v4
+
 services:
   receipt-bot:
     build:

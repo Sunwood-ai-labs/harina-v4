@@ -1,13 +1,13 @@
 # CLI
 
 HARINA V4 は `harina-v4` という Python CLI を中心に構成されています。
-短い `harina` も互換用エイリアスとして使えます。
+短い互換エイリアスとして `harina` も使えます。
 
 ## CLI を使う理由
 
-- bot 運用、移行、再スキャン、確認作業を 1 つのコマンド体系にまとめられます
-- 常時稼働 bot と運用用コマンドで同じレシート処理パイプラインを共有できます
-- ローカル実行、CI、将来の自動化をそろえやすくなります
+- bot 運用、Drive watcher、移行、検証を 1 つのコマンド体系にまとめられる
+- 常時稼働サービスと単発オペレーションで同じロジックを再利用できる
+- ローカル実行、CI、Docker 自動化をそろえやすい
 
 ## 基本ヘルプ
 
@@ -17,7 +17,7 @@ uv run harina-v4 --help
 
 ## receipt コマンド
 
-ローカル画像を CLI-first の処理経路で確認できます。
+ローカルのレシート画像を CLI-first パイプラインで処理します。
 
 ```bash
 uv run harina-v4 receipt process ./sample-receipt.jpg --skip-google-write
@@ -27,66 +27,90 @@ uv run harina-v4 receipt process ./sample-receipt.jpg --skip-google-write
 
 - `receipt process` は Discord bot と同じ Gemini 中心の処理パイプラインを使います
 - `--skip-google-write` は `GEMINI_API_KEY` だけで抽出確認したいときに便利です
-- 省略すると Drive へのアップロードと Sheets への追記まで行います
+- 外すと Drive への保存と Sheets 追記まで実行します
 
 ## bot コマンド
 
-常時稼働の Discord bot を起動:
+常時稼働の Discord bot を起動します。
 
 ```bash
 uv run harina-v4 bot run
 ```
 
-## Google コマンド
-
-初回 OAuth ログインを行い、refresh token を保存:
-
-```bash
-uv run harina-v4 google oauth-login --oauth-client-secret-file ./secrets/harina-oauth-client.json --env-file .env
-```
-
-Drive フォルダと Spreadsheet を作成または再利用:
-
-```bash
-uv run harina-v4 google init-resources --env-file .env
-```
-
-## dataset コマンド
-
-Discord 画像をデータセットへ保存:
-
-```bash
-uv run harina-v4 dataset download "https://discord.com/channels/<guild_id>/<channel_id>" --limit 50
-```
-
-ローカルデータセット画像で Gemini の簡易確認:
-
-```bash
-uv run harina-v4 dataset smoke-test --dataset-dir ./dataset/v3-backfill --limit 2
-```
-
-## Discord アップロードテスト
-
-実際の画像を Discord に投稿して bot の返信まで確認:
+実画像を Discord に投稿して bot 応答まで確認します。
 
 ```bash
 uv run harina-v4 bot upload-test --channel-id <channel_id> --image ./sample-receipt.jpg
 ```
 
+## Drive watcher コマンド
+
+1 回だけ watcher を回して終了:
+
+```bash
+uv run harina-v4 drive watch --once
+```
+
+watcher を常駐実行:
+
+```bash
+uv run harina-v4 drive watch
+```
+
 補足:
 
-- 指定チャンネルに実際のメッセージを投稿します
-- `harina-v4 bot run` と同じパッケージロジックで処理します
-- テストメッセージには `DISCORD_TEST_MESSAGE_PREFIX` が付き、既定値は `[HARINA-TEST]` です
-- `DISCORD_TEST_CHANNEL_ID` を設定しておくと `--channel-id` を省略できます
-- 実環境に触るので、安全なテストチャンネルで使うのがおすすめです
+- `drive watch` は `GOOGLE_DRIVE_WATCH_SOURCE_FOLDER_ID` から画像を読みます
+- 通知先は `DISCORD_NOTIFY_CHANNEL_ID` です
+- 成功したファイルは `GOOGLE_DRIVE_WATCH_PROCESSED_FOLDER_ID` へ移動します
+- ポーリング間隔は `DRIVE_POLL_INTERVAL_SECONDS` で決まります
+
+## Google コマンド
+
+1 回だけ OAuth ログインして refresh token を保存:
+
+```bash
+uv run harina-v4 google oauth-login --oauth-client-secret-file ./secrets/harina-oauth-client.json --env-file .env
+```
+
+メインの Drive フォルダと Spreadsheet を作成または再利用:
+
+```bash
+uv run harina-v4 google init-resources --env-file .env
+```
+
+watcher 用の Drive フォルダを作成または再利用:
+
+```bash
+uv run harina-v4 google init-drive-watch --env-file .env
+```
+
+watcher セットアップで便利なオプション:
+
+- `--source-folder-name "Harina V4 Drive Inbox"`
+- `--processed-folder-name "Harina V4 Drive Processed"`
+- `--parent-folder-id <folder_id>`
+- `--poll-interval-seconds 60`
+
+## dataset コマンド
+
+Discord 画像を dataset として保存:
+
+```bash
+uv run harina-v4 dataset download "https://discord.com/channels/<guild_id>/<channel_id>" --limit 50
+```
+
+ローカル dataset に対して Gemini の軽い確認:
+
+```bash
+uv run harina-v4 dataset smoke-test --dataset-dir ./dataset/v3-backfill --limit 2
+```
 
 ## おすすめ運用フロー
 
-1. `harina-v4 receipt process --skip-google-write` でローカル抽出を確認する
-2. `harina-v4 dataset download` で小さなサンプルを取得する
-3. `harina-v4 dataset smoke-test` で 2 枚ほどの画像で抽出結果を確認する
-4. 個人 Gmail 運用なら `harina-v4 google oauth-login` を先に通す
-5. `harina-v4 google init-resources` で Drive / Sheets の保存先をそろえる
-6. `harina-v4 bot upload-test` で Discord 上の動作確認をする
-7. `harina-v4 bot run` で本番の常時稼働へ進む
+1. 個人 Gmail なら `harina-v4 google oauth-login` を先に実行
+2. `harina-v4 google init-resources` で Drive / Sheets を作成
+3. `harina-v4 google init-drive-watch` で watcher フォルダを作成
+4. `harina-v4 receipt process --skip-google-write` で抽出確認
+5. `harina-v4 bot upload-test` で Discord 側の動作確認
+6. `harina-v4 drive watch --once` で Drive watcher の単発確認
+7. `harina-v4 bot run` と `harina-v4 drive watch` を常時稼働

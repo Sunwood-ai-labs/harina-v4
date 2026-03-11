@@ -1,53 +1,40 @@
-# Google 設定
+# Google セットアップ
 
-## 1. サービスアカウントを作成する
+## 1. 認証方式を決める
 
-Google Cloud でサービスアカウントを作成し、同じプロジェクトで次を有効化します。
+同じ Google Cloud project で次の API を有効化します。
 
 - Google Drive API
 - Google Sheets API
 
-JSON キーをダウンロードするか、JSON 本文をシークレットストアに保存します。
+認証方式は次のどれかを使います。
 
-## 2. 個人 Gmail では OAuth refresh token を優先する
+- `GOOGLE_SERVICE_ACCOUNT_JSON`
+- `GOOGLE_SERVICE_ACCOUNT_KEY_FILE`
+- `GOOGLE_OAUTH_CLIENT_JSON` + `GOOGLE_OAUTH_REFRESH_TOKEN`
+- `GOOGLE_OAUTH_CLIENT_SECRET_FILE` + `GOOGLE_OAUTH_REFRESH_TOKEN`
 
-個人の Google Drive に HARINA が書き込む場合は、service account より OAuth refresh token のほうが相性がよいです。
+Docker Compose では、ファイルベース secret を `./secrets` に置いて `/app/secrets` へマウントする前提です。
 
-Codex を使っている場合は、Google Cloud Console 側のブラウザ作業も `logged-in-google-chrome` スキルで自動化できます。Cloud project 作成、OAuth 同意画面設定、OAuth client JSON の取得、初回 consent までをログイン済み Chrome プロファイルで進める用途に向いています。
+## 2. 個人 Gmail は OAuth refresh token を推奨
 
-Codex に渡すセットアップ用プロンプト例:
-
-```text
-[$logged-in-google-chrome](D:\Prj\logged-in-google-chrome-skill\SKILL.md) と D:\Prj\onizuka-playwright-profile を使って、HARINA の Google 側セットアップを進めて。
-HARINA 用の Google Cloud project を作成または再利用し、Drive API と Sheets API を有効化して、OAuth consent を設定し、desktop OAuth client を作成して、client JSON を ./secrets に保存して、初回 OAuth を通し、.env を更新したうえで `uv run harina google init-resources --env-file .env` まで実行して。
-あとから確認できるように、Google Cloud Console の URL、OAuth client ID、Drive フォルダ URL、Spreadsheet URL も .env に記録して。
-```
-
-1. Google Cloud で OAuth client を作成する
-2. OAuth client の JSON を `./secrets` に置く
-3. 次を実行する
+個人 Google Drive に書き込むなら、service account より OAuth refresh token の方が安定します。
 
 ```bash
-uv run harina google oauth-login --oauth-client-secret-file ./secrets/harina-oauth-client.json --env-file .env
+uv run harina-v4 google oauth-login --oauth-client-secret-file ./secrets/harina-oauth-client.json --env-file .env
 ```
 
-この認可は最初の 1 回だけで、その後は保存した refresh token で自動更新できます。
+一度 refresh token を保存すれば、その後は自動でアクセストークン更新できます。
 
-## 3. CLI で Drive と Sheets を初期化する
+## 3. CLI で Drive と Sheets を作る
 
-サービスアカウントの JSON キーがあれば、HARINA CLI から Drive フォルダと Spreadsheet を自動作成できます。
+メインのレシート保存先 Drive フォルダと Spreadsheet を作成または再利用します。
 
 ```bash
-uv run harina google init-resources --service-account-key-file ./secrets/harina-v4-bot.json --env-file .env
+uv run harina-v4 google init-resources --env-file .env
 ```
 
-OAuth を `.env` に設定済みなら、次だけで大丈夫です。
-
-```bash
-uv run harina google init-resources --env-file .env
-```
-
-よく使うオプション:
+便利なオプション:
 
 - `--folder-name "Harina V4 Receipts"`
 - `--spreadsheet-title "Harina V4 Receipts"`
@@ -55,51 +42,42 @@ uv run harina google init-resources --env-file .env
 - `--share-with-email you@example.com`
 - `--env-file .env`
 
-このコマンドは次を行います。
+このコマンドで:
 
-- サービスアカウント所有の Drive フォルダを作成または再利用する
-- サービスアカウント所有の Spreadsheet を作成または再利用する
-- 目的のシートタブとヘッダー行を揃える
-- 必要な `GOOGLE_*` 値を表示する
-- 必要ならその値を `.env` に書き込む
+- メインの Drive フォルダを作成または再利用
+- Spreadsheet を作成または再利用
+- 対象シートタブとヘッダー行を保証
+- 必要に応じて ID と URL を `.env` へ保存
 
-`--env-file` を使うと、次のような成果物 URL も `.env` に残せます。
+## 4. Drive watcher 用フォルダを作る
 
-- `GOOGLE_DRIVE_FOLDER_URL`
-- `GOOGLE_SHEETS_SPREADSHEET_URL`
+watcher 用の inbox フォルダと processed フォルダを作成または再利用します。
 
-運用メモとして、次の optional な Cloud Console 情報も `.env` に残しておくと見返しやすいです。
+```bash
+uv run harina-v4 google init-drive-watch --env-file .env
+```
 
-- `GOOGLE_CLOUD_PROJECT_ID`
-- `GOOGLE_CLOUD_PROJECT_NUMBER`
-- `GOOGLE_CLOUD_CONSOLE_URL`
-- `GOOGLE_CLOUD_CREDENTIALS_URL`
-- `GOOGLE_CLOUD_AUTH_OVERVIEW_URL`
-- `GOOGLE_OAUTH_CLIENT_ID`
+便利なオプション:
 
-注意:
+- `--source-folder-name "Harina V4 Drive Inbox"`
+- `--processed-folder-name "Harina V4 Drive Processed"`
+- `--parent-folder-id <folder_id>`
+- `--poll-interval-seconds 60`
+- `--share-with-email you@example.com`
+- `--env-file .env`
 
-- 個人の Google Drive では、サービスアカウントに Drive 容量がないためアップロードが拒否されることがあります
-- 個人 Gmail で運用する場合は、OAuth refresh token ベースの認証を優先するのが安全です
+`--env-file` を使うと次の値を書き込みます。
 
-手動で用意したい場合は、これまでどおり次の手順でも構いません。
+- `GOOGLE_DRIVE_WATCH_SOURCE_FOLDER_ID`
+- `GOOGLE_DRIVE_WATCH_SOURCE_FOLDER_URL`
+- `GOOGLE_DRIVE_WATCH_PROCESSED_FOLDER_ID`
+- `GOOGLE_DRIVE_WATCH_PROCESSED_FOLDER_URL`
+- `DRIVE_POLL_INTERVAL_SECONDS`
 
-- レシート画像保存用フォルダを作成し、`GOOGLE_DRIVE_FOLDER_ID` にフォルダ ID を設定する
-- 抽出結果保存用 Spreadsheet を作成し、`GOOGLE_SHEETS_SPREADSHEET_ID` にその ID を設定する
-- service account を使う場合は、両方をサービスアカウントへ共有する
-- 既定の `Receipts` 以外を使いたい場合は `GOOGLE_SHEETS_SHEET_NAME` を設定する
+すでに `GOOGLE_DRIVE_FOLDER_ID` がある場合は、それを watcher フォルダの親として自動利用します。
 
-## 4. 認証情報の渡し方を決める
+## 5. 注意点
 
-次のどちらかを使います。
-
-- `GOOGLE_SERVICE_ACCOUNT_JSON`
-  JSON 本文を環境変数へ直接入れる
-- `GOOGLE_SERVICE_ACCOUNT_KEY_FILE`
-  JSON ファイルをマウントし、そのパスを指定する
-- `GOOGLE_OAUTH_CLIENT_JSON` と `GOOGLE_OAUTH_REFRESH_TOKEN`
-  OAuth client の JSON 本文と refresh token を環境変数へ入れる
-- `GOOGLE_OAUTH_CLIENT_SECRET_FILE` と `GOOGLE_OAUTH_REFRESH_TOKEN`
-  OAuth client の JSON ファイルを置き、refresh token を環境変数で渡す
-
-Docker Compose を使う場合は、ファイルベースの秘密情報を `./secrets` に置き、`/app/secrets` へマウントする構成を想定しています。
+- 個人 Google Drive では service account に Drive 容量がなく、アップロードが拒否されることがあります
+- 個人 Gmail 環境では OAuth refresh token を優先してください
+- 手動で作る場合も、メイン Drive フォルダと watcher 用フォルダの両方に対して選んだ認証主体が書き込みできる必要があります

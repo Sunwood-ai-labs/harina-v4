@@ -1,56 +1,68 @@
 # 概要
 
-Harina Receipt Bot は、レシート運用向けのセルフホスト Discord bot であり、移行や再実行に使えるワンショットのデータセットダウンローダーでもあります。
+Harina Receipt Bot は、レシート画像の取り込み、OCR、台帳化を自前で回すための自動化スタックです。
+Discord 起点と Google Drive 起点の両方に対応します。
 
-## ???
+## 2 つの動作モード
 
-![Harina V4 ???](../../architecture/harina-v4-flow.ja.svg)
+### 1. Discord レシート受付
 
-
-## 2つの運用モード
-
-### 1. 常時レシート処理
-
-- Discord の画像添付メッセージを監視
-- Gemini でレシートを構造化抽出
+- Discord チャンネルの画像添付を監視
+- 各レシート画像を Gemini へ送って構造化抽出
 - 元画像を Google Drive に保存
-- レシートごとに Google Sheets へ 1 行追加
-- Discord に処理結果の要約を返信
+- Google Sheets に 1 レシート 1 行で追記
+- Discord に短い要約を返信
 
-### 2. 履歴バックフィルと再スキャン
+### 2. Google Drive watcher 受付
 
-- Discord 上の過去レシート画像をローカルデータセットとして取得
-- 元のアップロードファイル名を保持
-- V1、V2、V3 のチャンネル履歴を新運用へ移行
-- Gemini モデル、プロンプト、スキーマ、後段ロジック変更後に旧データを再処理
-- 本格的な再処理の前に、数枚だけ Gemini スモークテストで確認できる
+- Google Drive の inbox フォルダをポーリング
+- 新着画像を Drive から直接ダウンロード
+- Gemini で抽出して Google Sheets に追記
+- 画像と要約を Discord 通知チャンネルへ投稿
+- 成功後に Drive ファイルを processed フォルダへ移動
 
-## CLI 中心のパッケージ構成
+## CLI 中心の構成
 
 HARINA V4 は Python パッケージ CLI を中心に整理されています。
 
-- `harina bot run` で常時稼働 bot を起動
-- `harina dataset download` で Discord 画像をデータセットへ書き出し
-- `harina dataset smoke-test` でローカル画像を Gemini で確認
-- `harina bot upload-test` で実際に Discord へ画像を投稿して返信を待機
+- `harina bot run`: 常時稼働の Discord bot
+- `harina drive watch`: Google Drive watcher
+- `harina google init-resources`: メインの Drive フォルダと Spreadsheet を作成
+- `harina google init-drive-watch`: watcher 用の inbox / processed フォルダを作成
+- `harina dataset download`: Discord 画像を dataset として保存
+- `harina dataset smoke-test`: ローカル画像を Gemini で軽く確認
+- `harina bot upload-test`: 実画像を Discord に投稿して bot 応答まで確認
 
-## 処理の流れ
+## アーキテクチャ図
 
-### 常時 bot の流れ
+![Harina V4 アーキテクチャ図](../../architecture/harina-v4-flow.ja.svg)
 
-1. 監視対象チャンネルにレシート画像が投稿されます。
-2. bot が Discord から画像を直接取得します。
-3. Gemini が正規化済み JSON を返します。
-4. 元画像を Google Drive に保存します。
-5. 対応する 1 行を Google Sheets に書き込みます。
-6. Discord に要約メッセージを返信します。
+## 処理フロー
 
-### downloader の流れ
+### Discord bot フロー
 
-1. `app.dataset_downloader` に Discord チャンネル URL を渡します。
-2. bot トークンでメッセージ履歴を走査します。
-3. 画像添付をデータセット用フォルダへ保存します。
-4. 再実行や監査に使える `metadata.jsonl` を出力します。
+1. ユーザーが監視対象の Discord チャンネルにレシート画像を投稿
+2. bot が Discord から画像 bytes を取得
+3. Gemini が正規化済み JSON を返す
+4. 元画像を Google Drive に保存
+5. Google Sheets に対応する 1 行を書き込む
+6. Discord に要約返信を返す
+
+### Drive watcher フロー
+
+1. ユーザーが Drive inbox フォルダにレシート画像をアップロード
+2. watcher が Drive を見て新着画像を取得
+3. Gemini が正規化済みのレシート情報を返す
+4. HARINA が Google Sheets に 1 行追記
+5. watcher が `DISCORD_NOTIFY_CHANNEL_ID` に画像つき通知を投稿
+6. Drive ファイルを processed フォルダへ移動
+
+### Downloader フロー
+
+1. Discord チャンネル URL を `app.dataset_downloader` に渡す
+2. downloader が bot token でメッセージ履歴を走査
+3. 画像添付を dataset フォルダ構成で保存
+4. 再処理や監査用に `metadata.jsonl` を生成
 
 ## 実行スタック
 
@@ -59,20 +71,20 @@ HARINA V4 は Python パッケージ CLI を中心に整理されています。
 - `google-genai`
 - Google Drive API と Google Sheets API
 - ローカル依存管理用の `uv`
-- 常時運用向けの Docker Compose
+- 常時運用用の Docker Compose
 
-## この構成が向いている理由
+## この構成の良さ
 
-- 入力面は普段使っている Discord のままでよい
-- Gemini で OCR と項目抽出を低コストにまとめられる
-- Drive に元証憑を残せる
-- Sheets に会計向けの扱いやすい形で集約できる
-- downloader があるので、システム更新時も安全に移行と回帰確認ができる
+- 通知や運用の見える場所を Discord に寄せられる
+- Gemini で OCR と構造化抽出をまとめて処理できる
+- Drive に原本を残せる
+- Sheets を台帳としてそのまま使いやすい
+- dataset downloader が移行と回帰確認の逃げ道になる
 
 ## 次に読むもの
 
-- 運用コマンドを見たいなら [CLI](./cli.md)
-- V1、V2、V3 から移行するなら [データセットダウンローダー](./dataset-downloader.md)
-- サンプル画像で素早く確認するなら [Gemini スモークテスト](./gemini-smoke-test.md)
-- 常時 bot を動かす前提を整えるなら [Google 設定](./google-setup.md)
-- 継続運用するなら [デプロイ](./deployment.md)
+- [CLI](./cli.md)
+- [Google セットアップ](./google-setup.md)
+- [デプロイ](./deployment.md)
+- [データセットダウンローダー](./dataset-downloader.md)
+- [Gemini スモークテスト](./gemini-smoke-test.md)

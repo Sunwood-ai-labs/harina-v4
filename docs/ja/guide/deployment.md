@@ -1,58 +1,74 @@
 # デプロイ
 
-常時稼働させる bot は `harina bot run` を使います。移行や再スキャンのために一度だけ取得したい場合は `harina dataset download` を使います。
-ローカルのデータセット画像で Gemini の応答を軽く確認したい場合は `harina dataset smoke-test` を使います。
+常時稼働の Discord bot には `harina bot run` を使います。
+Google Drive watcher には `harina drive watch` を使います。
+移行や確認だけなら `harina dataset download` や `harina dataset smoke-test` を使います。
 
 ## ローカル開発
 
 ```bash
 uv sync
 uv run pytest
-uv run harina bot run
+uv run harina-v4 bot run
 ```
 
-## ワンショット downloader 実行
+## 単発確認
+
+Discord アップロード経路:
 
 ```bash
-uv run harina dataset download "https://discord.com/channels/<guild_id>/<channel_id>" --limit 50
+uv run harina-v4 bot upload-test --channel-id <channel_id> --image ./sample-receipt.jpg
 ```
 
-## Gemini スモークテスト実行
+Drive watcher 経路:
 
 ```bash
-uv run harina dataset smoke-test --dataset-dir ./dataset/v3-backfill --limit 2
+uv run harina-v4 drive watch --once
 ```
 
-## Discord アップロードテスト実行
+Gemini スモークテスト:
 
 ```bash
-uv run harina bot upload-test --channel-id <channel_id> --image ./sample-receipt.jpg
+uv run harina-v4 dataset smoke-test --dataset-dir ./dataset/v3-backfill --limit 2
 ```
 
 ## Docker Compose
 
-1. `.env.example` を `.env` にコピーする
+1. `.env.example` を `.env` にコピー
 2. Discord、Gemini、Drive、Sheets の設定を入れる
-3. JSON キーファイルを使う場合は `./secrets` に置く
-4. サービスを起動する
+3. `harina-v4 google init-resources --env-file .env` を実行
+4. `harina-v4 google init-drive-watch --env-file .env` を実行
+5. JSON キーファイルを使うなら `./secrets` に配置
+6. サービスを起動
 
 ```bash
 docker compose up -d --build
-docker compose logs -f
+docker compose logs -f receipt-bot
+docker compose logs -f drive-watcher
 ```
 
-## 必須の環境変数
+## 必須環境変数
+
+receipt bot 側:
 
 - `DISCORD_TOKEN`
 - `GEMINI_API_KEY`
-- `GOOGLE_DRIVE_FOLDER_ID`
 - `GOOGLE_SHEETS_SPREADSHEET_ID`
-- `GOOGLE_SERVICE_ACCOUNT_JSON` または `GOOGLE_SERVICE_ACCOUNT_KEY_FILE`
+- service account または OAuth refresh token の Google 認証
+
+Drive watcher 側:
+
+- `DISCORD_NOTIFY_CHANNEL_ID`
+- `GOOGLE_DRIVE_WATCH_SOURCE_FOLDER_ID`
+- `GOOGLE_DRIVE_WATCH_PROCESSED_FOLDER_ID`
+- `DRIVE_POLL_INTERVAL_SECONDS`
 
 ## 運用メモ
 
-- `DISCORD_CHANNEL_IDS` を空にすると、アクセス可能な全チャンネルを監視します
-- `DISCORD_CHANNEL_IDS` にカンマ区切りの ID を入れると対象を制限できます
-- bot 起動時に対象シートのヘッダー行を自動作成します
-- 必須設定が不足している場合は起動時に失敗します
-- `DISCORD_DATASET_OUTPUT_DIR` で downloader の既定保存先を変更できます
+- `DISCORD_CHANNEL_IDS` を空にするとアクセス可能な Discord チャンネルをすべて監視
+- `DISCORD_CHANNEL_IDS` をカンマ区切りで入れると Discord intake を制限
+- bot は対象シートのヘッダー行を自動で作成
+- watcher は `DISCORD_NOTIFY_CHANNEL_ID` に画像つき通知を投稿
+- 成功した Drive ファイルは processed フォルダへ移動
+- 必須設定が足りない場合は起動時に即失敗
+- `DISCORD_DATASET_OUTPUT_DIR` は downloader の既定出力先

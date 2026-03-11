@@ -1,17 +1,10 @@
 <div align="center">
   <img src="./docs/public/brand/harina-hero.webp" alt="Harina Receipt Bot hero" width="280" />
   <h1>Harina Receipt Bot</h1>
-  <p>Discord のレシート運用を Gemini、Google Drive、Google Sheets、そして移行用データセット作成までつなぐ Python ツールです。</p>
+  <p>Discord と Google Drive を入口にして、Gemini・Google Drive・Google Sheets へつなぐレシート自動化ツールです。</p>
 </div>
 
 [English](./README.md)
-
-## ???
-
-![Harina V4 ???](./docs/architecture/harina-v4-flow.ja.svg)
-
-?????: [docs/architecture/harina-v4-flow.ja.drawio](./docs/architecture/harina-v4-flow.ja.drawio)
-
 
 ![Python](https://img.shields.io/badge/Python-3.12-1E3A34?style=for-the-badge&logo=python&logoColor=white)
 ![Gemini](https://img.shields.io/badge/Gemini-Receipt%20Extraction-E68B2C?style=for-the-badge)
@@ -19,50 +12,63 @@
 ![CI](https://img.shields.io/github/actions/workflow/status/Sunwood-ai-labs/harina-v4/ci.yml?branch=main&style=for-the-badge&label=CI)
 ![License](https://img.shields.io/github/license/Sunwood-ai-labs/harina-v4?style=for-the-badge)
 
-## ✨ 概要
+## 概要
 
-Harina Receipt Bot は、レシート運用向けのセルフホスト型 Python Discord bot です。役割は大きく 2 つあります。
+Harina Receipt Bot は、レシート処理を自前で回したい人向けの Python 製自動化スタックです。  
+入口は 2 つあります。
 
-- Discord に投稿されたレシート画像を常時処理し、Gemini、Google Drive、Google Sheets へ連携する
-- V1、V2、V3 からの移行や、モデル更新後の再スキャン用に過去画像をデータセットとして取得する
+- Discord に画像を直接投稿して bot に処理させる
+- Google Drive の監視フォルダに画像を置き、watcher が Discord に通知しながら同じ処理系へ流す
 
-## 🚀 特長
+## できること
 
-- Discord チャンネルに投稿されたレシート画像を監視
-- Gemini で店舗名、日付、金額、税額、支払方法、OCR 風テキスト、明細行を構造化
+- Gemini で店舗名、日付、金額、税額、支払方法、OCR 風テキスト、明細行を抽出
 - 元画像を Google Drive に保存
-- 1 レシートごとに Google Sheets へ 1 行追加
-- 過去の Discord 画像をローカルデータセットとして取得できる
-- `uv` と Docker Compose でローカル運用しやすい
+- Google Sheets に 1 レシート 1 行で追記
+- Google Drive の新着画像を Discord 通知チャンネルへ転送
+- 処理済みファイルを別フォルダへ移動
+- `uv` でも Docker Compose でも運用可能
 
-## 🔄 想定ワークフロー
+## 主な使い方
 
-1. 日常運用: ユーザーが Discord にレシート画像を投稿し、bot が自動処理する
-2. データ移行: V1、V2、V3 のチャンネルから過去画像をまとめて取得する
-3. 再スキャン: プロンプト、モデル、スキーマ、抽出ロジックの変更後に旧データを再評価する
+1. Discord 受付: 指定チャンネルへ画像を投稿すると、bot が処理して返信します。
+2. Drive 受付: 監視元フォルダへ画像を置くと、watcher が Discord 通知、Sheets 記録、processed フォルダ移動まで実行します。
+3. バックフィル: 過去の Discord 画像を dataset として落として、Gemini の再評価や移行検証に使えます。
 
-## ⚡ クイックスタート
+## アーキテクチャ
+
+![Harina V4 アーキテクチャ図](./docs/architecture/harina-v4-flow.ja.svg)
+
+元データ: [docs/architecture/harina-v4-flow.ja.drawio](./docs/architecture/harina-v4-flow.ja.drawio)
+
+## クイックスタート
 
 ```bash
 cp .env.example .env
 uv sync
 uv run pytest
+uv run harina-v4 google oauth-login --oauth-client-secret-file ./secrets/harina-oauth-client.json --env-file .env
+uv run harina-v4 google init-resources --env-file .env
+uv run harina-v4 google init-drive-watch --env-file .env
 uv run harina-v4 bot run
 ```
 
-必須の環境変数:
+bot 側で最低限必要な環境変数:
 
 - `DISCORD_TOKEN`
 - `GEMINI_API_KEY`
-- `GOOGLE_DRIVE_FOLDER_ID`
 - `GOOGLE_SHEETS_SPREADSHEET_ID`
 - `GOOGLE_SERVICE_ACCOUNT_JSON` または `GOOGLE_SERVICE_ACCOUNT_KEY_FILE`
 - または `GOOGLE_OAUTH_CLIENT_JSON` / `GOOGLE_OAUTH_CLIENT_SECRET_FILE` と `GOOGLE_OAUTH_REFRESH_TOKEN`
 
-## 🧰 HARINA CLI
+Drive watcher 側で必要な環境変数:
 
-このリポジトリは Python パッケージ CLI として `harina-v4` コマンドを公開します。
-後方互換のため、短い `harina` コマンドもエイリアスとして残しています。
+- `DISCORD_NOTIFY_CHANNEL_ID`
+- `GOOGLE_DRIVE_WATCH_SOURCE_FOLDER_ID`
+- `GOOGLE_DRIVE_WATCH_PROCESSED_FOLDER_ID`
+- `DRIVE_POLL_INTERVAL_SECONDS`
+
+## CLI
 
 ```bash
 uv run harina-v4 --help
@@ -71,206 +77,75 @@ uv run harina-v4 --help
 主なコマンド:
 
 ```bash
-uv run harina-v4 receipt process ./sample-receipt.jpg --skip-google-write
 uv run harina-v4 bot run
+uv run harina-v4 bot upload-test --channel-id <channel_id> --image ./sample-receipt.jpg
+uv run harina-v4 receipt process ./sample-receipt.jpg --skip-google-write
 uv run harina-v4 google oauth-login --oauth-client-secret-file ./secrets/harina-oauth-client.json --env-file .env
-uv run harina-v4 google init-resources --service-account-key-file ./secrets/harina-v4-bot.json --env-file .env
+uv run harina-v4 google init-resources --env-file .env
+uv run harina-v4 google init-drive-watch --env-file .env
+uv run harina-v4 drive watch --once
 uv run harina-v4 dataset download "https://discord.com/channels/<guild_id>/<channel_id>" --limit 50
 uv run harina-v4 dataset smoke-test --dataset-dir ./dataset/v3-backfill --limit 2
-uv run harina-v4 bot upload-test --channel-id <channel_id> --image ./sample-receipt.jpg
 ```
 
-この形にする利点:
+## Google セットアップ
 
-- V4 の運用コマンド面を CLI に集約できる
-- Discord bot も同じレシート処理パイプラインを再利用できる
-- 移行、再スキャン、Discord 上の実機確認まで同じツールから実行できる
-
-ローカルでのレシートデバッグ例:
+個人 Gmail で使うなら、基本的には OAuth refresh token 方式がおすすめです。  
+一度ブラウザで同意すれば、その後は CLI から Drive / Sheets / watch 用フォルダをまとめて作れます。
 
 ```bash
-uv run harina-v4 receipt process ./sample-receipt.jpg --skip-google-write
-uv run harina-v4 receipt process ./sample-receipt.jpg --output ./artifacts/receipt-result.json
+uv run harina-v4 google oauth-login --oauth-client-secret-file ./secrets/harina-oauth-client.json --env-file .env
+uv run harina-v4 google init-resources --env-file .env
+uv run harina-v4 google init-drive-watch --env-file .env
 ```
 
-補足:
+`google init-drive-watch` で行うこと:
 
-- `receipt process` は bot と同じ Gemini 中心のレシート処理経路を使います
-- `--skip-google-write` を付けると `GEMINI_API_KEY` だけでローカル抽出確認ができます
-- `--skip-google-write` を外すと Drive へのアップロードと Sheets への追記まで行います
+- 新着画像用の Drive inbox フォルダを作成または再利用
+- 処理済みファイル用の Drive processed フォルダを作成または再利用
+- フォルダ ID、URL、ポーリング秒数を `.env` に保存
 
-## ☁ Google 初期化
+便利なオプション:
 
-Google へのブラウザログインは、Cloud project 作成、API 有効化、サービスアカウント JSON キー取得のときだけで十分です。その後は HARINA CLI から Drive フォルダと Spreadsheet を自動で作成できます。
+- `--source-folder-name "Harina V4 Drive Inbox"`
+- `--processed-folder-name "Harina V4 Drive Processed"`
+- `--parent-folder-id <folder_id>`
+- `--poll-interval-seconds 60`
+- `--share-with-email you@example.com`
+- `--env-file .env`
 
-Codex で運用する場合は、Google Cloud Console 側のブラウザ作業も `logged-in-google-chrome` スキルを使って進められます。プロジェクト作成、OAuth client 作成、token 発行までを再現しやすい形で扱えます。
+## Drive watcher の流れ
 
-Codex に渡すセットアップ用プロンプト例:
+1. `GOOGLE_DRIVE_WATCH_SOURCE_FOLDER_ID` に画像をアップロード
+2. `uv run harina-v4 drive watch --once` で単発確認、または watcher を常駐起動
+3. HARINA が Drive 画像を取得し、Gemini で抽出し、Sheets に追記し、`DISCORD_NOTIFY_CHANNEL_ID` へ画像つき通知を送り、最後に `GOOGLE_DRIVE_WATCH_PROCESSED_FOLDER_ID` へ移動
 
-```text
-[$logged-in-google-chrome](D:\Prj\logged-in-google-chrome-skill\SKILL.md) と D:\Prj\onizuka-playwright-profile を使って、HARINA の Google 側セットアップを進めて。
-HARINA 用の Google Cloud project を作成または再利用し、Drive API と Sheets API を有効化して、OAuth consent を設定し、desktop OAuth client を作成して、client JSON を ./secrets に保存して、初回 OAuth を通し、.env を更新したうえで `uv run harina google init-resources --env-file .env` まで実行して。
-あとから確認できるように、Google Cloud Console の URL、OAuth client ID、Drive フォルダ URL、Spreadsheet URL も .env に記録して。
-```
-
-個人 Gmail で運用する場合は、OAuth refresh token 方式がいちばん自然です。
-
-```bash
-uv run harina google oauth-login --oauth-client-secret-file ./secrets/harina-oauth-client.json --env-file .env
-uv run harina google init-resources --env-file .env
-```
-
-```bash
-uv run harina google init-resources --service-account-key-file ./secrets/harina-v4-bot.json --env-file .env
-```
-
-よく使う例:
-
-```bash
-uv run harina google init-resources --service-account-key-file ./secrets/harina-v4-bot.json
-uv run harina google init-resources --service-account-key-file ./secrets/harina-v4-bot.json --share-with-email you@example.com
-uv run harina google init-resources --service-account-key-file ./secrets/harina-v4-bot.json --folder-name "Harina V4 Receipts" --spreadsheet-title "Harina V4 Receipts" --sheet-name Receipts --env-file .env
-```
-
-このコマンドで行うこと:
-
-- サービスアカウント所有の Drive フォルダを作成または再利用する
-- サービスアカウント所有の Spreadsheet を作成または再利用する
-- 目的のシートタブとヘッダー行を揃える
-- 必要なら自分の Google アカウントへ共有する
-- 環境変数の値を表示し、ID と URL を `.env` にも書き込める
-
-注意:
-
-- 個人の Google Drive では、サービスアカウントに Drive 容量がないためアップロードが拒否されることがあります
-- 個人 Gmail で運用するなら、OAuth refresh token ベースの認証を優先するのが安全です
-- service account は Google Workspace の共有ドライブや管理者前提の環境向けです
-
-あとから確認しやすいように、`.env` には次のような運用メタ情報も残しておくのがおすすめです。
-
-- `GOOGLE_CLOUD_PROJECT_ID`
-- `GOOGLE_CLOUD_PROJECT_NUMBER`
-- `GOOGLE_CLOUD_CONSOLE_URL`
-- `GOOGLE_CLOUD_CREDENTIALS_URL`
-- `GOOGLE_CLOUD_AUTH_OVERVIEW_URL`
-- `GOOGLE_OAUTH_CLIENT_ID`
-
-## 📦 データセットダウンローダー
-
-移行や再スキャン用に、Discord の画像を一括取得するワンショット CLI としても使えます。
-
-```bash
-uv run harina dataset download "https://discord.com/channels/<guild_id>/<channel_id>"
-```
-
-よく使う例:
-
-```bash
-uv run harina dataset download "https://discord.com/channels/<guild_id>/<channel_id>" --limit 5
-uv run harina dataset download "https://discord.com/channels/<guild_id>/<channel_id>" --output-dir ./dataset/v3-backfill
-uv run harina dataset download "https://discord.com/channels/<guild_id>/<channel_id>" --overwrite
-```
-
-主なオプション:
-
-- `--output-dir ./dataset/discord-images`
-- `--limit 500`
-- `--include-bots`
-- `--overwrite`
-
-アップロードされていたファイル名はそのまま保持されます。保存先は `guild-<name-or-id>/channel-<name-or-id>/message-<id>/attachment-<id>/` で整理され、ルートには `metadata.jsonl` を出力します。サーバー名またはチャンネル名に日本語が含まれる場合は、その名前部分をスキップして数値 ID のみを使います。
-
-主な用途:
-
-- V1、V2、V3 からの過去データ移行
-- 回帰検証や評価用の固定データセット作成
-- Gemini モデルやプロンプト更新後の再スキャン
-
-## 🧪 Gemini スモークテスト
-
-データセットを取得したあと、2 枚程度の画像でレシート認識の動作確認をすぐ回せます。
-
-```bash
-uv run harina dataset smoke-test --limit 2
-```
-
-よく使う例:
-
-```bash
-uv run harina dataset smoke-test --limit 2
-uv run harina dataset smoke-test --dataset-dir ./dataset/v3-backfill --limit 2
-uv run harina dataset smoke-test --dataset-dir ./dataset/v3-backfill --limit 2 --output ./artifacts/gemini-smoke-test.json
-```
-
-補足:
-
-- `GEMINI_API_KEY` と `GEMINI_MODEL` を使って実行します
-- このリポジトリの既定モデルは `gemini-3-flash-preview` です
-- 同一画像は、`--allow-duplicates` を付けない限りハッシュで自動除外します
-- 結果は JSON で標準出力され、必要ならファイルにも保存できます
-
-## 🤖 Discord アップロードテスト
-
-CLI から実際にレシート画像を Discord チャンネルへアップロードし、bot の返信まで待つ確認もできます。
-
-```bash
-uv run harina bot upload-test --channel-id <channel_id> --image ./sample-receipt.jpg
-```
-
-補足:
-
-- 対象チャンネルに実際のメッセージを投稿します
-- 常時稼働の bot と同じパッケージロジックで処理します
-- テストメッセージには `DISCORD_TEST_MESSAGE_PREFIX` が付き、既定値は `[HARINA-TEST]` です
-- `DISCORD_TEST_CHANNEL_ID` を入れておくと `--channel-id` を省略できます
-- 実運用確認向けなので、安全なテスト用チャンネルで使うのがおすすめです
-
-bot 側の前提条件:
-
-- 対象サーバーに bot が参加していること
-- 対象チャンネルの閲覧権限と履歴参照権限があること
-- Discord Developer Portal で `MESSAGE CONTENT INTENT` を有効化していること
-
-## 🐳 Docker Compose
+## Docker Compose
 
 ```bash
 docker compose up -d --build
-docker compose logs -f
+docker compose logs -f receipt-bot
+docker compose logs -f drive-watcher
 ```
 
-Google サービスアカウント JSON ファイルを使う場合は `./secrets` に置き、`GOOGLE_SERVICE_ACCOUNT_KEY_FILE=/app/secrets/your-key.json` を設定してください。
+Compose では 2 サービスが動きます。
 
-## 📚 ドキュメント
+- `receipt-bot`: Discord 直接投稿の受付
+- `drive-watcher`: Google Drive inbox フォルダの監視
+
+ファイルベースの Google 認証情報を使う場合は `./secrets` に置き、`GOOGLE_OAUTH_CLIENT_SECRET_FILE` または `GOOGLE_SERVICE_ACCOUNT_KEY_FILE` を `/app/secrets/...` に向けてください。
+
+## ドキュメント
 
 - [Docs site](https://sunwood-ai-labs.github.io/harina-v4/)
 - [概要](./docs/ja/guide/overview.md)
 - [CLI](./docs/ja/guide/cli.md)
+- [Google セットアップ](./docs/ja/guide/google-setup.md)
+- [デプロイ](./docs/ja/guide/deployment.md)
 - [データセットダウンローダー](./docs/ja/guide/dataset-downloader.md)
 - [Gemini スモークテスト](./docs/ja/guide/gemini-smoke-test.md)
-- [Google 設定](./docs/ja/guide/google-setup.md)
-- [デプロイ](./docs/ja/guide/deployment.md)
 
-## 🗂 リポジトリ構成
-
-```text
-app/                  Python bot 実装
-docs/                 VitePress ドキュメント
-.github/workflows/    CI と GitHub Pages
-Dockerfile            コンテナイメージ定義
-docker-compose.yml    セルフホスト用構成
-```
-
-## 🛠 運用メモ
-
-- `DISCORD_CHANNEL_IDS` を空にすると、アクセス可能な全チャンネルを対象にします
-- `DISCORD_CHANNEL_IDS` にカンマ区切りの ID を入れると対象を制限できます
-- bot 起動時に Google Sheets のヘッダー行を自動作成します
-- 必須設定が不足している場合は起動時に失敗します
-- `DISCORD_DATASET_OUTPUT_DIR` で downloader の既定保存先を変更できます
-- `DISCORD_TEST_CHANNEL_ID` で `harina-v4 bot upload-test` の既定チャンネルを設定できます
-- `DISCORD_TEST_MESSAGE_PREFIX` で CLI テスト投稿として扱う自己投稿メッセージの接頭辞を変えられます
-
-## 💻 開発
+## 開発
 
 ```bash
 uv sync
@@ -280,6 +155,6 @@ npm --prefix docs install
 npm --prefix docs run docs:build
 ```
 
-## 📄 ライセンス
+## ライセンス
 
 [MIT](./LICENSE)

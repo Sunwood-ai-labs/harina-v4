@@ -44,6 +44,9 @@ class GoogleWorkspaceClient:
     async def append_receipt_row(self, row: list[str]) -> None:
         await asyncio.to_thread(self._append_receipt_row_sync, row)
 
+    async def append_receipt_rows(self, rows: list[list[str]]) -> None:
+        await asyncio.to_thread(self._append_receipt_rows_sync, rows)
+
     async def list_image_files(self, *, folder_id: str) -> list[DriveImageFile]:
         return await asyncio.to_thread(self._list_image_files_sync, folder_id)
 
@@ -121,6 +124,11 @@ class GoogleWorkspaceClient:
         return UploadedDriveFile(file_id=response["id"], web_view_link=response.get("webViewLink"))
 
     def _append_receipt_row_sync(self, row: list[str]) -> None:
+        self._append_receipt_rows_sync([row])
+
+    def _append_receipt_rows_sync(self, rows: list[list[str]]) -> None:
+        if not rows:
+            return
         (
             self._sheets.spreadsheets()
             .values()
@@ -129,7 +137,7 @@ class GoogleWorkspaceClient:
                 range=f"'{self._sheet_name}'!A1",
                 valueInputOption="USER_ENTERED",
                 insertDataOption="INSERT_ROWS",
-                body={"values": [row]},
+                body={"values": rows},
             )
                 .execute()
         )

@@ -1,7 +1,7 @@
 import asyncio
 
 from app.formatters import ReceiptRecordContext
-from app.models import ReceiptExtraction
+from app.models import ReceiptExtraction, ReceiptLineItem
 from app.processor import ReceiptProcessor
 
 
@@ -33,8 +33,8 @@ class _FakeGoogleWorkspace:
 
         return _DriveFile()
 
-    async def append_receipt_row(self, row: list[str]) -> None:
-        self.rows.append(row)
+    async def append_receipt_rows(self, rows: list[list[str]]) -> None:
+        self.rows.extend(rows)
 
 
 def sample_extraction() -> ReceiptExtraction:
@@ -44,6 +44,10 @@ def sample_extraction() -> ReceiptExtraction:
         currency="JPY",
         total=1100,
         confidence=0.92,
+        line_items=[
+            ReceiptLineItem(name="Cabbage", quantity=1, total_price=198),
+            ReceiptLineItem(name="Juice", quantity=2, unit_price=150, total_price=300),
+        ],
     )
 
 
@@ -70,8 +74,11 @@ def test_process_receipt_can_skip_google_writes() -> None:
     assert result.drive_file_id is None
     assert result.drive_file_url is None
     assert result.google_write_performed is False
+    assert len(result.rows) == 2
     assert result.row[4] == "cli"
     assert result.row[14] == "Cafe Harina"
+    assert result.rows[0][31] == "Cabbage"
+    assert result.rows[1][31] == "Juice"
 
 
 def test_process_receipt_writes_to_google_when_enabled() -> None:
@@ -94,6 +101,7 @@ def test_process_receipt_writes_to_google_when_enabled() -> None:
     )
 
     assert workspace.upload_calls[0][0].startswith("2026-03-11_Cafe-Harina_")
-    assert workspace.rows == [result.row]
+    assert workspace.rows == result.rows
+    assert len(result.rows) == 2
     assert result.drive_file_id == "drive-123"
     assert result.google_write_performed is True

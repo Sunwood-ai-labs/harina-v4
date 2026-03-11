@@ -104,4 +104,6 @@ async def run_discord_upload_test(
         "reply_message_id": client.reply_message.id,
         "reply_message_url": client.reply_message.jump_url,
         "reply_content": client.reply_message.content,
+        "reply_embed_count": len(client.reply_message.embeds),
+        "reply_embed_titles": [embed.title for embed in client.reply_message.embeds],
     }

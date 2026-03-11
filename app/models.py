@@ -9,6 +9,12 @@ class ReceiptLineItem(BaseModel):
     unit_price: float | None = None
     total_price: float | None = None
 
+    def has_meaningful_data(self) -> bool:
+        return any(
+            value not in (None, "")
+            for value in (self.name, self.quantity, self.unit_price, self.total_price)
+        )
+
 
 class ReceiptExtraction(BaseModel):
     merchant_name: str | None = None

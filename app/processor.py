@@ -8,7 +8,7 @@ from app.formatters import (
     ReceiptRecordContext,
     build_discord_receipt_context,
     build_drive_file_name,
-    build_receipt_row,
+    build_receipt_rows,
     format_receipt_summary,
 )
 from app.gemini_client import GeminiReceiptExtractor
@@ -22,15 +22,21 @@ class ProcessedReceipt:
     summary: str
     drive_file_id: str | None
     drive_file_url: str | None
-    row: list[str]
+    rows: list[list[str]]
     google_write_performed: bool
+
+    @property
+    def row(self) -> list[str]:
+        return self.rows[0]
 
     def as_dict(self) -> dict[str, object]:
         return {
             "summary": self.summary,
             "drive_file_id": self.drive_file_id,
             "drive_file_url": self.drive_file_url,
+            "row_count": len(self.rows),
             "row": self.row,
+            "rows": self.rows,
             "google_write_performed": self.google_write_performed,
             "extraction": self.extraction.model_dump(mode="json"),
         }
@@ -92,20 +98,20 @@ class ReceiptProcessor:
             drive_file_id = drive_file.file_id
             drive_file_url = drive_file.web_view_link
 
-        row = build_receipt_row(
+        rows = build_receipt_rows(
             context=context,
             extraction=extraction,
             drive_file_id=drive_file_id or "",
             drive_file_url=drive_file_url,
         )
         if write_to_google:
-            await self.google_workspace.append_receipt_row(row)
+            await self.google_workspace.append_receipt_rows(rows)
 
         return ProcessedReceipt(
             extraction=extraction,
             summary=format_receipt_summary(extraction, drive_file_url),
             drive_file_id=drive_file_id,
             drive_file_url=drive_file_url,
-            row=row,
+            rows=rows,
             google_write_performed=write_to_google,
         )

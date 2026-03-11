@@ -2,7 +2,7 @@ import asyncio
 
 from app.drive_watcher import DriveReceiptWatcher
 from app.google_workspace import DriveImageFile
-from app.models import ReceiptExtraction
+from app.models import ReceiptExtraction, ReceiptLineItem
 
 
 class _FakeGemini:
@@ -16,6 +16,10 @@ class _FakeGemini:
             currency="JPY",
             total=1100,
             confidence=0.97,
+            line_items=[
+                ReceiptLineItem(name="Cabbage", quantity=1, total_price=198),
+                ReceiptLineItem(name="Juice", quantity=2, unit_price=150, total_price=300),
+            ],
         )
 
 
@@ -44,8 +48,8 @@ class _FakeWorkspace:
         assert file_id == "drive-file-123"
         return b"drive-image"
 
-    async def append_receipt_row(self, row: list[str]) -> None:
-        self.rows.append(row)
+    async def append_receipt_rows(self, rows: list[list[str]]) -> None:
+        self.rows.extend(rows)
 
     async def move_file(self, *, file_id: str, destination_folder_id: str) -> None:
         self.moves.append((file_id, destination_folder_id))
@@ -60,14 +64,14 @@ class _FakeNotifier:
         *,
         file_name: str,
         image_bytes: bytes,
-        summary: str,
+        extraction: ReceiptExtraction,
         drive_file_url: str | None,
     ) -> None:
         self.calls.append(
             {
                 "file_name": file_name,
                 "image_bytes": image_bytes,
-                "summary": summary,
+                "extraction": extraction,
                 "drive_file_url": drive_file_url,
             }
         )
@@ -91,13 +95,16 @@ def test_drive_watcher_processes_files_and_moves_them() -> None:
     assert summary.failed == 0
     assert summary.notified == 1
     assert summary.moved == 1
+    assert len(workspace.rows) == 2
     assert workspace.rows[0][4] == "google-drive-watch"
     assert workspace.rows[0][9] == "drive-file-123"
     assert workspace.rows[0][12] == "drive-file-123"
+    assert workspace.rows[0][31] == "Cabbage"
+    assert workspace.rows[1][31] == "Juice"
     assert workspace.moves == [("drive-file-123", "processed-folder")]
     assert notifier.calls[0]["file_name"] == "receipt.jpg"
     assert notifier.calls[0]["image_bytes"] == b"drive-image"
-    assert "Cafe Harina" in str(notifier.calls[0]["summary"])
+    assert "Cafe Harina" == notifier.calls[0]["extraction"].merchant_name
 
 
 def test_drive_watcher_continues_after_file_failure() -> None:

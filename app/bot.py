@@ -5,13 +5,16 @@ import logging
 import discord
 
 from app.config import Settings
-from app.formatters import is_image_attachment
+from app.formatters import build_receipt_embed, is_image_attachment
 from app.gemini_client import GeminiReceiptExtractor
 from app.google_workspace import GoogleWorkspaceClient
-from app.processor import ReceiptProcessor
+from app.processor import ProcessedReceipt, ReceiptProcessor
 
 
 logger = logging.getLogger(__name__)
+
+PROCESSING_REACTION = "🧾"
+ERROR_MESSAGE = "レシートの処理に失敗しました。Gemini / Google Drive / Google Sheets の設定と画像形式を確認してください。"
 
 
 def should_process_message(
@@ -82,25 +85,48 @@ class ReceiptBot(discord.Client):
             return
 
         try:
-            await message.add_reaction("🧾")
+            await message.add_reaction(PROCESSING_REACTION)
         except discord.HTTPException:
             logger.warning("Could not add reaction to message %s", message.id)
 
         try:
-            summaries = []
+            embeds = []
             for index, attachment in enumerate(receipt_attachments, start=1):
-                summary = await self._process_attachment(message=message, attachment=attachment)
-                label = f"Receipt {index}" if len(receipt_attachments) > 1 else "Receipt"
-                summaries.append(f"{label}: {summary}")
+                processed = await self._process_attachment(message=message, attachment=attachment)
+                title = f"Receipt {index}" if len(receipt_attachments) > 1 else "Receipt"
+                embeds.append(
+                    build_receipt_embed(
+                        title=title,
+                        extraction=processed.extraction,
+                        drive_file_url=processed.drive_file_url,
+                        source_label=attachment.filename,
+                    )
+                )
 
-            await message.reply("\n".join(summaries), mention_author=False)
+            await self._reply_with_embeds(message=message, embeds=embeds)
         except Exception:  # noqa: BLE001
             logger.exception("Receipt processing failed for message %s", message.id)
-            await message.reply(
-                "レシートの処理に失敗しました。Gemini / Google Drive / Google Sheets の設定と画像形式を確認してください。",
-                mention_author=False,
+            error_embed = discord.Embed(
+                title="Receipt Processing Failed",
+                description=ERROR_MESSAGE,
+                color=discord.Color.red(),
+            )
+            await message.reply(embed=error_embed, mention_author=False)
+
+    async def _reply_with_embeds(self, *, message: discord.Message, embeds: list[discord.Embed]) -> None:
+        if not embeds:
+            return
+
+        for start in range(0, len(embeds), 10):
+            chunk = embeds[start : start + 10]
+            if start == 0:
+                await message.reply(embeds=chunk, mention_author=False)
+                continue
+
+            await message.channel.send(
+                embeds=chunk,
+                reference=message.to_reference(fail_if_not_exists=False),
             )
 
-    async def _process_attachment(self, *, message: discord.Message, attachment: discord.Attachment) -> str:
-        processed = await self.processor.process_attachment(message=message, attachment=attachment)
-        return processed.summary
+    async def _process_attachment(self, *, message: discord.Message, attachment: discord.Attachment) -> ProcessedReceipt:
+        return await self.processor.process_attachment(message=message, attachment=attachment)

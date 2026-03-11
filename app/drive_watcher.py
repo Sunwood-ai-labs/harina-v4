@@ -8,9 +8,10 @@ from io import BytesIO
 import discord
 
 from app.config import Settings
-from app.formatters import build_drive_receipt_context, build_receipt_row, format_receipt_summary
+from app.formatters import build_drive_receipt_context, build_receipt_embed, build_receipt_rows, format_receipt_summary
 from app.gemini_client import GeminiReceiptExtractor
 from app.google_workspace import DriveImageFile, GoogleWorkspaceClient
+from app.models import ReceiptExtraction
 
 
 logger = logging.getLogger(__name__)
@@ -73,7 +74,7 @@ class DriveReceiptWatcher:
             filename=drive_file.name,
         )
 
-        row = build_receipt_row(
+        rows = build_receipt_rows(
             context=build_drive_receipt_context(
                 file_id=drive_file.file_id,
                 file_name=drive_file.name,
@@ -83,13 +84,12 @@ class DriveReceiptWatcher:
             drive_file_id=drive_file.file_id,
             drive_file_url=drive_file.web_view_link,
         )
-        await self.google_workspace.append_receipt_row(row)
+        await self.google_workspace.append_receipt_rows(rows)
 
-        summary = format_receipt_summary(extraction, drive_file.web_view_link)
         await self.notifier.send_receipt_notification(
             file_name=drive_file.name,
             image_bytes=image_bytes,
-            summary=summary,
+            extraction=extraction,
             drive_file_url=drive_file.web_view_link,
         )
         await self.google_workspace.move_file(
@@ -146,7 +146,7 @@ class DriveWatcherClient(discord.Client):
         *,
         file_name: str,
         image_bytes: bytes,
-        summary: str,
+        extraction: ReceiptExtraction,
         drive_file_url: str | None,
     ) -> None:
         channel = self.get_channel(self._notify_channel)
@@ -155,14 +155,17 @@ class DriveWatcherClient(discord.Client):
         if not hasattr(channel, "send"):
             raise RuntimeError(f"Channel {self._notify_channel} is not messageable.")
 
-        content = f"[Drive Watch] {summary}"
-        if drive_file_url:
-            content = f"{content}\nDrive: {drive_file_url}"
-
-        await channel.send(
-            content=content,
-            file=discord.File(BytesIO(image_bytes), filename=file_name),
+        file = discord.File(BytesIO(image_bytes), filename=file_name)
+        embed = build_receipt_embed(
+            title="Drive Watch Receipt",
+            extraction=extraction,
+            drive_file_url=drive_file_url,
+            source_label=file_name,
+            image_url=f"attachment://{file_name}",
         )
+        embed.description = format_receipt_summary(extraction, drive_file_url)
+
+        await channel.send(file=file, embed=embed)
 
     async def _run_watch_loop(self) -> None:
         try:

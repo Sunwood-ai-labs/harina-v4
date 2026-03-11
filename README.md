@@ -86,6 +86,7 @@ uv run harina-v4 google init-drive-watch --env-file .env
 uv run harina-v4 drive watch --once
 uv run harina-v4 dataset download "https://discord.com/channels/<guild_id>/<channel_id>" --limit 50
 uv run harina-v4 dataset smoke-test --dataset-dir ./dataset/v3-backfill --limit 2
+uv run harina-v4 test docs-public
 ```
 
 ## Google setup

@@ -35,3 +35,17 @@ def test_select_sample_images_can_keep_duplicates(tmp_path: Path) -> None:
     result = select_sample_images([image_a, image_b], limit=2, allow_duplicates=True)
 
     assert result == [image_a, image_b]
+
+
+def test_discover_dataset_images_includes_real_dataset_image(dataset_receipt_image_path: Path) -> None:
+    dataset_dir = Path(__file__).resolve().parents[1] / "docs" / "public" / "test"
+
+    result = discover_dataset_images(dataset_dir)
+
+    assert dataset_receipt_image_path in result
+
+
+def test_select_sample_images_can_use_real_dataset_image(dataset_receipt_image_path: Path) -> None:
+    result = select_sample_images([dataset_receipt_image_path], limit=1, allow_duplicates=False)
+
+    assert result == [dataset_receipt_image_path]

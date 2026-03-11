@@ -23,6 +23,12 @@ Process a local receipt image through the CLI-first pipeline:
 uv run harina-v4 receipt process ./sample-receipt.jpg --skip-google-write
 ```
 
+Run both the CLI path and the Discord path against every sample under `docs/public/test`:
+
+```bash
+uv run harina-v4 test docs-public
+```
+
 Notes:
 
 - `receipt process` uses the same Gemini-centered receipt pipeline as the Discord bot
@@ -42,6 +48,13 @@ Upload a real image into Discord and wait for the bot reply:
 ```bash
 uv run harina-v4 bot upload-test --channel-id <channel_id> --image ./sample-receipt.jpg
 ```
+
+Notes:
+
+- `test docs-public` scans every supported image under `docs/public/test`
+- The default `--mode both` runs the local CLI pipeline and the live Discord upload check in one pass
+- Use `--mode cli` or `--mode discord` when you want to isolate one path
+- Discord-side checks default to `DISCORD_TEST_CHANNEL_ID` unless `--channel-id` is provided
 
 ## Drive watcher commands
 
@@ -110,7 +123,7 @@ uv run harina-v4 dataset smoke-test --dataset-dir ./dataset/v3-backfill --limit 
 1. Use `harina-v4 google oauth-login` if you are on personal Gmail.
 2. Use `harina-v4 google init-resources` to create or confirm Drive and Sheets targets.
 3. Use `harina-v4 google init-drive-watch` to provision the Drive watcher folders.
-4. Use `harina-v4 receipt process --skip-google-write` to debug extraction against a local image.
-5. Use `harina-v4 bot upload-test` to confirm live Discord behavior.
+4. Put the receipt images you want to verify under `docs/public/test`.
+5. Use `harina-v4 test docs-public` to exercise both the CLI path and the Discord path.
 6. Use `harina-v4 drive watch --once` to confirm one-shot Drive watcher behavior.
 7. Use `harina-v4 bot run` and `harina-v4 drive watch` for the continuous production path.

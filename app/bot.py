@@ -13,8 +13,11 @@ from app.processor import ProcessedReceipt, ReceiptProcessor
 
 logger = logging.getLogger(__name__)
 
-PROCESSING_REACTION = "🧾"
-ERROR_MESSAGE = "レシートの処理に失敗しました。Gemini / Google Drive / Google Sheets の設定と画像形式を確認してください。"
+PROCESSING_REACTION = "🔄"
+ERROR_EMBED_TITLE = "Receipt Processing Failed"
+ERROR_MESSAGE = (
+    "Receipt processing failed. Check the Gemini, Google Drive, and Google Sheets settings and image contents."
+)
 
 
 def should_process_message(
@@ -107,7 +110,7 @@ class ReceiptBot(discord.Client):
         except Exception:  # noqa: BLE001
             logger.exception("Receipt processing failed for message %s", message.id)
             error_embed = discord.Embed(
-                title="Receipt Processing Failed",
+                title=ERROR_EMBED_TITLE,
                 description=ERROR_MESSAGE,
                 color=discord.Color.red(),
             )

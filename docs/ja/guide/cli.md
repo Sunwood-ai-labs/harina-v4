@@ -23,6 +23,12 @@ uv run harina-v4 --help
 uv run harina-v4 receipt process ./sample-receipt.jpg --skip-google-write
 ```
 
+`docs/public/test` の画像を使って CLI と Discord の両方をまとめて確認:
+
+```bash
+uv run harina-v4 test docs-public
+```
+
 補足:
 
 - `receipt process` は Discord bot と同じ Gemini 中心の処理パイプラインを使います
@@ -42,6 +48,13 @@ uv run harina-v4 bot run
 ```bash
 uv run harina-v4 bot upload-test --channel-id <channel_id> --image ./sample-receipt.jpg
 ```
+
+補足:
+
+- `test docs-public` は `docs/public/test` 配下の対応画像をすべて走査します
+- 既定の `--mode both` で CLI 経路と Discord 経路をまとめて確認できます
+- 片側だけ確認したい場合は `--mode cli` または `--mode discord` を使います
+- Discord 側は `--channel-id` を省略すると `DISCORD_TEST_CHANNEL_ID` を使います
 
 ## Drive watcher コマンド
 

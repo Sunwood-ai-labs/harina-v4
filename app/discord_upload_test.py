@@ -5,7 +5,7 @@ from pathlib import Path
 
 import discord
 
-from app.bot import ReceiptBot
+from app.bot import ERROR_EMBED_TITLE, ReceiptBot
 from app.config import Settings
 
 
@@ -96,6 +96,12 @@ async def run_discord_upload_test(
     if client.reply_message is None:
         raise RuntimeError("Did not receive a bot reply before timeout.")
 
+    reply_embed_titles = [embed.title for embed in client.reply_message.embeds]
+    if ERROR_EMBED_TITLE in reply_embed_titles:
+        raise RuntimeError(
+            f"Bot replied with {ERROR_EMBED_TITLE} for {image_path.name}: {client.reply_message.jump_url}"
+        )
+
     return {
         "channel_id": channel_id,
         "image_path": str(image_path.resolve()),
@@ -105,5 +111,5 @@ async def run_discord_upload_test(
         "reply_message_url": client.reply_message.jump_url,
         "reply_content": client.reply_message.content,
         "reply_embed_count": len(client.reply_message.embeds),
-        "reply_embed_titles": [embed.title for embed in client.reply_message.embeds],
+        "reply_embed_titles": reply_embed_titles,
     }

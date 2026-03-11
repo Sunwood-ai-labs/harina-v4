@@ -4,7 +4,6 @@ import argparse
 import asyncio
 import json
 import logging
-import mimetypes
 import os
 from argparse import Namespace
 from pathlib import Path
@@ -16,7 +15,6 @@ from app.config import Settings, load_settings
 from app.dataset_downloader import DEFAULT_OUTPUT_DIR, run_downloader
 from app.discord_upload_test import run_discord_upload_test
 from app.drive_watcher import run_drive_watch
-from app.formatters import build_local_receipt_context
 from app.gemini_smoke_test import run_smoke_test
 from app.google_auth import build_google_credentials, load_oauth_client_info, load_service_account_info
 from app.google_oauth import finish_oauth_login, run_oauth_login, start_oauth_login
@@ -26,9 +24,8 @@ from app.google_setup import (
     build_google_env_updates,
     upsert_env_file,
 )
-from app.gemini_client import GeminiReceiptExtractor
-from app.google_workspace import GoogleWorkspaceClient
-from app.processor import ReceiptProcessor
+from app.local_receipt_runner import run_local_receipt_process
+from app.test_asset_runner import DEFAULT_TEST_ASSET_DIR, run_test_asset_suite
 
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -129,6 +126,43 @@ def build_parser() -> argparse.ArgumentParser:
     )
     dataset_smoke_parser.add_argument("--output", default=None, help="Optional JSON output file.")
     dataset_smoke_parser.set_defaults(handler=handle_dataset_smoke_test)
+
+    test_parser = subparsers.add_parser("test", help="Run CLI and Discord verification flows against sample assets.")
+    test_subparsers = test_parser.add_subparsers(dest="test_command", required=True)
+
+    test_docs_public_parser = test_subparsers.add_parser(
+        "docs-public",
+        help="Run CLI and Discord tests against images stored under docs/public/test.",
+    )
+    test_docs_public_parser.add_argument(
+        "--source-dir",
+        default=str(DEFAULT_TEST_ASSET_DIR),
+        help=f"Directory with sample images. Default: {DEFAULT_TEST_ASSET_DIR}",
+    )
+    test_docs_public_parser.add_argument(
+        "--mode",
+        choices=("both", "cli", "discord"),
+        default="both",
+        help="Which verification paths to run. Default: both",
+    )
+    test_docs_public_parser.add_argument(
+        "--channel-id",
+        type=int,
+        default=None,
+        help="Discord channel ID for upload tests. Defaults to DISCORD_TEST_CHANNEL_ID when set.",
+    )
+    test_docs_public_parser.add_argument(
+        "--discord-timeout-seconds",
+        type=float,
+        default=60.0,
+        help="How long to wait for each Discord bot reply. Default: 60",
+    )
+    test_docs_public_parser.add_argument(
+        "--cli-google-write",
+        action="store_true",
+        help="Allow the CLI-side test path to upload to Drive and append to Sheets.",
+    )
+    test_docs_public_parser.set_defaults(handler=handle_test_docs_public)
 
     drive_parser = subparsers.add_parser("drive", help="Watch Google Drive folders and forward receipt notifications.")
     drive_subparsers = drive_parser.add_subparsers(dest="drive_command", required=True)
@@ -381,51 +415,16 @@ def handle_receipt_process(args: Namespace, settings: Settings | None) -> None:
     if settings is None:
         raise RuntimeError("Receipt settings were not loaded.")
 
-    image_path = Path(args.image)
-    if not image_path.exists():
-        raise RuntimeError(f"Image file does not exist: {image_path}")
-    if not image_path.is_file():
-        raise RuntimeError(f"Image path is not a file: {image_path}")
-
-    settings.require_gemini_api_key()
-    google_workspace = None
-    if not args.skip_google_write:
-        settings.require_google_workspace()
-        google_workspace = GoogleWorkspaceClient(
-            credentials=settings.google_credentials,
-            drive_folder_id=settings.google_drive_folder_id or "",
-            spreadsheet_id=settings.google_sheets_spreadsheet_id or "",
-            sheet_name=settings.google_sheets_sheet_name,
-        )
-
-    processor = ReceiptProcessor(
-        gemini=GeminiReceiptExtractor(
-            api_key=settings.gemini_api_key or "",
-            model=settings.gemini_model,
-        ),
-        google_workspace=google_workspace,
-    )
-
-    mime_type = args.mime_type or mimetypes.guess_type(image_path.name)[0] or "image/jpeg"
-    result = asyncio.run(
-        processor.process_receipt(
-            context=build_local_receipt_context(
-                image_path,
-                source_name=args.source_name,
-                author_tag=args.author_tag,
-            ),
-            filename=image_path.name,
-            mime_type=mime_type,
-            image_bytes=image_path.read_bytes(),
-            write_to_google=not args.skip_google_write,
+    summary = asyncio.run(
+        run_local_receipt_process(
+            settings=settings,
+            image_path=Path(args.image),
+            mime_type=args.mime_type,
+            skip_google_write=args.skip_google_write,
+            source_name=args.source_name,
+            author_tag=args.author_tag,
         )
     )
-
-    summary = {
-        "image_path": str(image_path.resolve()),
-        "mime_type": mime_type,
-        **result.as_dict(),
-    }
     output_text = json.dumps(summary, ensure_ascii=True, indent=2)
     if args.output:
         output_path = Path(args.output)
@@ -463,6 +462,23 @@ def handle_dataset_smoke_test(args: Namespace, settings: Settings | None) -> Non
                 allow_duplicates=args.allow_duplicates,
                 output=args.output,
             )
+        )
+    )
+    print(json.dumps(summary, ensure_ascii=True, indent=2))
+
+
+def handle_test_docs_public(args: Namespace, settings: Settings | None) -> None:
+    if settings is None:
+        raise RuntimeError("Test settings were not loaded.")
+
+    summary = asyncio.run(
+        run_test_asset_suite(
+            settings=settings,
+            source_dir=Path(args.source_dir),
+            mode=args.mode,
+            channel_id=args.channel_id,
+            discord_timeout_seconds=args.discord_timeout_seconds,
+            cli_google_write=args.cli_google_write,
         )
     )
     print(json.dumps(summary, ensure_ascii=True, indent=2))
@@ -692,6 +708,14 @@ def main() -> None:
         settings = load_settings(require_discord=True, require_gemini=True, require_google_workspace=True)
     elif args.command == "receipt":
         settings = load_settings(require_gemini=True)
+    elif args.command == "test":
+        require_discord = args.mode in {"both", "discord"}
+        require_google_workspace = require_discord or bool(args.cli_google_write)
+        settings = load_settings(
+            require_discord=require_discord,
+            require_gemini=True,
+            require_google_workspace=require_google_workspace,
+        )
     elif args.command == "drive":
         settings = load_settings(require_discord=True, require_gemini=True)
     args.handler(args, settings)

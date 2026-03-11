@@ -17,6 +17,7 @@ class Settings(BaseModel):
     discord_channel_ids: str | None = Field(default=None, alias="DISCORD_CHANNEL_IDS")
     discord_test_channel_id: int | None = Field(default=None, alias="DISCORD_TEST_CHANNEL_ID")
     discord_test_message_prefix: str = Field(default="[HARINA-TEST]", alias="DISCORD_TEST_MESSAGE_PREFIX")
+    discord_notify_channel_id: int | None = Field(default=None, alias="DISCORD_NOTIFY_CHANNEL_ID")
     gemini_api_key: str | None = Field(default=None, alias="GEMINI_API_KEY")
     gemini_model: str = Field(default="gemini-3-flash-preview", alias="GEMINI_MODEL")
     google_service_account_json: str | None = Field(default=None, alias="GOOGLE_SERVICE_ACCOUNT_JSON")
@@ -27,6 +28,12 @@ class Settings(BaseModel):
     google_drive_folder_id: str | None = Field(default=None, alias="GOOGLE_DRIVE_FOLDER_ID")
     google_sheets_spreadsheet_id: str | None = Field(default=None, alias="GOOGLE_SHEETS_SPREADSHEET_ID")
     google_sheets_sheet_name: str = Field(default="Receipts", alias="GOOGLE_SHEETS_SHEET_NAME")
+    google_drive_watch_source_folder_id: str | None = Field(default=None, alias="GOOGLE_DRIVE_WATCH_SOURCE_FOLDER_ID")
+    google_drive_watch_processed_folder_id: str | None = Field(
+        default=None,
+        alias="GOOGLE_DRIVE_WATCH_PROCESSED_FOLDER_ID",
+    )
+    drive_poll_interval_seconds: int = Field(default=60, alias="DRIVE_POLL_INTERVAL_SECONDS")
 
     @property
     def allowed_channel_ids(self) -> set[int]:
@@ -81,6 +88,7 @@ class Settings(BaseModel):
         "discord_token",
         "discord_channel_ids",
         "discord_test_channel_id",
+        "discord_notify_channel_id",
         "gemini_api_key",
         "google_service_account_json",
         "google_service_account_key_file",
@@ -88,6 +96,8 @@ class Settings(BaseModel):
         "google_oauth_client_secret_file",
         "google_oauth_refresh_token",
         "google_drive_folder_id",
+        "google_drive_watch_source_folder_id",
+        "google_drive_watch_processed_folder_id",
         "google_sheets_spreadsheet_id",
         mode="before",
     )
@@ -131,6 +141,40 @@ class Settings(BaseModel):
             raise RuntimeError(
                 "Set GOOGLE_SHEETS_SPREADSHEET_ID in your environment or .env before writing receipts."
             )
+
+    def require_drive_watch(self) -> None:
+        if not self.discord_token:
+            raise RuntimeError("Set DISCORD_TOKEN in your environment or .env before running drive watch commands.")
+        if not self.gemini_api_key:
+            raise RuntimeError("Set GEMINI_API_KEY in your environment or .env before running drive watch commands.")
+        if not self.has_google_auth():
+            raise RuntimeError(
+                "Configure either GOOGLE_SERVICE_ACCOUNT_JSON / GOOGLE_SERVICE_ACCOUNT_KEY_FILE or "
+                "GOOGLE_OAUTH_CLIENT_JSON / GOOGLE_OAUTH_CLIENT_SECRET_FILE plus GOOGLE_OAUTH_REFRESH_TOKEN."
+            )
+        if not self.google_sheets_spreadsheet_id:
+            raise RuntimeError(
+                "Set GOOGLE_SHEETS_SPREADSHEET_ID in your environment or .env before running drive watch commands."
+            )
+        if not self.google_drive_watch_source_folder_id:
+            raise RuntimeError(
+                "Set GOOGLE_DRIVE_WATCH_SOURCE_FOLDER_ID in your environment or .env before running drive watch commands."
+            )
+        if not self.google_drive_watch_processed_folder_id:
+            raise RuntimeError(
+                "Set GOOGLE_DRIVE_WATCH_PROCESSED_FOLDER_ID in your environment or .env before running drive watch commands."
+            )
+        if self.discord_notify_channel_id is None:
+            raise RuntimeError(
+                "Set DISCORD_NOTIFY_CHANNEL_ID in your environment or .env before running drive watch commands."
+            )
+
+    @field_validator("drive_poll_interval_seconds")
+    @classmethod
+    def validate_poll_interval(cls, value: int) -> int:
+        if value <= 0:
+            raise ValueError("DRIVE_POLL_INTERVAL_SECONDS must be greater than 0.")
+        return value
 
     @model_validator(mode="after")
     def validate_sheet_name(self) -> "Settings":

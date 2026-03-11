@@ -2,18 +2,28 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
+from typing import Any
 
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaInMemoryUpload
 
 from app.formatters import RECEIPT_SHEET_HEADERS
-from app.models import ReceiptExtraction
 
 
 @dataclass(slots=True)
 class UploadedDriveFile:
     file_id: str
+    web_view_link: str | None
+
+
+@dataclass(slots=True)
+class DriveImageFile:
+    file_id: str
+    name: str
+    mime_type: str
+    created_time: str
+    parents: list[str]
     web_view_link: str | None
 
 
@@ -33,6 +43,15 @@ class GoogleWorkspaceClient:
 
     async def append_receipt_row(self, row: list[str]) -> None:
         await asyncio.to_thread(self._append_receipt_row_sync, row)
+
+    async def list_image_files(self, *, folder_id: str) -> list[DriveImageFile]:
+        return await asyncio.to_thread(self._list_image_files_sync, folder_id)
+
+    async def download_file(self, *, file_id: str) -> bytes:
+        return await asyncio.to_thread(self._download_file_sync, file_id)
+
+    async def move_file(self, *, file_id: str, destination_folder_id: str) -> None:
+        await asyncio.to_thread(self._move_file_sync, file_id, destination_folder_id)
 
     def _ensure_receipt_sheet_sync(self) -> None:
         spreadsheet = (
@@ -115,6 +134,52 @@ class GoogleWorkspaceClient:
                 .execute()
         )
 
+    def _list_image_files_sync(self, folder_id: str) -> list[DriveImageFile]:
+        page_token = None
+        files: list[DriveImageFile] = []
+
+        while True:
+            response = (
+                self._drive.files()
+                .list(
+                    q=(
+                        f"'{folder_id}' in parents and trashed = false "
+                        "and mimeType != 'application/vnd.google-apps.folder'"
+                    ),
+                    fields="nextPageToken,files(id,name,mimeType,createdTime,parents,webViewLink)",
+                    orderBy="createdTime asc",
+                    pageSize=100,
+                    pageToken=page_token,
+                )
+                .execute()
+            )
+
+            image_items = [item for item in response.get("files", []) if str(item.get("mimeType", "")).startswith("image/")]
+            files.extend(_parse_drive_image_files(image_items))
+            page_token = response.get("nextPageToken")
+            if not page_token:
+                break
+
+        return files
+
+    def _download_file_sync(self, file_id: str) -> bytes:
+        return self._drive.files().get_media(fileId=file_id).execute()
+
+    def _move_file_sync(self, file_id: str, destination_folder_id: str) -> None:
+        response = self._drive.files().get(fileId=file_id, fields="parents").execute()
+        parents = response.get("parents", [])
+        remove_parents = ",".join(parent for parent in parents if parent != destination_folder_id)
+        (
+            self._drive.files()
+            .update(
+                fileId=file_id,
+                addParents=destination_folder_id,
+                removeParents=remove_parents or None,
+                fields="id,parents",
+            )
+            .execute()
+        )
+
 
 def _is_service_account_quota_error(exc: HttpError) -> bool:
     if getattr(exc, "resp", None) is not None and getattr(exc.resp, "status", None) != 403:
@@ -122,3 +187,17 @@ def _is_service_account_quota_error(exc: HttpError) -> bool:
 
     text = str(exc)
     return "storageQuotaExceeded" in text or "Service Accounts do not have storage quota" in text
+
+
+def _parse_drive_image_files(items: list[dict[str, Any]]) -> list[DriveImageFile]:
+    return [
+        DriveImageFile(
+            file_id=item["id"],
+            name=item["name"],
+            mime_type=item["mimeType"],
+            created_time=item.get("createdTime", ""),
+            parents=list(item.get("parents", [])),
+            web_view_link=item.get("webViewLink"),
+        )
+        for item in items
+    ]

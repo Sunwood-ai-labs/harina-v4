@@ -10,3 +10,15 @@ services:
     restart: unless-stopped
     volumes:
       - ./secrets:/app/secrets:ro
+    command: ["uv", "run", "--no-dev", "harina-v4", "bot", "run"]
+
+  drive-watcher:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    restart: unless-stopped
+    volumes:
+      - ./secrets:/app/secrets:ro
+    command: ["uv", "run", "--no-dev", "harina-v4", "drive", "watch"]

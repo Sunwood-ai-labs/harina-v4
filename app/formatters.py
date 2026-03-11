@@ -101,6 +101,22 @@ def build_local_receipt_context(
     )
 
 
+def build_drive_receipt_context(
+    *,
+    file_id: str,
+    file_name: str,
+    file_url: str | None,
+    source_name: str = "google-drive-watch",
+) -> ReceiptRecordContext:
+    return ReceiptRecordContext(
+        channel_name=source_name,
+        author_tag="google-drive",
+        attachment_id=file_id,
+        attachment_name=file_name,
+        attachment_url=file_url or "",
+    )
+
+
 def build_drive_file_name(original_filename: str, extraction: ReceiptExtraction) -> str:
     merchant = sanitize_segment(extraction.merchant_name or "merchant") or "merchant"
     purchase_date = sanitize_segment(extraction.purchase_date or datetime.now(UTC).date().isoformat()) or "unknown-date"

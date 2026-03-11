@@ -15,6 +15,7 @@ from app.bot import ReceiptBot
 from app.config import Settings, load_settings
 from app.dataset_downloader import DEFAULT_OUTPUT_DIR, run_downloader
 from app.discord_upload_test import run_discord_upload_test
+from app.drive_watcher import run_drive_watch
 from app.formatters import build_local_receipt_context
 from app.gemini_smoke_test import run_smoke_test
 from app.google_auth import build_google_credentials, load_oauth_client_info, load_service_account_info
@@ -123,6 +124,20 @@ def build_parser() -> argparse.ArgumentParser:
     )
     dataset_smoke_parser.add_argument("--output", default=None, help="Optional JSON output file.")
     dataset_smoke_parser.set_defaults(handler=handle_dataset_smoke_test)
+
+    drive_parser = subparsers.add_parser("drive", help="Watch Google Drive folders and forward receipt notifications.")
+    drive_subparsers = drive_parser.add_subparsers(dest="drive_command", required=True)
+
+    drive_watch_parser = drive_subparsers.add_parser(
+        "watch",
+        help="Poll a Google Drive source folder, extract receipts, notify Discord, and move files after success.",
+    )
+    drive_watch_parser.add_argument(
+        "--once",
+        action="store_true",
+        help="Run one scan and exit instead of polling forever.",
+    )
+    drive_watch_parser.set_defaults(handler=handle_drive_watch)
 
     google_parser = subparsers.add_parser("google", help="Google Drive and Sheets bootstrap helpers.")
     google_subparsers = google_parser.add_subparsers(dest="google_command", required=True)
@@ -386,6 +401,14 @@ def handle_dataset_smoke_test(args: Namespace, settings: Settings | None) -> Non
     print(json.dumps(summary, ensure_ascii=True, indent=2))
 
 
+def handle_drive_watch(args: Namespace, settings: Settings | None) -> None:
+    if settings is None:
+        raise RuntimeError("Drive watcher settings were not loaded.")
+    settings.require_drive_watch()
+    summary = asyncio.run(run_drive_watch(settings=settings, run_once=args.once))
+    print(json.dumps(summary, ensure_ascii=True, indent=2))
+
+
 def handle_google_init_resources(args: Namespace, settings: Settings | None) -> None:
     del settings
     service_account_key_file = args.service_account_key_file or os.getenv("GOOGLE_SERVICE_ACCOUNT_KEY_FILE")
@@ -543,6 +566,8 @@ def main() -> None:
         settings = load_settings(require_discord=True, require_gemini=True, require_google_workspace=True)
     elif args.command == "receipt":
         settings = load_settings(require_gemini=True)
+    elif args.command == "drive":
+        settings = load_settings(require_discord=True, require_gemini=True)
     args.handler(args, settings)
 
 

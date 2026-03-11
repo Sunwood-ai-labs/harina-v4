@@ -1,0 +1,4 @@
+interface:
+  display_name: "Draw.io Diagram Hygiene"
+  short_description: "Prevent overlap in diagrams.net layouts."
+  default_prompt: "Use $drawio-diagram-hygiene to clean up a diagrams.net file and reduce connector or label overlap."

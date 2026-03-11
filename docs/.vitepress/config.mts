@@ -10,7 +10,7 @@ export default defineConfig({
   lastUpdated: true,
   head: [
     ["link", { rel: "icon", href: "/harina-v4/brand/harina-mark.svg" }],
-    ["meta", { property: "og:image", content: "https://sunwood-ai-labs.github.io/harina-v4/brand/harina-hero.svg" }]
+    ["meta", { property: "og:image", content: "https://sunwood-ai-labs.github.io/harina-v4/brand/harina-hero.webp" }]
   ],
   themeConfig: {
     logo: "/brand/harina-mark.svg",

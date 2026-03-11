@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="./docs/public/brand/harina-hero.svg" alt="Harina Receipt Bot hero" width="100%" />
+  <img src="./docs/public/brand/harina-hero.webp" alt="Harina Receipt Bot hero" width="280" />
   <h1>Harina Receipt Bot</h1>
   <p>Discord receipt intake for Gemini, Google Drive, Google Sheets, and migration-friendly dataset backfills.</p>
 </div>

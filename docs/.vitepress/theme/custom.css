@@ -1,0 +1,43 @@
+.VPHome .VPHero.has-image .container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2rem;
+}
+
+.VPHome .VPHero.has-image .main {
+  max-width: 960px;
+  text-align: center;
+}
+
+.VPHome .VPHero.has-image .actions {
+  justify-content: center;
+}
+
+.VPHome .VPHero.has-image .image {
+  order: -1;
+  width: 100%;
+}
+
+.VPHome .VPHero.has-image .image-container {
+  width: min(280px, 70vw);
+  margin: 0 auto;
+  transform: none;
+}
+
+.VPHome .VPHero.has-image .image-bg {
+  display: none;
+}
+
+.VPHome .VPHero.has-image .image-src {
+  width: 100%;
+  height: auto;
+  border-radius: 28px;
+  box-shadow: 0 18px 44px rgba(15, 23, 42, 0.16);
+}
+
+@media (min-width: 960px) {
+  .VPHome .VPHero.has-image .container {
+    padding-top: 24px;
+  }
+}

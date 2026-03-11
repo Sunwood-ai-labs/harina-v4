@@ -6,8 +6,8 @@ hero:
   text: Run real-time receipt intake and historical Discord backfills from one codebase
   tagline: A Python self-hosted Discord bot that processes live receipt uploads with Gemini, archives originals to Google Drive, writes structured rows to Google Sheets, and can also rebuild datasets for V1, V2, V3 migrations or model re-scan workflows.
   image:
-    src: /brand/harina-mark.svg
-    alt: Harina Receipt Bot logo
+    src: /brand/harina-hero.webp
+    alt: Harina Receipt Bot hero image
   actions:
     - theme: brand
       text: Overview

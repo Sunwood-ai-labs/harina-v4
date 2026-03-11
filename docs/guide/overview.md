@@ -18,6 +18,16 @@ Harina Receipt Bot is a self-hosted Discord bot for receipt capture workflows, p
 - Preserve the original uploaded filename
 - Rebuild datasets from V1, V2, or V3 channels before retiring older workflows
 - Replay older receipts after changing Gemini models, prompts, schemas, or downstream logic
+- Run a quick Gemini smoke test on a few sample images before larger backfills
+
+## CLI-first packaging
+
+HARINA V4 is now organized around a Python package CLI surface:
+
+- `harina bot run` starts the always-on Discord bot
+- `harina dataset download` exports Discord images into a dataset
+- `harina dataset smoke-test` checks a few local dataset images with Gemini
+- `harina bot upload-test` uploads a real receipt image to Discord and waits for the bot reply
 
 ## Processing flow
 
@@ -58,6 +68,8 @@ This repository is optimized for small-team or personal bookkeeping automation:
 
 ## Next steps
 
+- Read [CLI](./cli.md) for the operator commands
 - Read [Dataset Downloader](./dataset-downloader.md) if you are migrating from V1, V2, or V3
+- Read [Gemini Smoke Test](./gemini-smoke-test.md) if you want a quick verification pass on sampled dataset images
 - Read [Google Setup](./google-setup.md) before the live bot flow
 - Read [Deployment](./deployment.md) when you are ready to run continuously

@@ -15,6 +15,8 @@ load_dotenv()
 class Settings(BaseModel):
     discord_token: str = Field(alias="DISCORD_TOKEN")
     discord_channel_ids: str | None = Field(default=None, alias="DISCORD_CHANNEL_IDS")
+    discord_test_channel_id: int | None = Field(default=None, alias="DISCORD_TEST_CHANNEL_ID")
+    discord_test_message_prefix: str = Field(default="[HARINA-TEST]", alias="DISCORD_TEST_MESSAGE_PREFIX")
     gemini_api_key: str = Field(alias="GEMINI_API_KEY")
     gemini_model: str = Field(default="gemini-3-flash-preview", alias="GEMINI_MODEL")
     google_service_account_json: str | None = Field(default=None, alias="GOOGLE_SERVICE_ACCOUNT_JSON")
@@ -45,7 +47,13 @@ class Settings(BaseModel):
 
         return data
 
-    @field_validator("discord_token", "gemini_api_key", "google_drive_folder_id", "google_sheets_spreadsheet_id")
+    @field_validator(
+        "discord_token",
+        "discord_test_message_prefix",
+        "gemini_api_key",
+        "google_drive_folder_id",
+        "google_sheets_spreadsheet_id",
+    )
     @classmethod
     def validate_not_blank(cls, value: str) -> str:
         value = value.strip()
@@ -53,14 +61,23 @@ class Settings(BaseModel):
             raise ValueError("This value must not be blank.")
         return value
 
-    @field_validator("discord_channel_ids", "google_service_account_json", "google_service_account_key_file", mode="before")
+    @field_validator(
+        "discord_channel_ids",
+        "discord_test_channel_id",
+        "google_service_account_json",
+        "google_service_account_key_file",
+        mode="before",
+    )
     @classmethod
     def blank_to_none(cls, value: str | None) -> str | None:
         if value is None:
             return None
 
-        value = value.strip()
-        return value or None
+        if isinstance(value, str):
+            value = value.strip()
+            return value or None
+
+        return value
 
 
 def load_settings() -> Settings:

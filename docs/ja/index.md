@@ -13,11 +13,14 @@ hero:
       text: 概要
       link: /ja/guide/overview
     - theme: alt
+      text: CLI
+      link: /ja/guide/cli
+    - theme: alt
       text: データセットダウンローダー
       link: /ja/guide/dataset-downloader
     - theme: alt
-      text: デプロイ
-      link: /ja/guide/deployment
+      text: Upload Test
+      link: /ja/guide/cli#discord-upload-test
 
 features:
   - title: Discord ネイティブ運用

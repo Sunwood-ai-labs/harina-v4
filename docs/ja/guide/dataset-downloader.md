@@ -12,7 +12,7 @@
 ## 基本コマンド
 
 ```bash
-uv run python -m app.dataset_downloader "https://discord.com/channels/<guild_id>/<channel_id>"
+uv run harina dataset download "https://discord.com/channels/<guild_id>/<channel_id>"
 ```
 
 ## よく使う例
@@ -20,19 +20,19 @@ uv run python -m app.dataset_downloader "https://discord.com/channels/<guild_id>
 直近 5 メッセージだけ取得:
 
 ```bash
-uv run python -m app.dataset_downloader "https://discord.com/channels/<guild_id>/<channel_id>" --limit 5
+uv run harina dataset download "https://discord.com/channels/<guild_id>/<channel_id>" --limit 5
 ```
 
 移行用にバージョン別フォルダへ保存:
 
 ```bash
-uv run python -m app.dataset_downloader "https://discord.com/channels/<guild_id>/<channel_id>" --output-dir ./dataset/v3-backfill
+uv run harina dataset download "https://discord.com/channels/<guild_id>/<channel_id>" --output-dir ./dataset/v3-backfill
 ```
 
 既存ファイルを上書きして再取得:
 
 ```bash
-uv run python -m app.dataset_downloader "https://discord.com/channels/<guild_id>/<channel_id>" --overwrite
+uv run harina dataset download "https://discord.com/channels/<guild_id>/<channel_id>" --overwrite
 ```
 
 ## 出力構成
@@ -67,6 +67,7 @@ dataset/
 
 1. まず `--limit 5` や `--limit 50` で小さく確認する
 2. フォルダ構成と `metadata.jsonl` を確認する
-3. `dataset/v3-backfill` のようなバージョン付きフォルダへ本番取得する
-4. 新しい抽出ロジックや正規化パイプラインに流し込む
-5. V1、V2、V3 の既存結果と比較してから切り替える
+3. [Gemini スモークテスト](./gemini-smoke-test.md) で 2 枚程度の認識結果を確認する
+4. `dataset/v3-backfill` のようなバージョン付きフォルダへ本番取得する
+5. 新しい抽出ロジックや正規化パイプラインに流し込む
+6. V1、V2、V3 の既存結果と比較してから切り替える

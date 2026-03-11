@@ -69,4 +69,17 @@ class GeminiReceiptExtractor:
         if not response.text:
             raise RuntimeError("Gemini returned an empty response.")
 
-        return ReceiptExtraction.model_validate(json.loads(response.text))
+        return ReceiptExtraction.model_validate(parse_receipt_payload(response.text))
+
+
+def parse_receipt_payload(response_text: str) -> dict[str, object]:
+    payload = json.loads(response_text)
+    if isinstance(payload, list):
+        if len(payload) != 1 or not isinstance(payload[0], dict):
+            raise RuntimeError("Gemini returned a JSON array instead of a single receipt object.")
+        payload = payload[0]
+
+    if not isinstance(payload, dict):
+        raise RuntimeError("Gemini returned JSON that was not a receipt object.")
+
+    return payload

@@ -1,19 +1,32 @@
 # Deployment
 
-Use `app.main` for the always-on bot service. Use `app.dataset_downloader` when you only need a one-shot migration or re-scan export.
+Use `harina bot run` for the always-on bot service. Use `harina dataset download` when you only need a one-shot migration or re-scan export.
+Use `harina dataset smoke-test` when you want a quick Gemini verification pass against a few local dataset images.
 
 ## Local development
 
 ```bash
 uv sync
 uv run pytest
-uv run python -m app.main
+uv run harina bot run
 ```
 
 ## One-shot downloader runs
 
 ```bash
-uv run python -m app.dataset_downloader "https://discord.com/channels/<guild_id>/<channel_id>" --limit 50
+uv run harina dataset download "https://discord.com/channels/<guild_id>/<channel_id>" --limit 50
+```
+
+## Gemini smoke test runs
+
+```bash
+uv run harina dataset smoke-test --dataset-dir ./dataset/v3-backfill --limit 2
+```
+
+## Discord upload test runs
+
+```bash
+uv run harina bot upload-test --channel-id <channel_id> --image ./sample-receipt.jpg
 ```
 
 ## Docker Compose

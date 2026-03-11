@@ -40,7 +40,7 @@ Harina Receipt Bot is a self-hosted Python Discord bot for receipt workflows. It
 cp .env.example .env
 uv sync
 uv run pytest
-uv run python -m app.main
+uv run harina bot run
 ```
 
 Required environment variables:
@@ -51,20 +51,43 @@ Required environment variables:
 - `GOOGLE_SHEETS_SPREADSHEET_ID`
 - `GOOGLE_SERVICE_ACCOUNT_JSON` or `GOOGLE_SERVICE_ACCOUNT_KEY_FILE`
 
+## 🧰 HARINA CLI
+
+This repository now exposes a Python package CLI called `harina`.
+
+```bash
+uv run harina --help
+```
+
+Core commands:
+
+```bash
+uv run harina bot run
+uv run harina dataset download "https://discord.com/channels/<guild_id>/<channel_id>" --limit 50
+uv run harina dataset smoke-test --dataset-dir ./dataset/v3-backfill --limit 2
+uv run harina bot upload-test --channel-id <channel_id> --image ./sample-receipt.jpg
+```
+
+Why this shape is useful:
+
+- The CLI becomes the stable operator surface for V4 workflows
+- The Discord bot can reuse the same package logic instead of hiding behavior only inside event handlers
+- Migration, replay, and Discord-side verification can all run from one installed tool
+
 ## 📦 Dataset Downloader
 
 You can also use the repo as a one-shot Discord image dataset downloader for migrations and replay jobs.
 
 ```bash
-uv run python -m app.dataset_downloader "https://discord.com/channels/<guild_id>/<channel_id>"
+uv run harina dataset download "https://discord.com/channels/<guild_id>/<channel_id>"
 ```
 
 Useful examples:
 
 ```bash
-uv run python -m app.dataset_downloader "https://discord.com/channels/<guild_id>/<channel_id>" --limit 5
-uv run python -m app.dataset_downloader "https://discord.com/channels/<guild_id>/<channel_id>" --output-dir ./dataset/v3-backfill
-uv run python -m app.dataset_downloader "https://discord.com/channels/<guild_id>/<channel_id>" --overwrite
+uv run harina dataset download "https://discord.com/channels/<guild_id>/<channel_id>" --limit 5
+uv run harina dataset download "https://discord.com/channels/<guild_id>/<channel_id>" --output-dir ./dataset/v3-backfill
+uv run harina dataset download "https://discord.com/channels/<guild_id>/<channel_id>" --overwrite
 ```
 
 Optional flags:
@@ -81,6 +104,45 @@ Common use cases:
 - Migrate historical images from V1, V2, or V3 before retiring an older workflow
 - Build a fixed dataset snapshot for regression tests and evaluation
 - Re-scan old receipts after switching Gemini models, prompts, or output schemas
+
+## 🧪 Gemini Smoke Test
+
+After downloading a dataset, you can run a quick Gemini receipt-recognition check against about 2 sample images.
+
+```bash
+uv run harina dataset smoke-test --limit 2
+```
+
+Useful examples:
+
+```bash
+uv run harina dataset smoke-test --limit 2
+uv run harina dataset smoke-test --dataset-dir ./dataset/v3-backfill --limit 2
+uv run harina dataset smoke-test --dataset-dir ./dataset/v3-backfill --limit 2 --output ./artifacts/gemini-smoke-test.json
+```
+
+Notes:
+
+- The smoke test uses `GEMINI_API_KEY` and `GEMINI_MODEL`
+- The default model in this repo is `gemini-3-flash-preview`
+- Duplicate files are skipped by content hash unless you add `--allow-duplicates`
+- Results are printed as JSON and can optionally be written to a file
+
+## 🤖 Discord Upload Test
+
+You can also test the live Discord bot path from the CLI by uploading a real receipt image to a Discord channel and waiting for the bot reply.
+
+```bash
+uv run harina bot upload-test --channel-id <channel_id> --image ./sample-receipt.jpg
+```
+
+Notes:
+
+- The command uploads an actual message into the target Discord channel
+- The bot processes that message using the same package logic as the always-on runtime
+- Test messages are prefixed with `DISCORD_TEST_MESSAGE_PREFIX`, which defaults to `[HARINA-TEST]`
+- `DISCORD_TEST_CHANNEL_ID` lets you omit `--channel-id` for a fixed test channel
+- This command is intended for real environment verification, so run it against a safe test channel
 
 Bot requirements:
 
@@ -101,7 +163,9 @@ If you use a file-based Google service account key, place it under `./secrets` a
 
 - [Docs site](https://sunwood-ai-labs.github.io/harina-v4/)
 - [Overview](./docs/guide/overview.md)
+- [CLI](./docs/guide/cli.md)
 - [Dataset Downloader](./docs/guide/dataset-downloader.md)
+- [Gemini Smoke Test](./docs/guide/gemini-smoke-test.md)
 - [Google setup](./docs/guide/google-setup.md)
 - [Deployment guide](./docs/guide/deployment.md)
 
@@ -122,12 +186,15 @@ docker-compose.yml    Self-hosted runtime
 - The bot creates the destination sheet header row automatically on startup
 - Startup fails fast when required Google settings are missing
 - `DISCORD_DATASET_OUTPUT_DIR` sets the default dataset output path for downloader runs
+- `DISCORD_TEST_CHANNEL_ID` sets the default Discord channel for `harina bot upload-test`
+- `DISCORD_TEST_MESSAGE_PREFIX` controls which self-authored Discord messages are treated as CLI test uploads
 
 ## 💻 Development
 
 ```bash
 uv sync
 uv run pytest
+uv run harina --help
 npm --prefix docs install
 npm --prefix docs run docs:build
 ```

@@ -40,7 +40,7 @@ Harina Receipt Bot は、レシート運用向けのセルフホスト型 Python
 cp .env.example .env
 uv sync
 uv run pytest
-uv run python -m app.main
+uv run harina bot run
 ```
 
 必須の環境変数:
@@ -51,20 +51,43 @@ uv run python -m app.main
 - `GOOGLE_SHEETS_SPREADSHEET_ID`
 - `GOOGLE_SERVICE_ACCOUNT_JSON` または `GOOGLE_SERVICE_ACCOUNT_KEY_FILE`
 
+## 🧰 HARINA CLI
+
+このリポジトリは Python パッケージ CLI として `harina` コマンドを公開します。
+
+```bash
+uv run harina --help
+```
+
+主なコマンド:
+
+```bash
+uv run harina bot run
+uv run harina dataset download "https://discord.com/channels/<guild_id>/<channel_id>" --limit 50
+uv run harina dataset smoke-test --dataset-dir ./dataset/v3-backfill --limit 2
+uv run harina bot upload-test --channel-id <channel_id> --image ./sample-receipt.jpg
+```
+
+この形にする利点:
+
+- V4 の運用コマンド面を CLI に集約できる
+- Discord bot も同じ Python パッケージのロジックを再利用できる
+- 移行、再スキャン、Discord 上の実機確認まで同じツールから実行できる
+
 ## 📦 データセットダウンローダー
 
 移行や再スキャン用に、Discord の画像を一括取得するワンショット CLI としても使えます。
 
 ```bash
-uv run python -m app.dataset_downloader "https://discord.com/channels/<guild_id>/<channel_id>"
+uv run harina dataset download "https://discord.com/channels/<guild_id>/<channel_id>"
 ```
 
 よく使う例:
 
 ```bash
-uv run python -m app.dataset_downloader "https://discord.com/channels/<guild_id>/<channel_id>" --limit 5
-uv run python -m app.dataset_downloader "https://discord.com/channels/<guild_id>/<channel_id>" --output-dir ./dataset/v3-backfill
-uv run python -m app.dataset_downloader "https://discord.com/channels/<guild_id>/<channel_id>" --overwrite
+uv run harina dataset download "https://discord.com/channels/<guild_id>/<channel_id>" --limit 5
+uv run harina dataset download "https://discord.com/channels/<guild_id>/<channel_id>" --output-dir ./dataset/v3-backfill
+uv run harina dataset download "https://discord.com/channels/<guild_id>/<channel_id>" --overwrite
 ```
 
 主なオプション:
@@ -81,6 +104,45 @@ uv run python -m app.dataset_downloader "https://discord.com/channels/<guild_id>
 - V1、V2、V3 からの過去データ移行
 - 回帰検証や評価用の固定データセット作成
 - Gemini モデルやプロンプト更新後の再スキャン
+
+## 🧪 Gemini スモークテスト
+
+データセットを取得したあと、2 枚程度の画像でレシート認識の動作確認をすぐ回せます。
+
+```bash
+uv run harina dataset smoke-test --limit 2
+```
+
+よく使う例:
+
+```bash
+uv run harina dataset smoke-test --limit 2
+uv run harina dataset smoke-test --dataset-dir ./dataset/v3-backfill --limit 2
+uv run harina dataset smoke-test --dataset-dir ./dataset/v3-backfill --limit 2 --output ./artifacts/gemini-smoke-test.json
+```
+
+補足:
+
+- `GEMINI_API_KEY` と `GEMINI_MODEL` を使って実行します
+- このリポジトリの既定モデルは `gemini-3-flash-preview` です
+- 同一画像は、`--allow-duplicates` を付けない限りハッシュで自動除外します
+- 結果は JSON で標準出力され、必要ならファイルにも保存できます
+
+## 🤖 Discord アップロードテスト
+
+CLI から実際にレシート画像を Discord チャンネルへアップロードし、bot の返信まで待つ確認もできます。
+
+```bash
+uv run harina bot upload-test --channel-id <channel_id> --image ./sample-receipt.jpg
+```
+
+補足:
+
+- 対象チャンネルに実際のメッセージを投稿します
+- 常時稼働の bot と同じパッケージロジックで処理します
+- テストメッセージには `DISCORD_TEST_MESSAGE_PREFIX` が付き、既定値は `[HARINA-TEST]` です
+- `DISCORD_TEST_CHANNEL_ID` を入れておくと `--channel-id` を省略できます
+- 実運用確認向けなので、安全なテスト用チャンネルで使うのがおすすめです
 
 bot 側の前提条件:
 
@@ -101,7 +163,9 @@ Google サービスアカウント JSON ファイルを使う場合は `./secret
 
 - [Docs site](https://sunwood-ai-labs.github.io/harina-v4/)
 - [概要](./docs/ja/guide/overview.md)
+- [CLI](./docs/ja/guide/cli.md)
 - [データセットダウンローダー](./docs/ja/guide/dataset-downloader.md)
+- [Gemini スモークテスト](./docs/ja/guide/gemini-smoke-test.md)
 - [Google 設定](./docs/ja/guide/google-setup.md)
 - [デプロイ](./docs/ja/guide/deployment.md)
 
@@ -122,12 +186,15 @@ docker-compose.yml    セルフホスト用構成
 - bot 起動時に Google Sheets のヘッダー行を自動作成します
 - 必須設定が不足している場合は起動時に失敗します
 - `DISCORD_DATASET_OUTPUT_DIR` で downloader の既定保存先を変更できます
+- `DISCORD_TEST_CHANNEL_ID` で `harina bot upload-test` の既定チャンネルを設定できます
+- `DISCORD_TEST_MESSAGE_PREFIX` で CLI テスト投稿として扱う自己投稿メッセージの接頭辞を変えられます
 
 ## 💻 開発
 
 ```bash
 uv sync
 uv run pytest
+uv run harina --help
 npm --prefix docs install
 npm --prefix docs run docs:build
 ```

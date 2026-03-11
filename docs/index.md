@@ -13,11 +13,14 @@ hero:
       text: Overview
       link: /guide/overview
     - theme: alt
+      text: CLI
+      link: /guide/cli
+    - theme: alt
       text: Dataset Downloader
       link: /guide/dataset-downloader
     - theme: alt
-      text: Deployment Guide
-      link: /guide/deployment
+      text: Upload Test
+      link: /guide/cli#discord-upload-test
 
 features:
   - title: Discord-native intake

@@ -1,7 +1,7 @@
 [project]
 name = "harina-v4"
 version = "0.2.0"
-description = "Discord receipt recognition bot powered by Gemini, Google Drive, and Google Sheets."
+description = "HARINA V4 CLI and Discord receipt bot powered by Gemini, Google Drive, and Google Sheets."
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
@@ -17,6 +17,9 @@ dependencies = [
 dev = [
   "pytest>=8.4.2",
 ]
+
+[project.scripts]
+harina = "app.cli:main"
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

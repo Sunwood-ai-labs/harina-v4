@@ -18,6 +18,16 @@ Harina Receipt Bot は、レシート運用向けのセルフホスト Discord b
 - 元のアップロードファイル名を保持
 - V1、V2、V3 のチャンネル履歴を新運用へ移行
 - Gemini モデル、プロンプト、スキーマ、後段ロジック変更後に旧データを再処理
+- 本格的な再処理の前に、数枚だけ Gemini スモークテストで確認できる
+
+## CLI 中心のパッケージ構成
+
+HARINA V4 は Python パッケージ CLI を中心に整理されています。
+
+- `harina bot run` で常時稼働 bot を起動
+- `harina dataset download` で Discord 画像をデータセットへ書き出し
+- `harina dataset smoke-test` でローカル画像を Gemini で確認
+- `harina bot upload-test` で実際に Discord へ画像を投稿して返信を待機
 
 ## 処理の流れ
 
@@ -56,6 +66,8 @@ Harina Receipt Bot は、レシート運用向けのセルフホスト Discord b
 
 ## 次に読むもの
 
+- 運用コマンドを見たいなら [CLI](./cli.md)
 - V1、V2、V3 から移行するなら [データセットダウンローダー](./dataset-downloader.md)
+- サンプル画像で素早く確認するなら [Gemini スモークテスト](./gemini-smoke-test.md)
 - 常時 bot を動かす前提を整えるなら [Google 設定](./google-setup.md)
 - 継続運用するなら [デプロイ](./deployment.md)

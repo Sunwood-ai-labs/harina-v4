@@ -12,7 +12,7 @@ Use `app.dataset_downloader` when you need a local copy of historical Discord re
 ## Basic command
 
 ```bash
-uv run python -m app.dataset_downloader "https://discord.com/channels/<guild_id>/<channel_id>"
+uv run harina dataset download "https://discord.com/channels/<guild_id>/<channel_id>"
 ```
 
 ## Common examples
@@ -20,19 +20,19 @@ uv run python -m app.dataset_downloader "https://discord.com/channels/<guild_id>
 Download only the most recent 5 messages:
 
 ```bash
-uv run python -m app.dataset_downloader "https://discord.com/channels/<guild_id>/<channel_id>" --limit 5
+uv run harina dataset download "https://discord.com/channels/<guild_id>/<channel_id>" --limit 5
 ```
 
 Write into a versioned migration folder:
 
 ```bash
-uv run python -m app.dataset_downloader "https://discord.com/channels/<guild_id>/<channel_id>" --output-dir ./dataset/v3-backfill
+uv run harina dataset download "https://discord.com/channels/<guild_id>/<channel_id>" --output-dir ./dataset/v3-backfill
 ```
 
 Refresh files that already exist:
 
 ```bash
-uv run python -m app.dataset_downloader "https://discord.com/channels/<guild_id>/<channel_id>" --overwrite
+uv run harina dataset download "https://discord.com/channels/<guild_id>/<channel_id>" --overwrite
 ```
 
 ## Output structure
@@ -67,6 +67,7 @@ Notes:
 
 1. Download a bounded sample with `--limit 5` or `--limit 50`.
 2. Validate folder layout and metadata output.
-3. Run the full channel export into a versioned folder such as `dataset/v3-backfill`.
-4. Feed the dataset into your new extraction or normalization pipeline.
-5. Compare the new results against prior V1, V2, or V3 outputs before cutover.
+3. Run [Gemini Smoke Test](./gemini-smoke-test.md) on about 2 representative images.
+4. Run the full channel export into a versioned folder such as `dataset/v3-backfill`.
+5. Feed the dataset into your new extraction or normalization pipeline.
+6. Compare the new results against prior V1, V2, or V3 outputs before cutover.

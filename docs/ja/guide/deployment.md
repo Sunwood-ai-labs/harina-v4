@@ -1,19 +1,32 @@
 # デプロイ
 
-常時稼働させる bot は `app.main` を使います。移行や再スキャンのために一度だけ取得したい場合は `app.dataset_downloader` を使います。
+常時稼働させる bot は `harina bot run` を使います。移行や再スキャンのために一度だけ取得したい場合は `harina dataset download` を使います。
+ローカルのデータセット画像で Gemini の応答を軽く確認したい場合は `harina dataset smoke-test` を使います。
 
 ## ローカル開発
 
 ```bash
 uv sync
 uv run pytest
-uv run python -m app.main
+uv run harina bot run
 ```
 
 ## ワンショット downloader 実行
 
 ```bash
-uv run python -m app.dataset_downloader "https://discord.com/channels/<guild_id>/<channel_id>" --limit 50
+uv run harina dataset download "https://discord.com/channels/<guild_id>/<channel_id>" --limit 50
+```
+
+## Gemini スモークテスト実行
+
+```bash
+uv run harina dataset smoke-test --dataset-dir ./dataset/v3-backfill --limit 2
+```
+
+## Discord アップロードテスト実行
+
+```bash
+uv run harina bot upload-test --channel-id <channel_id> --image ./sample-receipt.jpg
 ```
 
 ## Docker Compose

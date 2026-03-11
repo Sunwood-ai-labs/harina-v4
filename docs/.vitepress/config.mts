@@ -28,7 +28,9 @@ export default defineConfig({
       themeConfig: {
         nav: [
           { text: "Guide", link: "/guide/overview" },
+          { text: "CLI", link: "/guide/cli" },
           { text: "Dataset", link: "/guide/dataset-downloader" },
+          { text: "Smoke Test", link: "/guide/gemini-smoke-test" },
           { text: "Deploy", link: "/guide/deployment" },
           { text: "GitHub", link: repo }
         ],
@@ -37,7 +39,9 @@ export default defineConfig({
             text: "Guide",
             items: [
               { text: "Overview", link: "/guide/overview" },
+              { text: "CLI", link: "/guide/cli" },
               { text: "Dataset Downloader", link: "/guide/dataset-downloader" },
+              { text: "Gemini Smoke Test", link: "/guide/gemini-smoke-test" },
               { text: "Google Setup", link: "/guide/google-setup" },
               { text: "Deployment", link: "/guide/deployment" }
             ]
@@ -56,7 +60,9 @@ export default defineConfig({
       themeConfig: {
         nav: [
           { text: "ガイド", link: "/ja/guide/overview" },
+          { text: "CLI", link: "/ja/guide/cli" },
           { text: "データセット", link: "/ja/guide/dataset-downloader" },
+          { text: "動作確認", link: "/ja/guide/gemini-smoke-test" },
           { text: "デプロイ", link: "/ja/guide/deployment" },
           { text: "GitHub", link: repo }
         ],
@@ -65,7 +71,9 @@ export default defineConfig({
             text: "ガイド",
             items: [
               { text: "概要", link: "/ja/guide/overview" },
+              { text: "CLI", link: "/ja/guide/cli" },
               { text: "データセットダウンローダー", link: "/ja/guide/dataset-downloader" },
+              { text: "Gemini スモークテスト", link: "/ja/guide/gemini-smoke-test" },
               { text: "Google 設定", link: "/ja/guide/google-setup" },
               { text: "デプロイ", link: "/ja/guide/deployment" }
             ]

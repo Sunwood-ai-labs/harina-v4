@@ -50,6 +50,31 @@ Required environment variables:
 - `GOOGLE_SHEETS_SPREADSHEET_ID`
 - `GOOGLE_SERVICE_ACCOUNT_JSON` or `GOOGLE_SERVICE_ACCOUNT_KEY_FILE`
 
+## Dataset Downloader
+
+You can also use the repo as a one-shot Discord image dataset downloader.
+
+```bash
+cp .env.example .env
+uv sync
+uv run python -m app.dataset_downloader "https://discord.com/channels/<guild_id>/<channel_id>"
+```
+
+Optional flags:
+
+- `--output-dir ./dataset/discord-images`
+- `--limit 500`
+- `--include-bots`
+- `--overwrite`
+
+The downloader keeps the uploaded filename unchanged by storing each attachment under `guild-<name-or-id>/channel-<name-or-id>/message-<id>/attachment-<id>/`, and it writes a `metadata.jsonl` file beside the dataset root. If the server or channel name contains Japanese characters, that name segment is skipped and the folder falls back to the numeric ID.
+
+Bot requirements:
+
+- The bot must be in the target server
+- The bot needs access to the channel and message history
+- `MESSAGE CONTENT INTENT` should be enabled in the Discord Developer Portal so attachment data is available consistently
+
 ## 🐳 Docker Compose
 
 ```bash

@@ -1,6 +1,11 @@
 from pathlib import Path
 
-from app.google_setup import GoogleResourceBootstrapper, build_google_env_updates, upsert_env_file
+from app.google_setup import (
+    GoogleResourceBootstrapper,
+    build_drive_watch_env_updates,
+    build_google_env_updates,
+    upsert_env_file,
+)
 
 
 class _Execute:
@@ -16,9 +21,13 @@ class _FakeDriveFiles:
         self.folder_files = folder_files
         self.spreadsheet_files = spreadsheet_files
         self.created: list[dict] = []
+        self.list_queries: list[str] = []
+        self._folder_counter = 0
+        self._sheet_counter = 0
 
     def list(self, *, q: str, fields: str, pageSize: int) -> _Execute:
         del fields, pageSize
+        self.list_queries.append(q)
         if "application/vnd.google-apps.folder" in q:
             return _Execute({"files": self.folder_files})
         return _Execute({"files": self.spreadsheet_files})
@@ -26,7 +35,12 @@ class _FakeDriveFiles:
     def create(self, *, body: dict, fields: str) -> _Execute:
         del fields
         self.created.append(body)
-        created_id = "folder-123" if body["mimeType"] == "application/vnd.google-apps.folder" else "sheet-123"
+        if body["mimeType"] == "application/vnd.google-apps.folder":
+            self._folder_counter += 1
+            created_id = f"folder-{self._folder_counter}"
+        else:
+            self._sheet_counter += 1
+            created_id = f"sheet-{self._sheet_counter}"
         return _Execute({"id": created_id, "name": body["name"], "webViewLink": f"https://example.com/{created_id}"})
 
 
@@ -78,8 +92,8 @@ def test_bootstrap_creates_resources_and_shares(monkeypatch) -> None:
         share_with_email="owner@example.com",
     )
 
-    assert result.folder_id == "folder-123"
-    assert result.spreadsheet_id == "sheet-123"
+    assert result.folder_id == "folder-1"
+    assert result.spreadsheet_id == "sheet-1"
     assert result.shared_with_email == "owner@example.com"
     assert drive.files_service.created == [
         {"name": "Harina V4 Receipts", "mimeType": "application/vnd.google-apps.folder"},
@@ -88,8 +102,42 @@ def test_bootstrap_creates_resources_and_shares(monkeypatch) -> None:
             "mimeType": "application/vnd.google-apps.spreadsheet",
         }
     ]
-    assert drive.permissions_service.calls == [("folder-123", "owner@example.com"), ("sheet-123", "owner@example.com")]
-    assert ensured == [("folder-123", "sheet-123", "Receipts")]
+    assert drive.permissions_service.calls == [("folder-1", "owner@example.com"), ("sheet-1", "owner@example.com")]
+    assert ensured == [("folder-1", "sheet-1", "Receipts")]
+
+
+def test_bootstrap_drive_watch_creates_parented_folders_and_shares(monkeypatch) -> None:
+    drive = _FakeDriveService(folder_files=[], spreadsheet_files=[])
+
+    monkeypatch.setattr(
+        "app.google_setup.build",
+        lambda service_name, version, credentials, cache_discovery: drive,
+    )
+
+    result = GoogleResourceBootstrapper(credentials=object()).bootstrap_drive_watch(
+        source_folder_name="Inbox",
+        processed_folder_name="Processed",
+        parent_folder_id="parent-123",
+        share_with_email="owner@example.com",
+    )
+
+    assert result.source_folder_id == "folder-1"
+    assert result.processed_folder_id == "folder-2"
+    assert result.parent_folder_id == "parent-123"
+    assert drive.files_service.created == [
+        {
+            "name": "Inbox",
+            "mimeType": "application/vnd.google-apps.folder",
+            "parents": ["parent-123"],
+        },
+        {
+            "name": "Processed",
+            "mimeType": "application/vnd.google-apps.folder",
+            "parents": ["parent-123"],
+        },
+    ]
+    assert drive.permissions_service.calls == [("folder-1", "owner@example.com"), ("folder-2", "owner@example.com")]
+    assert "'parent-123' in parents" in drive.files_service.list_queries[0]
 
 
 def test_upsert_env_file_replaces_existing_keys(tmp_path: Path) -> None:
@@ -134,3 +182,34 @@ def test_build_google_env_updates_supports_oauth() -> None:
     assert updates["GOOGLE_OAUTH_REFRESH_TOKEN"] == "refresh-token"
     assert updates["GOOGLE_DRIVE_FOLDER_URL"] == "https://drive.google.com/drive/folders/folder-123"
     assert updates["GOOGLE_SHEETS_SPREADSHEET_URL"] == "https://docs.google.com/spreadsheets/d/sheet-123/edit"
+
+
+def test_build_drive_watch_env_updates_includes_urls_and_poll_interval() -> None:
+    updates = build_drive_watch_env_updates(
+        source_folder_id="source-123",
+        source_folder_url="https://drive.google.com/drive/folders/source-123",
+        processed_folder_id="processed-123",
+        processed_folder_url="https://drive.google.com/drive/folders/processed-123",
+        poll_interval_seconds=45,
+    )
+
+    assert updates["GOOGLE_DRIVE_WATCH_SOURCE_FOLDER_ID"] == "source-123"
+    assert updates["GOOGLE_DRIVE_WATCH_SOURCE_FOLDER_URL"] == "https://drive.google.com/drive/folders/source-123"
+    assert updates["GOOGLE_DRIVE_WATCH_PROCESSED_FOLDER_ID"] == "processed-123"
+    assert updates["GOOGLE_DRIVE_WATCH_PROCESSED_FOLDER_URL"] == "https://drive.google.com/drive/folders/processed-123"
+    assert updates["DRIVE_POLL_INTERVAL_SECONDS"] == "45"
+
+
+def test_build_drive_watch_env_updates_rejects_non_positive_poll_interval() -> None:
+    try:
+        build_drive_watch_env_updates(
+            source_folder_id="source-123",
+            source_folder_url="https://drive.google.com/drive/folders/source-123",
+            processed_folder_id="processed-123",
+            processed_folder_url="https://drive.google.com/drive/folders/processed-123",
+            poll_interval_seconds=0,
+        )
+    except ValueError as exc:
+        assert "greater than 0" in str(exc)
+    else:
+        raise AssertionError("Expected ValueError for non-positive poll interval")

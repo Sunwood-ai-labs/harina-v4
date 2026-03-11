@@ -27,6 +27,19 @@ class GoogleResourceBootstrapResult:
         return asdict(self)
 
 
+@dataclass(slots=True)
+class GoogleDriveWatchBootstrapResult:
+    source_folder_id: str
+    source_folder_url: str
+    processed_folder_id: str
+    processed_folder_url: str
+    parent_folder_id: str | None
+    shared_with_email: str | None
+
+    def as_dict(self) -> dict[str, str | None]:
+        return asdict(self)
+
+
 class GoogleResourceBootstrapper:
     def __init__(self, *, credentials) -> None:
         self._drive = build("drive", "v3", credentials=credentials, cache_discovery=False)
@@ -64,11 +77,43 @@ class GoogleResourceBootstrapper:
             shared_with_email=share_with_email,
         )
 
-    def _ensure_drive_folder(self, folder_name: str) -> dict[str, str]:
+    def bootstrap_drive_watch(
+        self,
+        *,
+        source_folder_name: str,
+        processed_folder_name: str,
+        parent_folder_id: str | None = None,
+        share_with_email: str | None = None,
+    ) -> GoogleDriveWatchBootstrapResult:
+        source_folder = self._ensure_drive_folder(source_folder_name, parent_folder_id=parent_folder_id)
+        processed_folder = self._ensure_drive_folder(processed_folder_name, parent_folder_id=parent_folder_id)
+
+        if share_with_email:
+            self._share_file(source_folder["id"], share_with_email)
+            self._share_file(processed_folder["id"], share_with_email)
+
+        return GoogleDriveWatchBootstrapResult(
+            source_folder_id=source_folder["id"],
+            source_folder_url=source_folder.get("webViewLink")
+            or f"https://drive.google.com/drive/folders/{source_folder['id']}",
+            processed_folder_id=processed_folder["id"],
+            processed_folder_url=processed_folder.get("webViewLink")
+            or f"https://drive.google.com/drive/folders/{processed_folder['id']}",
+            parent_folder_id=parent_folder_id,
+            shared_with_email=share_with_email,
+        )
+
+    def _ensure_drive_folder(self, folder_name: str, *, parent_folder_id: str | None = None) -> dict[str, str]:
+        query = (
+            f"mimeType = '{FOLDER_MIME_TYPE}' and trashed = false and name = '{_escape_drive_query(folder_name)}'"
+        )
+        if parent_folder_id:
+            query = f"{query} and '{_escape_drive_query(parent_folder_id)}' in parents"
+
         existing = (
             self._drive.files()
             .list(
-                q=f"mimeType = '{FOLDER_MIME_TYPE}' and trashed = false and name = '{_escape_drive_query(folder_name)}'",
+                q=query,
                 fields="files(id,name,webViewLink)",
                 pageSize=1,
             )
@@ -82,7 +127,7 @@ class GoogleResourceBootstrapper:
         return (
             self._drive.files()
             .create(
-                body={"name": folder_name, "mimeType": FOLDER_MIME_TYPE},
+                body=_folder_create_body(folder_name, parent_folder_id=parent_folder_id),
                 fields="id,name,webViewLink",
             )
             .execute()
@@ -166,6 +211,28 @@ def build_google_env_updates(
     return values
 
 
+def build_drive_watch_env_updates(
+    *,
+    source_folder_id: str,
+    source_folder_url: str,
+    processed_folder_id: str,
+    processed_folder_url: str,
+    poll_interval_seconds: int | None = None,
+) -> dict[str, str]:
+    if poll_interval_seconds is not None and poll_interval_seconds <= 0:
+        raise ValueError("poll_interval_seconds must be greater than 0.")
+
+    values = {
+        "GOOGLE_DRIVE_WATCH_SOURCE_FOLDER_ID": source_folder_id,
+        "GOOGLE_DRIVE_WATCH_SOURCE_FOLDER_URL": source_folder_url,
+        "GOOGLE_DRIVE_WATCH_PROCESSED_FOLDER_ID": processed_folder_id,
+        "GOOGLE_DRIVE_WATCH_PROCESSED_FOLDER_URL": processed_folder_url,
+    }
+    if poll_interval_seconds is not None:
+        values["DRIVE_POLL_INTERVAL_SECONDS"] = str(poll_interval_seconds)
+    return values
+
+
 def upsert_env_file(env_file: Path, values: Mapping[str, str]) -> None:
     lines = env_file.read_text(encoding="utf-8").splitlines() if env_file.exists() else []
     seen_keys: set[str] = set()
@@ -199,3 +266,10 @@ def upsert_env_file(env_file: Path, values: Mapping[str, str]) -> None:
 
 def _escape_drive_query(value: str) -> str:
     return value.replace("\\", "\\\\").replace("'", "\\'")
+
+
+def _folder_create_body(folder_name: str, *, parent_folder_id: str | None) -> dict[str, object]:
+    body: dict[str, object] = {"name": folder_name, "mimeType": FOLDER_MIME_TYPE}
+    if parent_folder_id:
+        body["parents"] = [parent_folder_id]
+    return body

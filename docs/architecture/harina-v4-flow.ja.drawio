@@ -1,0 +1,190 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="65bd71144e">
+    <diagram id="harina-v4-flow-ja" name="Harina V4 Flow JA">
+        <mxGraphModel defaultFontFamily="Meiryo" dx="1390" dy="974" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1800" pageHeight="1000" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="title" value="Harina V4 の構成とフロー" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=22;fontFamily=Meiryo;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="30" y="20" width="500" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="main-lane" value="" style="rounded=1;whiteSpace=wrap;html=1;container=1;strokeColor=#22577A;fillColor=#EAF4F4;fontSize=16;fontFamily=Meiryo;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="30" y="70" width="1680" height="320" as="geometry"/>
+                </mxCell>
+                <mxCell id="ops-lane" value="" style="rounded=1;whiteSpace=wrap;html=1;container=1;strokeColor=#5C4D7D;fillColor=#F4F1FA;fontSize=16;fontFamily=Meiryo;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="30" y="420" width="1680" height="280" as="geometry"/>
+                </mxCell>
+                <mxCell id="migration-lane" value="" style="rounded=1;whiteSpace=wrap;html=1;container=1;strokeColor=#4F772D;fillColor=#F1F7E9;fontSize=16;fontFamily=Meiryo;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="30" y="730" width="1680" height="200" as="geometry"/>
+                </mxCell>
+                <mxCell id="main-lane-title" value="メインのレシート受付フロー" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=18;fontFamily=Meiryo;fontStyle=1;fontColor=#1D3557;" parent="1" vertex="1">
+                    <mxGeometry x="60" y="88" width="340" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="ops-lane-title" value="運用・デバッグ用エントリポイント" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=18;fontFamily=Meiryo;fontStyle=1;fontColor=#3C096C;" parent="1" vertex="1">
+                    <mxGeometry x="60" y="438" width="420" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="migration-lane-title" value="移行とリプレイのフロー" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=18;fontFamily=Meiryo;fontStyle=1;fontColor=#31572C;" parent="1" vertex="1">
+                    <mxGeometry x="60" y="748" width="320" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="user" value="利用者&#xa;レシート画像を投稿" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#22577A;fontSize=14;fontFamily=Meiryo;" parent="1" vertex="1">
+                    <mxGeometry x="80" y="175" width="180" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="discord" value="Discord チャンネル&#xa;bot が監視" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#22577A;fontSize=14;fontFamily=Meiryo;" parent="1" vertex="1">
+                    <mxGeometry x="320" y="175" width="210" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="bot" value="ReceiptBot&#xa;app/bot.py" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#D8F3DC;strokeColor=#2D6A4F;fontSize=14;fontFamily=Meiryo;" parent="1" vertex="1">
+                    <mxGeometry x="590" y="175" width="200" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="processor" value="共通レシート処理&#xa;ReceiptProcessor&#xa;app/processor.py" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF3BF;strokeColor=#C77D00;fontSize=14;fontFamily=Meiryo;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="860" y="160" width="280" height="110" as="geometry"/>
+                </mxCell>
+                <mxCell id="gemini" value="GeminiReceiptExtractor&#xa;構造化 JSON 抽出" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#C77D00;fontSize=14;fontFamily=Meiryo;" parent="1" vertex="1">
+                    <mxGeometry x="1210" y="90" width="240" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="drive" value="Google Drive&#xa;元画像を保存" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#C77D00;fontSize=14;fontFamily=Meiryo;" parent="1" vertex="1">
+                    <mxGeometry x="1210" y="190" width="240" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="sheets" value="Google Sheets&#xa;レシート行を追記" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#C77D00;fontSize=14;fontFamily=Meiryo;" parent="1" vertex="1">
+                    <mxGeometry x="1210" y="290" width="240" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="reply" value="Discord 返信&#xa;要約を返す" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#22577A;fontSize=14;fontFamily=Meiryo;" parent="1" vertex="1">
+                    <mxGeometry x="1510" y="175" width="180" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="operator" value="運用者 / 開発者" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#5C4D7D;fontSize=14;fontFamily=Meiryo;" parent="1" vertex="1">
+                    <mxGeometry x="80" y="530" width="190" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="cli" value="harina-v4 CLI&#xa;app/cli.py" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E9D8FD;strokeColor=#5A189A;fontSize=14;fontFamily=Meiryo;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="340" y="510" width="220" height="110" as="geometry"/>
+                </mxCell>
+                <mxCell id="receiptProcess" value="receipt process&#xa;ローカル画像 -&gt; 共通処理" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#5A189A;fontSize=14;fontFamily=Meiryo;" parent="1" vertex="1">
+                    <mxGeometry x="650" y="455" width="280" height="85" as="geometry"/>
+                </mxCell>
+                <mxCell id="uploadTest" value="bot upload-test&#xa;本番確認用の例外経路" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#B5179E;fontSize=14;fontFamily=Meiryo;" parent="1" vertex="1">
+                    <mxGeometry x="650" y="565" width="280" height="85" as="geometry"/>
+                </mxCell>
+                <mxCell id="localJson" value="JSON 結果 / ローカル確認出力" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#5A189A;fontSize=14;fontFamily=Meiryo;" parent="1" vertex="1">
+                    <mxGeometry x="1210" y="455" width="260" height="85" as="geometry"/>
+                </mxCell>
+                <mxCell id="testDiscord" value="Discord テスト投稿&#xa;upload-test 専用" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#B5179E;fontSize=14;fontFamily=Meiryo;" parent="1" vertex="1">
+                    <mxGeometry x="1210" y="565" width="260" height="85" as="geometry"/>
+                </mxCell>
+                <mxCell id="downloader" value="dataset download&#xa;Discord 履歴を取得" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#4F772D;fontSize=14;fontFamily=Meiryo;" parent="1" vertex="1">
+                    <mxGeometry x="340" y="790" width="240" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="dataset" value="ローカルデータセット&#xa;images + metadata.jsonl" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#4F772D;fontSize=14;fontFamily=Meiryo;" parent="1" vertex="1">
+                    <mxGeometry x="680" y="790" width="260" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="smoke" value="dataset smoke-test&#xa;Gemini でサンプル再実行" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#4F772D;fontSize=14;fontFamily=Meiryo;" parent="1" vertex="1">
+                    <mxGeometry x="1040" y="790" width="260" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="replay" value="将来の一括リプレイ / 移行作業" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#4F772D;fontSize=14;fontFamily=Meiryo;" parent="1" vertex="1">
+                    <mxGeometry x="1400" y="790" width="250" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="noteMain" value="本番の基本経路: Discord イベントから共通処理を直接呼び出します。&#xa;bot から CLI をシェル実行する想定ではありません。" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=13;fontFamily=Meiryo;fontColor=#1D3557;" parent="1" vertex="1">
+                    <mxGeometry x="80" y="320" width="820" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="noteOps" value="CLI はデバッグ・運用・初期化・テスト用の別入口です。&#xa;CLI から Discord へ行くのは upload-test だけです。" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=13;fontFamily=Meiryo;fontColor=#3C096C;" parent="1" vertex="1">
+                    <mxGeometry x="80" y="665" width="900" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="e1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#22577A;strokeWidth=2;" parent="1" source="user" target="discord" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#22577A;strokeWidth=2;" parent="1" source="discord" target="bot" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#22577A;strokeWidth=2;" parent="1" source="bot" target="processor" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e4" value="抽出" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#C77D00;strokeWidth=2;labelBackgroundColor=#FFFFFF;labelBorderColor=none;spacing=6;" parent="1" source="processor" target="gemini" edge="1">
+                    <mxGeometry x="0.1618" y="-5" relative="1" as="geometry">
+                        <mxPoint as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e5" value="画像を保存" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#C77D00;strokeWidth=2;labelBackgroundColor=#FFFFFF;labelBorderColor=none;spacing=6;" parent="1" source="processor" target="drive" edge="1">
+                    <mxGeometry x="-0.4286" relative="1" as="geometry">
+                        <mxPoint as="offset"/>
+                        <Array as="points">
+                            <mxPoint x="1150" y="230"/>
+                            <mxPoint x="1150" y="230"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e6" value="行を追記" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#C77D00;strokeWidth=2;labelBackgroundColor=#FFFFFF;labelBorderColor=none;spacing=6;" parent="1" source="processor" target="sheets" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="42" y="18" as="offset"/>
+                        <Array as="points">
+                            <mxPoint x="1180" y="260"/>
+                            <mxPoint x="1180" y="330"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e7" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#22577A;strokeWidth=2;" parent="1" source="processor" target="reply" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="1150" y="180"/>
+                            <mxPoint x="1150" y="80"/>
+                            <mxPoint x="1600" y="80"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e8" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#5A189A;strokeWidth=2;" parent="1" source="operator" target="cli" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e9" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#5A189A;strokeWidth=2;" parent="1" source="cli" target="receiptProcess" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e10" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#5A189A;strokeWidth=2;" parent="1" source="receiptProcess" target="processor" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="980" y="498"/>
+                            <mxPoint x="980" y="325"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e11" value="任意: --skip-google-write" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;dashed=1;strokeColor=#5A189A;strokeWidth=2;labelBackgroundColor=#FFFFFF;labelBorderColor=none;spacing=6;" parent="1" source="receiptProcess" target="localJson" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint y="-18" as="offset"/>
+                        <Array as="points">
+                            <mxPoint x="1070" y="510"/>
+                            <mxPoint x="1070" y="510"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e12" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#B5179E;strokeWidth=2;" parent="1" source="cli" target="uploadTest" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e13" value="テスト専用" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#B5179E;strokeWidth=2;labelBackgroundColor=#FFFFFF;labelBorderColor=none;spacing=6;" parent="1" source="uploadTest" target="testDiscord" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint y="-18" as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e14" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;dashed=1;strokeColor=#B5179E;strokeWidth=2;labelBackgroundColor=#FFFFFF;labelBorderColor=none;spacing=6;" parent="1" source="testDiscord" target="discord" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="1720" y="608"/>
+                            <mxPoint x="1720" y="60"/>
+                            <mxPoint x="425" y="60"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e15" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#4F772D;strokeWidth=2;" parent="1" source="cli" target="downloader" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="460" y="670"/>
+                            <mxPoint x="460" y="670"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e16" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#4F772D;strokeWidth=2;" parent="1" source="downloader" target="dataset" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e17" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#4F772D;strokeWidth=2;" parent="1" source="dataset" target="smoke" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e18" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#4F772D;strokeWidth=2;" parent="1" source="smoke" target="replay" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+</mxfile>

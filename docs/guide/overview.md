@@ -29,6 +29,10 @@ HARINA V4 is now organized around a Python package CLI surface:
 - `harina dataset smoke-test` checks a few local dataset images with Gemini
 - `harina bot upload-test` uploads a real receipt image to Discord and waits for the bot reply
 
+## Architecture diagram
+
+![Harina V4 architecture flow](../architecture/harina-v4-flow.svg)
+
 ## Processing flow
 
 ### Live bot flow

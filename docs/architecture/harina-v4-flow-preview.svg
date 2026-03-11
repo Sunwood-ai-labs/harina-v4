@@ -1,0 +1,97 @@
+<svg xmlns='http://www.w3.org/2000/svg' width='1800' height='1000' viewBox='0 0 1800 1000'>
+<defs><marker id='arrow' markerWidth='10' markerHeight='10' refX='8' refY='3' orient='auto'><path d='M0,0 L0,6 L9,3 z' fill='#555'/></marker></defs>
+<rect width='100%' height='100%' fill='white'/>
+<polyline points='170.0,215.0 425.0,215.0' fill='none' stroke='#22577A' stroke-width='3' marker-end='url(#arrow)'/>
+<polyline points='425.0,215.0 690.0,215.0' fill='none' stroke='#22577A' stroke-width='3' marker-end='url(#arrow)'/>
+<polyline points='690.0,215.0 1000.0,215.0' fill='none' stroke='#22577A' stroke-width='3' marker-end='url(#arrow)'/>
+<polyline points='1000.0,215.0 1330.0,130.0' fill='none' stroke='#C77D00' stroke-width='3' marker-end='url(#arrow)'/>
+<rect x='1240.0' y='114.0' width='180' height='22' fill='white' opacity='0.85'/>
+<text x='1330.0' y='130.0' font-size='13' font-family='Arial' text-anchor='middle' fill='#C77D00'>extract</text>
+<polyline points='1000.0,215.0 1330.0,230.0' fill='none' stroke='#C77D00' stroke-width='3' marker-end='url(#arrow)'/>
+<rect x='1240.0' y='214.0' width='180' height='22' fill='white' opacity='0.85'/>
+<text x='1330.0' y='230.0' font-size='13' font-family='Arial' text-anchor='middle' fill='#C77D00'>upload image</text>
+<polyline points='1000.0,215.0 1330.0,330.0' fill='none' stroke='#C77D00' stroke-width='3' marker-end='url(#arrow)'/>
+<rect x='1240.0' y='314.0' width='180' height='22' fill='white' opacity='0.85'/>
+<text x='1330.0' y='330.0' font-size='13' font-family='Arial' text-anchor='middle' fill='#C77D00'>append row</text>
+<polyline points='1000.0,215.0 1600.0,215.0' fill='none' stroke='#22577A' stroke-width='3' marker-end='url(#arrow)'/>
+<polyline points='175.0,565.0 450.0,565.0' fill='none' stroke='#5A189A' stroke-width='3' marker-end='url(#arrow)'/>
+<polyline points='450.0,565.0 790.0,497.5' fill='none' stroke='#5A189A' stroke-width='3' marker-end='url(#arrow)'/>
+<polyline points='790.0,497.5 980.0,498.0 980.0,325.0 1000.0,215.0' fill='none' stroke='#5A189A' stroke-width='3' marker-end='url(#arrow)'/>
+<polyline points='790.0,497.5 1340.0,497.5' fill='none' stroke='#5A189A' stroke-width='3' stroke-dasharray='8 6' marker-end='url(#arrow)'/>
+<rect x='1250.0' y='481.5' width='180' height='22' fill='white' opacity='0.85'/>
+<text x='1340.0' y='497.5' font-size='13' font-family='Arial' text-anchor='middle' fill='#5A189A'>optional --skip-google-write</text>
+<polyline points='450.0,565.0 790.0,607.5' fill='none' stroke='#B5179E' stroke-width='3' marker-end='url(#arrow)'/>
+<polyline points='790.0,607.5 1340.0,607.5' fill='none' stroke='#B5179E' stroke-width='3' marker-end='url(#arrow)'/>
+<rect x='1250.0' y='591.5' width='180' height='22' fill='white' opacity='0.85'/>
+<text x='1340.0' y='607.5' font-size='13' font-family='Arial' text-anchor='middle' fill='#B5179E'>test only</text>
+<polyline points='1340.0,607.5 1560.0,608.0 1560.0,60.0 425.0,60.0 425.0,215.0' fill='none' stroke='#B5179E' stroke-width='3' stroke-dasharray='8 6' marker-end='url(#arrow)'/>
+<rect x='1470.0' y='44.0' width='180' height='22' fill='white' opacity='0.85'/>
+<text x='1560.0' y='60.0' font-size='13' font-family='Arial' text-anchor='middle' fill='#B5179E'>bot receives uploaded test message</text>
+<polyline points='450.0,565.0 460.0,830.0' fill='none' stroke='#4F772D' stroke-width='3' marker-end='url(#arrow)'/>
+<polyline points='460.0,830.0 810.0,830.0' fill='none' stroke='#4F772D' stroke-width='3' marker-end='url(#arrow)'/>
+<polyline points='810.0,830.0 1170.0,830.0' fill='none' stroke='#4F772D' stroke-width='3' marker-end='url(#arrow)'/>
+<polyline points='1170.0,830.0 1525.0,830.0' fill='none' stroke='#4F772D' stroke-width='3' marker-end='url(#arrow)'/>
+<text x='30.0' y='38.0' font-size='14' font-family='Arial' fill='#111'>Harina V4 architecture and flow</text>
+<rect x='30.0' y='70.0' width='1680.0' height='320.0' rx='12' ry='12' fill='#EAF4F4' stroke='#22577A' stroke-width='2'/>
+<text x='870.0' y='230.0' font-size='14' font-family='Arial' text-anchor='middle' dominant-baseline='middle' fill='#111'>Main receipt intake</text>
+<rect x='30.0' y='420.0' width='1680.0' height='280.0' rx='12' ry='12' fill='#F4F1FA' stroke='#5C4D7D' stroke-width='2'/>
+<text x='870.0' y='560.0' font-size='14' font-family='Arial' text-anchor='middle' dominant-baseline='middle' fill='#111'>Operator and debug entrypoints</text>
+<rect x='30.0' y='730.0' width='1680.0' height='200.0' rx='12' ry='12' fill='#F1F7E9' stroke='#4F772D' stroke-width='2'/>
+<text x='870.0' y='830.0' font-size='14' font-family='Arial' text-anchor='middle' dominant-baseline='middle' fill='#111'>Migration and replay flow</text>
+<rect x='80.0' y='175.0' width='180.0' height='80.0' rx='12' ry='12' fill='#FFFFFF' stroke='#22577A' stroke-width='2'/>
+<text x='170.0' y='205.0' font-size='14' font-family='Arial' text-anchor='middle' dominant-baseline='middle' fill='#111'>User</text>
+<text x='170.0' y='225.0' font-size='14' font-family='Arial' text-anchor='middle' dominant-baseline='middle' fill='#111'>posts receipt image</text>
+<rect x='320.0' y='175.0' width='210.0' height='80.0' rx='12' ry='12' fill='#FFFFFF' stroke='#22577A' stroke-width='2'/>
+<text x='425.0' y='205.0' font-size='14' font-family='Arial' text-anchor='middle' dominant-baseline='middle' fill='#111'>Discord channel</text>
+<text x='425.0' y='225.0' font-size='14' font-family='Arial' text-anchor='middle' dominant-baseline='middle' fill='#111'>watched by bot</text>
+<rect x='590.0' y='175.0' width='200.0' height='80.0' rx='12' ry='12' fill='#D8F3DC' stroke='#2D6A4F' stroke-width='2'/>
+<text x='690.0' y='205.0' font-size='14' font-family='Arial' text-anchor='middle' dominant-baseline='middle' fill='#111'>ReceiptBot</text>
+<text x='690.0' y='225.0' font-size='14' font-family='Arial' text-anchor='middle' dominant-baseline='middle' fill='#111'>app/bot.py</text>
+<rect x='860.0' y='160.0' width='280.0' height='110.0' rx='12' ry='12' fill='#FFF3BF' stroke='#C77D00' stroke-width='2'/>
+<text x='1000.0' y='195.0' font-size='14' font-family='Arial' text-anchor='middle' dominant-baseline='middle' fill='#111'>Shared receipt pipeline</text>
+<text x='1000.0' y='215.0' font-size='14' font-family='Arial' text-anchor='middle' dominant-baseline='middle' fill='#111'>ReceiptProcessor</text>
+<text x='1000.0' y='235.0' font-size='14' font-family='Arial' text-anchor='middle' dominant-baseline='middle' fill='#111'>app/processor.py</text>
+<rect x='1210.0' y='90.0' width='240.0' height='80.0' rx='12' ry='12' fill='#FFFFFF' stroke='#C77D00' stroke-width='2'/>
+<text x='1330.0' y='120.0' font-size='14' font-family='Arial' text-anchor='middle' dominant-baseline='middle' fill='#111'>GeminiReceiptExtractor</text>
+<text x='1330.0' y='140.0' font-size='14' font-family='Arial' text-anchor='middle' dominant-baseline='middle' fill='#111'>structured JSON extraction</text>
+<rect x='1210.0' y='190.0' width='240.0' height='80.0' rx='12' ry='12' fill='#FFFFFF' stroke='#C77D00' stroke-width='2'/>
+<text x='1330.0' y='220.0' font-size='14' font-family='Arial' text-anchor='middle' dominant-baseline='middle' fill='#111'>Google Drive</text>
+<text x='1330.0' y='240.0' font-size='14' font-family='Arial' text-anchor='middle' dominant-baseline='middle' fill='#111'>store original image</text>
+<rect x='1210.0' y='290.0' width='240.0' height='80.0' rx='12' ry='12' fill='#FFFFFF' stroke='#C77D00' stroke-width='2'/>
+<text x='1330.0' y='320.0' font-size='14' font-family='Arial' text-anchor='middle' dominant-baseline='middle' fill='#111'>Google Sheets</text>
+<text x='1330.0' y='340.0' font-size='14' font-family='Arial' text-anchor='middle' dominant-baseline='middle' fill='#111'>append receipt row</text>
+<rect x='1510.0' y='175.0' width='180.0' height='80.0' rx='12' ry='12' fill='#FFFFFF' stroke='#22577A' stroke-width='2'/>
+<text x='1600.0' y='205.0' font-size='14' font-family='Arial' text-anchor='middle' dominant-baseline='middle' fill='#111'>Discord reply</text>
+<text x='1600.0' y='225.0' font-size='14' font-family='Arial' text-anchor='middle' dominant-baseline='middle' fill='#111'>summary back to user</text>
+<rect x='80.0' y='530.0' width='190.0' height='70.0' rx='12' ry='12' fill='#FFFFFF' stroke='#5C4D7D' stroke-width='2'/>
+<text x='175.0' y='565.0' font-size='14' font-family='Arial' text-anchor='middle' dominant-baseline='middle' fill='#111'>Operator / developer</text>
+<rect x='340.0' y='510.0' width='220.0' height='110.0' rx='12' ry='12' fill='#E9D8FD' stroke='#5A189A' stroke-width='2'/>
+<text x='450.0' y='555.0' font-size='14' font-family='Arial' text-anchor='middle' dominant-baseline='middle' fill='#111'>harina-v4 CLI</text>
+<text x='450.0' y='575.0' font-size='14' font-family='Arial' text-anchor='middle' dominant-baseline='middle' fill='#111'>app/cli.py</text>
+<rect x='650.0' y='455.0' width='280.0' height='85.0' rx='12' ry='12' fill='#FFFFFF' stroke='#5A189A' stroke-width='2'/>
+<text x='790.0' y='487.5' font-size='14' font-family='Arial' text-anchor='middle' dominant-baseline='middle' fill='#111'>receipt process</text>
+<text x='790.0' y='507.5' font-size='14' font-family='Arial' text-anchor='middle' dominant-baseline='middle' fill='#111'>local image -&gt; shared pipeline</text>
+<rect x='650.0' y='565.0' width='280.0' height='85.0' rx='12' ry='12' fill='#FFFFFF' stroke='#B5179E' stroke-width='2'/>
+<text x='790.0' y='597.5' font-size='14' font-family='Arial' text-anchor='middle' dominant-baseline='middle' fill='#111'>bot upload-test</text>
+<text x='790.0' y='617.5' font-size='14' font-family='Arial' text-anchor='middle' dominant-baseline='middle' fill='#111'>exception path for live verification</text>
+<rect x='1210.0' y='455.0' width='260.0' height='85.0' rx='12' ry='12' fill='#FFFFFF' stroke='#5A189A' stroke-width='2'/>
+<text x='1340.0' y='497.5' font-size='14' font-family='Arial' text-anchor='middle' dominant-baseline='middle' fill='#111'>JSON result / local debug output</text>
+<rect x='1210.0' y='565.0' width='260.0' height='85.0' rx='12' ry='12' fill='#FFFFFF' stroke='#B5179E' stroke-width='2'/>
+<text x='1340.0' y='597.5' font-size='14' font-family='Arial' text-anchor='middle' dominant-baseline='middle' fill='#111'>Discord test message</text>
+<text x='1340.0' y='617.5' font-size='14' font-family='Arial' text-anchor='middle' dominant-baseline='middle' fill='#111'>used only by upload-test</text>
+<rect x='340.0' y='790.0' width='240.0' height='80.0' rx='12' ry='12' fill='#FFFFFF' stroke='#4F772D' stroke-width='2'/>
+<text x='460.0' y='820.0' font-size='14' font-family='Arial' text-anchor='middle' dominant-baseline='middle' fill='#111'>dataset download</text>
+<text x='460.0' y='840.0' font-size='14' font-family='Arial' text-anchor='middle' dominant-baseline='middle' fill='#111'>read Discord history</text>
+<rect x='680.0' y='790.0' width='260.0' height='80.0' rx='12' ry='12' fill='#FFFFFF' stroke='#4F772D' stroke-width='2'/>
+<text x='810.0' y='820.0' font-size='14' font-family='Arial' text-anchor='middle' dominant-baseline='middle' fill='#111'>Local dataset</text>
+<text x='810.0' y='840.0' font-size='14' font-family='Arial' text-anchor='middle' dominant-baseline='middle' fill='#111'>images + metadata.jsonl</text>
+<rect x='1040.0' y='790.0' width='260.0' height='80.0' rx='12' ry='12' fill='#FFFFFF' stroke='#4F772D' stroke-width='2'/>
+<text x='1170.0' y='820.0' font-size='14' font-family='Arial' text-anchor='middle' dominant-baseline='middle' fill='#111'>dataset smoke-test</text>
+<text x='1170.0' y='840.0' font-size='14' font-family='Arial' text-anchor='middle' dominant-baseline='middle' fill='#111'>sample replay with Gemini</text>
+<rect x='1400.0' y='790.0' width='250.0' height='80.0' rx='12' ry='12' fill='#FFFFFF' stroke='#4F772D' stroke-width='2'/>
+<text x='1525.0' y='830.0' font-size='14' font-family='Arial' text-anchor='middle' dominant-baseline='middle' fill='#111'>Future batch replay / migration work</text>
+<text x='80.0' y='338.0' font-size='14' font-family='Arial' fill='#1D3557'>Preferred production path: Discord event triggers the shared processor directly.</text>
+<text x='80.0' y='356.0' font-size='14' font-family='Arial' fill='#1D3557'>The bot should not shell out to the CLI.</text>
+<text x='80.0' y='683.0' font-size='14' font-family='Arial' fill='#3C096C'>CLI is a second entrypoint for debugging, operations, bootstrap, and tests.</text>
+<text x='80.0' y='701.0' font-size='14' font-family='Arial' fill='#3C096C'>Only upload-test intentionally goes from CLI to Discord.</text>
+</svg>

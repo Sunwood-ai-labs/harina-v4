@@ -6,6 +6,13 @@
 
 [English](./README.md)
 
+## ???
+
+![Harina V4 ???](./docs/architecture/harina-v4-flow.ja.svg)
+
+?????: [docs/architecture/harina-v4-flow.ja.drawio](./docs/architecture/harina-v4-flow.ja.drawio)
+
+
 ![Python](https://img.shields.io/badge/Python-3.12-1E3A34?style=for-the-badge&logo=python&logoColor=white)
 ![Gemini](https://img.shields.io/badge/Gemini-Receipt%20Extraction-E68B2C?style=for-the-badge)
 ![Docker Compose](https://img.shields.io/badge/Docker%20Compose-Self--Hosted-36544C?style=for-the-badge&logo=docker&logoColor=white)

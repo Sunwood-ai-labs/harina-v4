@@ -34,6 +34,12 @@ Harina Receipt Bot is a self-hosted Python Discord bot for receipt workflows. It
 2. Data migration: pull historical images from V1, V2, or V3 Discord channels into a local dataset.
 3. Re-scan pipeline: rerun older receipts after changing prompts, models, schemas, or extraction logic.
 
+## 🗺 Architecture
+
+![Harina V4 architecture flow](./docs/architecture/harina-v4-flow.svg)
+
+Source: [docs/architecture/harina-v4-flow.drawio](./docs/architecture/harina-v4-flow.drawio)
+
 ## ⚡ Quick Start
 
 ```bash

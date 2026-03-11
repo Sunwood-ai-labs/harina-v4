@@ -2,6 +2,11 @@
 
 Harina Receipt Bot は、レシート運用向けのセルフホスト Discord bot であり、移行や再実行に使えるワンショットのデータセットダウンローダーでもあります。
 
+## ???
+
+![Harina V4 ???](../../architecture/harina-v4-flow.ja.svg)
+
+
 ## 2つの運用モード
 
 ### 1. 常時レシート処理

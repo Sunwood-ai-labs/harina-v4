@@ -4,6 +4,7 @@ import argparse
 import asyncio
 import json
 import logging
+import mimetypes
 import os
 from argparse import Namespace
 from pathlib import Path
@@ -14,17 +15,21 @@ from app.bot import ReceiptBot
 from app.config import Settings, load_settings
 from app.dataset_downloader import DEFAULT_OUTPUT_DIR, run_downloader
 from app.discord_upload_test import run_discord_upload_test
+from app.formatters import build_local_receipt_context
 from app.gemini_smoke_test import run_smoke_test
 from app.google_auth import build_google_credentials, load_oauth_client_info, load_service_account_info
 from app.google_oauth import finish_oauth_login, run_oauth_login, start_oauth_login
 from app.google_setup import GoogleResourceBootstrapper, build_google_env_updates, upsert_env_file
+from app.gemini_client import GeminiReceiptExtractor
+from app.google_workspace import GoogleWorkspaceClient
+from app.processor import ReceiptProcessor
 
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="harina", description="HARINA V4 CLI")
+    parser = argparse.ArgumentParser(description="HARINA V4 CLI")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     bot_parser = subparsers.add_parser("bot", help="Run the Discord bot or Discord-side bot checks.")
@@ -52,6 +57,44 @@ def build_parser() -> argparse.ArgumentParser:
         help="How long to wait for the reply message. Default: 60",
     )
     bot_upload_test_parser.set_defaults(handler=handle_bot_upload_test)
+
+    receipt_parser = subparsers.add_parser(
+        "receipt",
+        help="Run the CLI-first receipt pipeline against a local image.",
+    )
+    receipt_subparsers = receipt_parser.add_subparsers(dest="receipt_command", required=True)
+
+    receipt_process_parser = receipt_subparsers.add_parser(
+        "process",
+        help="Process a local receipt image with Gemini and optionally write to Google Drive / Sheets.",
+    )
+    receipt_process_parser.add_argument("image", help="Local receipt image path.")
+    receipt_process_parser.add_argument(
+        "--mime-type",
+        default=None,
+        help="Override the detected MIME type. Defaults to guessing from the file name.",
+    )
+    receipt_process_parser.add_argument(
+        "--skip-google-write",
+        action="store_true",
+        help="Run Gemini extraction only without uploading to Drive or appending to Sheets.",
+    )
+    receipt_process_parser.add_argument(
+        "--source-name",
+        default="cli",
+        help="Label stored in the sheet channelName column for local runs. Default: cli",
+    )
+    receipt_process_parser.add_argument(
+        "--author-tag",
+        default="harina-v4",
+        help="Label stored in the sheet authorTag column for local runs. Default: harina-v4",
+    )
+    receipt_process_parser.add_argument(
+        "--output",
+        default=None,
+        help="Optional JSON file path to write the processing result.",
+    )
+    receipt_process_parser.set_defaults(handler=handle_receipt_process)
 
     dataset_parser = subparsers.add_parser("dataset", help="Dataset acquisition and Gemini checks.")
     dataset_subparsers = dataset_parser.add_subparsers(dest="dataset_command", required=True)
@@ -231,7 +274,7 @@ def handle_bot_run(args: Namespace, settings: Settings | None) -> None:
     if settings is None:
         raise RuntimeError("Bot settings were not loaded.")
     bot = ReceiptBot(settings=settings)
-    bot.run(settings.discord_token, log_handler=None)
+    bot.run(settings.require_discord_token(), log_handler=None)
 
 
 def handle_bot_upload_test(args: Namespace, settings: Settings | None) -> None:
@@ -250,6 +293,64 @@ def handle_bot_upload_test(args: Namespace, settings: Settings | None) -> None:
         )
     )
     print(json.dumps(summary, ensure_ascii=True, indent=2))
+
+
+def handle_receipt_process(args: Namespace, settings: Settings | None) -> None:
+    if settings is None:
+        raise RuntimeError("Receipt settings were not loaded.")
+
+    image_path = Path(args.image)
+    if not image_path.exists():
+        raise RuntimeError(f"Image file does not exist: {image_path}")
+    if not image_path.is_file():
+        raise RuntimeError(f"Image path is not a file: {image_path}")
+
+    settings.require_gemini_api_key()
+    google_workspace = None
+    if not args.skip_google_write:
+        settings.require_google_workspace()
+        google_workspace = GoogleWorkspaceClient(
+            credentials=settings.google_credentials,
+            drive_folder_id=settings.google_drive_folder_id or "",
+            spreadsheet_id=settings.google_sheets_spreadsheet_id or "",
+            sheet_name=settings.google_sheets_sheet_name,
+        )
+
+    processor = ReceiptProcessor(
+        gemini=GeminiReceiptExtractor(
+            api_key=settings.gemini_api_key or "",
+            model=settings.gemini_model,
+        ),
+        google_workspace=google_workspace,
+    )
+
+    mime_type = args.mime_type or mimetypes.guess_type(image_path.name)[0] or "image/jpeg"
+    result = asyncio.run(
+        processor.process_receipt(
+            context=build_local_receipt_context(
+                image_path,
+                source_name=args.source_name,
+                author_tag=args.author_tag,
+            ),
+            filename=image_path.name,
+            mime_type=mime_type,
+            image_bytes=image_path.read_bytes(),
+            write_to_google=not args.skip_google_write,
+        )
+    )
+
+    summary = {
+        "image_path": str(image_path.resolve()),
+        "mime_type": mime_type,
+        **result.as_dict(),
+    }
+    output_text = json.dumps(summary, ensure_ascii=True, indent=2)
+    if args.output:
+        output_path = Path(args.output)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(output_text + "\n", encoding="utf-8")
+
+    print(output_text)
 
 
 def handle_dataset_download(args: Namespace, settings: Settings | None) -> None:
@@ -437,7 +538,11 @@ def handle_google_oauth_finish(args: Namespace, settings: Settings | None) -> No
 def main() -> None:
     parser = build_parser()
     args = parser.parse_args()
-    settings = load_settings() if args.command == "bot" else None
+    settings = None
+    if args.command == "bot":
+        settings = load_settings(require_discord=True, require_gemini=True, require_google_workspace=True)
+    elif args.command == "receipt":
+        settings = load_settings(require_gemini=True)
     args.handler(args, settings)
 
 

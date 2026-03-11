@@ -85,7 +85,7 @@ async def run_discord_upload_test(
         caption=caption,
         timeout_seconds=timeout_seconds,
     )
-    await client.start(settings.discord_token)
+    await client.start(settings.require_discord_token())
 
     if client.run_error is not None:
         raise client.run_error

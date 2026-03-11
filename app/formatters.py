@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import json
 import re
+from dataclasses import dataclass
 from datetime import datetime, UTC
+from pathlib import Path
 
 import discord
 
@@ -42,11 +44,60 @@ RECEIPT_SHEET_HEADERS = [
 ]
 
 
+@dataclass(slots=True)
+class ReceiptRecordContext:
+    processed_at: str | None = None
+    guild_id: str = ""
+    guild_name: str = ""
+    channel_id: str = ""
+    channel_name: str = ""
+    message_id: str = ""
+    message_url: str = ""
+    author_id: str = ""
+    author_tag: str = ""
+    attachment_id: str = ""
+    attachment_name: str = ""
+    attachment_url: str = ""
+
+
 def is_image_attachment(attachment: discord.Attachment) -> bool:
     content_type = attachment.content_type or ""
     return bool(
         content_type.startswith("image/")
         or attachment.filename.lower().endswith((".png", ".jpg", ".jpeg", ".webp", ".gif", ".heic", ".heif"))
+    )
+
+
+def build_discord_receipt_context(message: discord.Message, attachment: discord.Attachment) -> ReceiptRecordContext:
+    channel_name = getattr(message.channel, "name", "")
+    author_tag = getattr(message.author, "global_name", None) or str(message.author)
+
+    return ReceiptRecordContext(
+        guild_id=str(message.guild.id) if message.guild else "",
+        guild_name=message.guild.name if message.guild else "",
+        channel_id=str(message.channel.id),
+        channel_name=channel_name or "",
+        message_id=str(message.id),
+        message_url=message.jump_url,
+        author_id=str(message.author.id),
+        author_tag=author_tag,
+        attachment_id=str(attachment.id),
+        attachment_name=attachment.filename,
+        attachment_url=attachment.url,
+    )
+
+
+def build_local_receipt_context(
+    image_path: Path,
+    *,
+    source_name: str = "cli",
+    author_tag: str = "harina-v4",
+) -> ReceiptRecordContext:
+    return ReceiptRecordContext(
+        channel_name=source_name,
+        author_tag=author_tag,
+        attachment_name=image_path.name,
+        attachment_url=str(image_path.resolve()),
     )
 
 
@@ -59,28 +110,24 @@ def build_drive_file_name(original_filename: str, extraction: ReceiptExtraction)
 
 def build_receipt_row(
     *,
-    message: discord.Message,
-    attachment: discord.Attachment,
+    context: ReceiptRecordContext,
     extraction: ReceiptExtraction,
     drive_file_id: str,
     drive_file_url: str | None,
 ) -> list[str]:
-    channel_name = getattr(message.channel, "name", "")
-    author_tag = getattr(message.author, "global_name", None) or str(message.author)
-
     return [
-        datetime.now(UTC).isoformat(),
-        str(message.guild.id) if message.guild else "",
-        message.guild.name if message.guild else "",
-        str(message.channel.id),
-        channel_name or "",
-        str(message.id),
-        message.jump_url,
-        str(message.author.id),
-        author_tag,
-        str(attachment.id),
-        attachment.filename,
-        attachment.url,
+        context.processed_at or datetime.now(UTC).isoformat(),
+        context.guild_id,
+        context.guild_name,
+        context.channel_id,
+        context.channel_name,
+        context.message_id,
+        context.message_url,
+        context.author_id,
+        context.author_tag,
+        context.attachment_id,
+        context.attachment_name,
+        context.attachment_url,
         drive_file_id,
         drive_file_url or "",
         extraction.merchant_name or "",

@@ -10,9 +10,9 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name
 
 
 def main() -> None:
-    settings = load_settings()
+    settings = load_settings(require_discord=True, require_gemini=True, require_google_workspace=True)
     bot = ReceiptBot(settings=settings)
-    bot.run(settings.discord_token, log_handler=None)
+    bot.run(settings.require_discord_token(), log_handler=None)
 
 
 if __name__ == "__main__":

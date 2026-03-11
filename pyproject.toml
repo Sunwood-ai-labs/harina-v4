@@ -21,6 +21,7 @@ dev = [
 
 [project.scripts]
 harina = "app.cli:main"
+harina-v4 = "app.cli:main"
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

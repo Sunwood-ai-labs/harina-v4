@@ -81,6 +81,8 @@ uv run harina bot upload-test --channel-id <channel_id> --image ./sample-receipt
 
 Google へのブラウザログインは、Cloud project 作成、API 有効化、サービスアカウント JSON キー取得のときだけで十分です。その後は HARINA CLI から Drive フォルダと Spreadsheet を自動で作成できます。
 
+Codex で運用する場合は、Google Cloud Console 側のブラウザ作業も `logged-in-google-chrome` スキルを使って進められます。プロジェクト作成、OAuth client 作成、token 発行までを再現しやすい形で扱えます。
+
 個人 Gmail で運用する場合は、OAuth refresh token 方式がいちばん自然です。
 
 ```bash

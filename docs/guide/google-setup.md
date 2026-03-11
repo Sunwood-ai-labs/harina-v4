@@ -13,6 +13,8 @@ Download the JSON key, or copy its JSON payload into a secret store.
 
 If HARINA writes into a personal Google Drive account, use OAuth refresh-token credentials instead of a service account.
 
+If you are using Codex, the browser-side Google Cloud Console steps can be automated with the `logged-in-google-chrome` skill. That is a good fit for creating the Cloud project, configuring OAuth consent, downloading the OAuth client JSON, and completing the one-time consent flow in a logged-in Chrome profile.
+
 1. Create an OAuth client in Google Cloud.
 2. Download the OAuth client JSON into `./secrets`.
 3. Run:

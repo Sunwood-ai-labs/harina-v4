@@ -81,6 +81,8 @@ Why this shape is useful:
 
 You only need browser-based Google login once to create the Cloud project, enable APIs, and download the service account JSON key. After that, HARINA can create its own Drive folder and spreadsheet from the CLI.
 
+If you are operating HARINA through Codex, the browser-side Google Cloud Console work can also be driven with the `logged-in-google-chrome` skill so project creation, OAuth client setup, and token issuance stay reproducible.
+
 For personal Gmail setups, OAuth refresh tokens are usually the right path:
 
 ```bash

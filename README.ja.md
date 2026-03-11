@@ -40,7 +40,7 @@ Harina Receipt Bot は、レシート運用向けのセルフホスト型 Python
 cp .env.example .env
 uv sync
 uv run pytest
-uv run harina bot run
+uv run harina-v4 bot run
 ```
 
 必須の環境変数:
@@ -54,28 +54,43 @@ uv run harina bot run
 
 ## 🧰 HARINA CLI
 
-このリポジトリは Python パッケージ CLI として `harina` コマンドを公開します。
+このリポジトリは Python パッケージ CLI として `harina-v4` コマンドを公開します。
+後方互換のため、短い `harina` コマンドもエイリアスとして残しています。
 
 ```bash
-uv run harina --help
+uv run harina-v4 --help
 ```
 
 主なコマンド:
 
 ```bash
-uv run harina bot run
-uv run harina google oauth-login --oauth-client-secret-file ./secrets/harina-oauth-client.json --env-file .env
-uv run harina google init-resources --service-account-key-file ./secrets/harina-v4-bot.json --env-file .env
-uv run harina dataset download "https://discord.com/channels/<guild_id>/<channel_id>" --limit 50
-uv run harina dataset smoke-test --dataset-dir ./dataset/v3-backfill --limit 2
-uv run harina bot upload-test --channel-id <channel_id> --image ./sample-receipt.jpg
+uv run harina-v4 receipt process ./sample-receipt.jpg --skip-google-write
+uv run harina-v4 bot run
+uv run harina-v4 google oauth-login --oauth-client-secret-file ./secrets/harina-oauth-client.json --env-file .env
+uv run harina-v4 google init-resources --service-account-key-file ./secrets/harina-v4-bot.json --env-file .env
+uv run harina-v4 dataset download "https://discord.com/channels/<guild_id>/<channel_id>" --limit 50
+uv run harina-v4 dataset smoke-test --dataset-dir ./dataset/v3-backfill --limit 2
+uv run harina-v4 bot upload-test --channel-id <channel_id> --image ./sample-receipt.jpg
 ```
 
 この形にする利点:
 
 - V4 の運用コマンド面を CLI に集約できる
-- Discord bot も同じ Python パッケージのロジックを再利用できる
+- Discord bot も同じレシート処理パイプラインを再利用できる
 - 移行、再スキャン、Discord 上の実機確認まで同じツールから実行できる
+
+ローカルでのレシートデバッグ例:
+
+```bash
+uv run harina-v4 receipt process ./sample-receipt.jpg --skip-google-write
+uv run harina-v4 receipt process ./sample-receipt.jpg --output ./artifacts/receipt-result.json
+```
+
+補足:
+
+- `receipt process` は bot と同じ Gemini 中心のレシート処理経路を使います
+- `--skip-google-write` を付けると `GEMINI_API_KEY` だけでローカル抽出確認ができます
+- `--skip-google-write` を外すと Drive へのアップロードと Sheets への追記まで行います
 
 ## ☁ Google 初期化
 
@@ -245,7 +260,7 @@ docker-compose.yml    セルフホスト用構成
 - bot 起動時に Google Sheets のヘッダー行を自動作成します
 - 必須設定が不足している場合は起動時に失敗します
 - `DISCORD_DATASET_OUTPUT_DIR` で downloader の既定保存先を変更できます
-- `DISCORD_TEST_CHANNEL_ID` で `harina bot upload-test` の既定チャンネルを設定できます
+- `DISCORD_TEST_CHANNEL_ID` で `harina-v4 bot upload-test` の既定チャンネルを設定できます
 - `DISCORD_TEST_MESSAGE_PREFIX` で CLI テスト投稿として扱う自己投稿メッセージの接頭辞を変えられます
 
 ## 💻 開発
@@ -253,7 +268,7 @@ docker-compose.yml    セルフホスト用構成
 ```bash
 uv sync
 uv run pytest
-uv run harina --help
+uv run harina-v4 --help
 npm --prefix docs install
 npm --prefix docs run docs:build
 ```

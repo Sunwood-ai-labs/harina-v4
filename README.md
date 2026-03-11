@@ -40,7 +40,7 @@ Harina Receipt Bot is a self-hosted Python Discord bot for receipt workflows. It
 cp .env.example .env
 uv sync
 uv run pytest
-uv run harina bot run
+uv run harina-v4 bot run
 ```
 
 Required environment variables:
@@ -54,28 +54,43 @@ Required environment variables:
 
 ## 🧰 HARINA CLI
 
-This repository now exposes a Python package CLI called `harina`.
+This repository now exposes a Python package CLI called `harina-v4`.
+For backwards compatibility, the shorter `harina` command remains available as an alias.
 
 ```bash
-uv run harina --help
+uv run harina-v4 --help
 ```
 
 Core commands:
 
 ```bash
-uv run harina bot run
-uv run harina google oauth-login --oauth-client-secret-file ./secrets/harina-oauth-client.json --env-file .env
-uv run harina google init-resources --service-account-key-file ./secrets/harina-v4-bot.json --env-file .env
-uv run harina dataset download "https://discord.com/channels/<guild_id>/<channel_id>" --limit 50
-uv run harina dataset smoke-test --dataset-dir ./dataset/v3-backfill --limit 2
-uv run harina bot upload-test --channel-id <channel_id> --image ./sample-receipt.jpg
+uv run harina-v4 receipt process ./sample-receipt.jpg --skip-google-write
+uv run harina-v4 bot run
+uv run harina-v4 google oauth-login --oauth-client-secret-file ./secrets/harina-oauth-client.json --env-file .env
+uv run harina-v4 google init-resources --service-account-key-file ./secrets/harina-v4-bot.json --env-file .env
+uv run harina-v4 dataset download "https://discord.com/channels/<guild_id>/<channel_id>" --limit 50
+uv run harina-v4 dataset smoke-test --dataset-dir ./dataset/v3-backfill --limit 2
+uv run harina-v4 bot upload-test --channel-id <channel_id> --image ./sample-receipt.jpg
 ```
 
 Why this shape is useful:
 
 - The CLI becomes the stable operator surface for V4 workflows
-- The Discord bot can reuse the same package logic instead of hiding behavior only inside event handlers
+- The Discord bot reuses the same receipt-processing pipeline instead of hiding behavior only inside event handlers
 - Migration, replay, and Discord-side verification can all run from one installed tool
+
+Local receipt debugging:
+
+```bash
+uv run harina-v4 receipt process ./sample-receipt.jpg --skip-google-write
+uv run harina-v4 receipt process ./sample-receipt.jpg --output ./artifacts/receipt-result.json
+```
+
+Notes:
+
+- `receipt process` runs the same Gemini-centered receipt pipeline used by the bot
+- `--skip-google-write` is useful when you want to debug extraction locally with only `GEMINI_API_KEY`
+- Without `--skip-google-write`, the command also uploads to Drive and appends a row to Sheets
 
 ## ☁ Google Bootstrap
 
@@ -245,7 +260,7 @@ docker-compose.yml    Self-hosted runtime
 - The bot creates the destination sheet header row automatically on startup
 - Startup fails fast when required Google settings are missing
 - `DISCORD_DATASET_OUTPUT_DIR` sets the default dataset output path for downloader runs
-- `DISCORD_TEST_CHANNEL_ID` sets the default Discord channel for `harina bot upload-test`
+- `DISCORD_TEST_CHANNEL_ID` sets the default Discord channel for `harina-v4 bot upload-test`
 - `DISCORD_TEST_MESSAGE_PREFIX` controls which self-authored Discord messages are treated as CLI test uploads
 
 ## 💻 Development
@@ -253,7 +268,7 @@ docker-compose.yml    Self-hosted runtime
 ```bash
 uv sync
 uv run pytest
-uv run harina --help
+uv run harina-v4 --help
 npm --prefix docs install
 npm --prefix docs run docs:build
 ```

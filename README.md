@@ -50,6 +50,7 @@ Required environment variables:
 - `GOOGLE_DRIVE_FOLDER_ID`
 - `GOOGLE_SHEETS_SPREADSHEET_ID`
 - `GOOGLE_SERVICE_ACCOUNT_JSON` or `GOOGLE_SERVICE_ACCOUNT_KEY_FILE`
+- or `GOOGLE_OAUTH_CLIENT_JSON` / `GOOGLE_OAUTH_CLIENT_SECRET_FILE` plus `GOOGLE_OAUTH_REFRESH_TOKEN`
 
 ## 🧰 HARINA CLI
 
@@ -63,6 +64,8 @@ Core commands:
 
 ```bash
 uv run harina bot run
+uv run harina google oauth-login --oauth-client-secret-file ./secrets/harina-oauth-client.json --env-file .env
+uv run harina google init-resources --service-account-key-file ./secrets/harina-v4-bot.json --env-file .env
 uv run harina dataset download "https://discord.com/channels/<guild_id>/<channel_id>" --limit 50
 uv run harina dataset smoke-test --dataset-dir ./dataset/v3-backfill --limit 2
 uv run harina bot upload-test --channel-id <channel_id> --image ./sample-receipt.jpg
@@ -73,6 +76,43 @@ Why this shape is useful:
 - The CLI becomes the stable operator surface for V4 workflows
 - The Discord bot can reuse the same package logic instead of hiding behavior only inside event handlers
 - Migration, replay, and Discord-side verification can all run from one installed tool
+
+## ☁ Google Bootstrap
+
+You only need browser-based Google login once to create the Cloud project, enable APIs, and download the service account JSON key. After that, HARINA can create its own Drive folder and spreadsheet from the CLI.
+
+For personal Gmail setups, OAuth refresh tokens are usually the right path:
+
+```bash
+uv run harina google oauth-login --oauth-client-secret-file ./secrets/harina-oauth-client.json --env-file .env
+uv run harina google init-resources --env-file .env
+```
+
+```bash
+uv run harina google init-resources --service-account-key-file ./secrets/harina-v4-bot.json --env-file .env
+```
+
+Useful examples:
+
+```bash
+uv run harina google init-resources --service-account-key-file ./secrets/harina-v4-bot.json
+uv run harina google init-resources --service-account-key-file ./secrets/harina-v4-bot.json --share-with-email you@example.com
+uv run harina google init-resources --service-account-key-file ./secrets/harina-v4-bot.json --folder-name "Harina V4 Receipts" --spreadsheet-title "Harina V4 Receipts" --sheet-name Receipts --env-file .env
+```
+
+What this command does:
+
+- Creates or reuses a Drive folder owned by the service account
+- Creates or reuses a spreadsheet owned by the service account
+- Ensures the target sheet tab and header row exist
+- Optionally shares both resources with your Google account
+- Prints the environment values and can write them into `.env`
+
+Important note:
+
+- Personal Google Drive accounts often reject service-account-owned uploads because service accounts do not have Drive storage quota there
+- If you are using a personal Gmail account, prefer an OAuth refresh-token flow for Drive and Sheets
+- Keep service accounts for Google Workspace shared drives or admin-managed environments
 
 ## 📦 Dataset Downloader
 

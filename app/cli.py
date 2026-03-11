@@ -8,11 +8,16 @@ import os
 from argparse import Namespace
 from pathlib import Path
 
+from googleapiclient.errors import HttpError
+
 from app.bot import ReceiptBot
 from app.config import Settings, load_settings
 from app.dataset_downloader import DEFAULT_OUTPUT_DIR, run_downloader
 from app.discord_upload_test import run_discord_upload_test
 from app.gemini_smoke_test import run_smoke_test
+from app.google_auth import build_google_credentials, load_oauth_client_info, load_service_account_info
+from app.google_oauth import finish_oauth_login, run_oauth_login, start_oauth_login
+from app.google_setup import GoogleResourceBootstrapper, build_google_env_updates, upsert_env_file
 
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -76,6 +81,148 @@ def build_parser() -> argparse.ArgumentParser:
     dataset_smoke_parser.add_argument("--output", default=None, help="Optional JSON output file.")
     dataset_smoke_parser.set_defaults(handler=handle_dataset_smoke_test)
 
+    google_parser = subparsers.add_parser("google", help="Google Drive and Sheets bootstrap helpers.")
+    google_subparsers = google_parser.add_subparsers(dest="google_command", required=True)
+
+    google_init_parser = google_subparsers.add_parser(
+        "init-resources",
+        help="Create the Drive folder and Sheets spreadsheet used by HARINA.",
+    )
+    google_init_parser.add_argument(
+        "--service-account-key-file",
+        default=None,
+        help="Path to the service account JSON key file. Defaults to GOOGLE_SERVICE_ACCOUNT_KEY_FILE.",
+    )
+    google_init_parser.add_argument(
+        "--service-account-json",
+        default=None,
+        help="Raw service account JSON. Defaults to GOOGLE_SERVICE_ACCOUNT_JSON.",
+    )
+    google_init_parser.add_argument(
+        "--oauth-client-secret-file",
+        default=None,
+        help="Path to the OAuth client secret JSON file. Defaults to GOOGLE_OAUTH_CLIENT_SECRET_FILE.",
+    )
+    google_init_parser.add_argument(
+        "--oauth-client-json",
+        default=None,
+        help="Raw OAuth client JSON. Defaults to GOOGLE_OAUTH_CLIENT_JSON.",
+    )
+    google_init_parser.add_argument(
+        "--oauth-refresh-token",
+        default=None,
+        help="OAuth refresh token. Defaults to GOOGLE_OAUTH_REFRESH_TOKEN.",
+    )
+    google_init_parser.add_argument(
+        "--folder-name",
+        default="Harina V4 Receipts",
+        help="Drive folder name. Default: Harina V4 Receipts",
+    )
+    google_init_parser.add_argument(
+        "--spreadsheet-title",
+        default="Harina V4 Receipts",
+        help="Spreadsheet title. Default: Harina V4 Receipts",
+    )
+    google_init_parser.add_argument(
+        "--sheet-name",
+        default="Receipts",
+        help="Sheet tab name for appended rows. Default: Receipts",
+    )
+    google_init_parser.add_argument(
+        "--share-with-email",
+        default=None,
+        help="Optional Google account email to share the created resources with.",
+    )
+    google_init_parser.add_argument(
+        "--env-file",
+        default=None,
+        help="Optional .env file to update with the created IDs.",
+    )
+    google_init_parser.set_defaults(handler=handle_google_init_resources)
+
+    google_oauth_parser = google_subparsers.add_parser(
+        "oauth-login",
+        help="Run the one-time Google OAuth login flow and save the refresh token for HARINA.",
+    )
+    google_oauth_parser.add_argument(
+        "--oauth-client-secret-file",
+        default=None,
+        help="Path to the OAuth client secret JSON file. Defaults to GOOGLE_OAUTH_CLIENT_SECRET_FILE.",
+    )
+    google_oauth_parser.add_argument(
+        "--oauth-client-json",
+        default=None,
+        help="Raw OAuth client JSON. Defaults to GOOGLE_OAUTH_CLIENT_JSON.",
+    )
+    google_oauth_parser.add_argument("--host", default="127.0.0.1", help="Loopback host for the OAuth callback.")
+    google_oauth_parser.add_argument("--port", type=int, default=8765, help="Loopback port for the OAuth callback.")
+    google_oauth_parser.add_argument(
+        "--no-open-browser",
+        action="store_false",
+        dest="open_browser",
+        help="Do not open a browser automatically. Useful when you want to drive an existing Chrome session yourself.",
+    )
+    google_oauth_parser.add_argument(
+        "--env-file",
+        default=None,
+        help="Optional .env file to update with the OAuth client path and refresh token.",
+    )
+    google_oauth_parser.set_defaults(handler=handle_google_oauth_login, open_browser=True)
+
+    google_oauth_start_parser = google_subparsers.add_parser(
+        "oauth-start",
+        help="Generate an OAuth authorization URL and save a local session file for later completion.",
+    )
+    google_oauth_start_parser.add_argument(
+        "--oauth-client-secret-file",
+        default=None,
+        help="Path to the OAuth client secret JSON file. Defaults to GOOGLE_OAUTH_CLIENT_SECRET_FILE.",
+    )
+    google_oauth_start_parser.add_argument(
+        "--oauth-client-json",
+        default=None,
+        help="Raw OAuth client JSON. Defaults to GOOGLE_OAUTH_CLIENT_JSON.",
+    )
+    google_oauth_start_parser.add_argument("--host", default="127.0.0.1", help="Loopback host for the redirect URI.")
+    google_oauth_start_parser.add_argument("--port", type=int, default=8765, help="Loopback port for the redirect URI.")
+    google_oauth_start_parser.add_argument(
+        "--session-file",
+        default=".harina-google-oauth-session.json",
+        help="Path to the temporary OAuth session file.",
+    )
+    google_oauth_start_parser.set_defaults(handler=handle_google_oauth_start)
+
+    google_oauth_finish_parser = google_subparsers.add_parser(
+        "oauth-finish",
+        help="Exchange the OAuth redirect URL for a refresh token using a saved session file.",
+    )
+    google_oauth_finish_parser.add_argument(
+        "--session-file",
+        default=".harina-google-oauth-session.json",
+        help="Path to the temporary OAuth session file created by oauth-start.",
+    )
+    google_oauth_finish_parser.add_argument(
+        "--redirect-url",
+        required=True,
+        help="The full redirect URL that contains the authorization code.",
+    )
+    google_oauth_finish_parser.add_argument(
+        "--oauth-client-secret-file",
+        default=None,
+        help="Path to the OAuth client secret JSON file. Defaults to GOOGLE_OAUTH_CLIENT_SECRET_FILE.",
+    )
+    google_oauth_finish_parser.add_argument(
+        "--oauth-client-json",
+        default=None,
+        help="Raw OAuth client JSON. Defaults to GOOGLE_OAUTH_CLIENT_JSON.",
+    )
+    google_oauth_finish_parser.add_argument(
+        "--env-file",
+        default=None,
+        help="Optional .env file to update with the OAuth client path and refresh token.",
+    )
+    google_oauth_finish_parser.set_defaults(handler=handle_google_oauth_finish)
+
     return parser
 
 
@@ -135,6 +282,153 @@ def handle_dataset_smoke_test(args: Namespace, settings: Settings | None) -> Non
             )
         )
     )
+    print(json.dumps(summary, ensure_ascii=True, indent=2))
+
+
+def handle_google_init_resources(args: Namespace, settings: Settings | None) -> None:
+    del settings
+    service_account_key_file = args.service_account_key_file or os.getenv("GOOGLE_SERVICE_ACCOUNT_KEY_FILE")
+    service_account_json = args.service_account_json or os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON")
+    oauth_client_secret_file = args.oauth_client_secret_file or os.getenv("GOOGLE_OAUTH_CLIENT_SECRET_FILE")
+    oauth_client_json = args.oauth_client_json or os.getenv("GOOGLE_OAUTH_CLIENT_JSON")
+    oauth_refresh_token = args.oauth_refresh_token or os.getenv("GOOGLE_OAUTH_REFRESH_TOKEN")
+
+    service_account_info = (
+        load_service_account_info(
+            service_account_json=service_account_json,
+            service_account_key_file=service_account_key_file,
+        )
+        if service_account_json or service_account_key_file
+        else None
+    )
+    oauth_client_info = (
+        load_oauth_client_info(
+            oauth_client_json=oauth_client_json,
+            oauth_client_secret_file=oauth_client_secret_file,
+        )
+        if oauth_refresh_token and (oauth_client_json or oauth_client_secret_file)
+        else None
+    )
+    credentials = build_google_credentials(
+        service_account_info=service_account_info,
+        oauth_client_info=oauth_client_info,
+        oauth_refresh_token=oauth_refresh_token,
+    )
+
+    bootstrapper = GoogleResourceBootstrapper(credentials=credentials)
+    try:
+        result = bootstrapper.bootstrap(
+            folder_name=args.folder_name,
+            spreadsheet_title=args.spreadsheet_title,
+            sheet_name=args.sheet_name,
+            share_with_email=args.share_with_email,
+        )
+    except HttpError as exc:
+        if "storageQuotaExceeded" in str(exc) or "Service Accounts do not have storage quota" in str(exc):
+            raise RuntimeError(
+                "Google rejected the request because service accounts do not have storage quota on personal My Drive. "
+                "Use a Google Workspace shared drive or switch HARINA to OAuth refresh-token credentials."
+            ) from exc
+        raise
+
+    env_updates = build_google_env_updates(
+        drive_folder_id=result.folder_id,
+        spreadsheet_id=result.spreadsheet_id,
+        sheet_name=result.sheet_name,
+        service_account_key_file=Path(service_account_key_file).as_posix() if service_account_key_file else None,
+        oauth_client_secret_file=Path(oauth_client_secret_file).as_posix() if oauth_client_secret_file else None,
+        oauth_refresh_token=oauth_refresh_token,
+    )
+
+    if args.env_file:
+        upsert_env_file(Path(args.env_file), env_updates)
+
+    summary = result.as_dict()
+    summary["env_updates"] = env_updates
+    if args.env_file:
+        summary["env_file"] = str(Path(args.env_file))
+
+    print(json.dumps(summary, ensure_ascii=True, indent=2))
+
+
+def handle_google_oauth_login(args: Namespace, settings: Settings | None) -> None:
+    del settings
+    oauth_client_secret_file = args.oauth_client_secret_file or os.getenv("GOOGLE_OAUTH_CLIENT_SECRET_FILE")
+    oauth_client_json = args.oauth_client_json or os.getenv("GOOGLE_OAUTH_CLIENT_JSON")
+    oauth_client_info = load_oauth_client_info(
+        oauth_client_json=oauth_client_json,
+        oauth_client_secret_file=oauth_client_secret_file,
+    )
+
+    result = run_oauth_login(
+        oauth_client_info=oauth_client_info,
+        host=args.host,
+        port=args.port,
+        open_browser=args.open_browser,
+    )
+
+    env_updates = {
+        "GOOGLE_OAUTH_REFRESH_TOKEN": result.refresh_token,
+    }
+    if oauth_client_secret_file:
+        env_updates["GOOGLE_OAUTH_CLIENT_SECRET_FILE"] = Path(oauth_client_secret_file).as_posix()
+    if oauth_client_json:
+        env_updates["GOOGLE_OAUTH_CLIENT_JSON"] = oauth_client_json
+
+    if args.env_file:
+        upsert_env_file(Path(args.env_file), env_updates)
+
+    summary = result.as_dict()
+    summary["env_updates"] = env_updates
+    if args.env_file:
+        summary["env_file"] = str(Path(args.env_file))
+
+    print(json.dumps(summary, ensure_ascii=True, indent=2))
+
+
+def handle_google_oauth_start(args: Namespace, settings: Settings | None) -> None:
+    del settings
+    oauth_client_secret_file = args.oauth_client_secret_file or os.getenv("GOOGLE_OAUTH_CLIENT_SECRET_FILE")
+    oauth_client_json = args.oauth_client_json or os.getenv("GOOGLE_OAUTH_CLIENT_JSON")
+    oauth_client_info = load_oauth_client_info(
+        oauth_client_json=oauth_client_json,
+        oauth_client_secret_file=oauth_client_secret_file,
+    )
+
+    result = start_oauth_login(
+        oauth_client_info=oauth_client_info,
+        host=args.host,
+        port=args.port,
+        session_file=Path(args.session_file),
+    )
+    print(json.dumps(result.as_dict(), ensure_ascii=True, indent=2))
+
+
+def handle_google_oauth_finish(args: Namespace, settings: Settings | None) -> None:
+    del settings
+    oauth_client_secret_file = args.oauth_client_secret_file or os.getenv("GOOGLE_OAUTH_CLIENT_SECRET_FILE")
+    oauth_client_json = args.oauth_client_json or os.getenv("GOOGLE_OAUTH_CLIENT_JSON")
+    result = finish_oauth_login(
+        session_file=Path(args.session_file),
+        redirect_url=args.redirect_url,
+    )
+
+    env_updates = {
+        "GOOGLE_OAUTH_REFRESH_TOKEN": result.refresh_token,
+    }
+    if oauth_client_secret_file:
+        env_updates["GOOGLE_OAUTH_CLIENT_SECRET_FILE"] = Path(oauth_client_secret_file).as_posix()
+    if oauth_client_json:
+        env_updates["GOOGLE_OAUTH_CLIENT_JSON"] = oauth_client_json
+
+    if args.env_file:
+        upsert_env_file(Path(args.env_file), env_updates)
+
+    summary = result.as_dict()
+    summary["env_updates"] = env_updates
+    if args.env_file:
+        summary["env_file"] = str(Path(args.env_file))
+
     print(json.dumps(summary, ensure_ascii=True, indent=2))
 
 

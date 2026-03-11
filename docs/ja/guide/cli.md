@@ -22,6 +22,20 @@ uv run harina --help
 uv run harina bot run
 ```
 
+## Google コマンド
+
+最初の 1 回だけ OAuth ログインを行い、refresh token を保存:
+
+```bash
+uv run harina google oauth-login --oauth-client-secret-file ./secrets/harina-oauth-client.json --env-file .env
+```
+
+Drive フォルダと Spreadsheet を作成または再利用:
+
+```bash
+uv run harina google init-resources --env-file .env
+```
+
 ## dataset コマンド
 
 Discord 画像をデータセットへ保存:
@@ -56,5 +70,7 @@ uv run harina bot upload-test --channel-id <channel_id> --image ./sample-receipt
 
 1. `harina dataset download` で小さなサンプルを取得する
 2. `harina dataset smoke-test` で 2 枚程度の抽出結果を確認する
-3. `harina bot upload-test` で Discord 上の実挙動を確認する
-4. `harina bot run` で本番の常時稼働へ進む
+3. 個人 Gmail 環境なら `harina google oauth-login` を先に通す
+4. `harina google init-resources` で Drive / Sheets の保存先を揃える
+5. `harina bot upload-test` で Discord 上の実挙動を確認する
+6. `harina bot run` で本番の常時稼働へ進む

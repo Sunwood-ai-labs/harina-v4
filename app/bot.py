@@ -50,7 +50,7 @@ class ReceiptBot(discord.Client):
         self.processor = ReceiptProcessor(
             gemini=GeminiReceiptExtractor(api_key=settings.gemini_api_key, model=settings.gemini_model),
             google_workspace=GoogleWorkspaceClient(
-                service_account_info=settings.service_account_info,
+                credentials=settings.google_credentials,
                 drive_folder_id=settings.google_drive_folder_id,
                 spreadsheet_id=settings.google_sheets_spreadsheet_id,
                 sheet_name=settings.google_sheets_sheet_name,

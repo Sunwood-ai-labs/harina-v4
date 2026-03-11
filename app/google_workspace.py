@@ -3,18 +3,12 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 
-from google.oauth2 import service_account
 from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaInMemoryUpload
 
 from app.formatters import RECEIPT_SHEET_HEADERS
 from app.models import ReceiptExtraction
-
-
-SCOPES = [
-    "https://www.googleapis.com/auth/drive",
-    "https://www.googleapis.com/auth/spreadsheets",
-]
 
 
 @dataclass(slots=True)
@@ -24,8 +18,7 @@ class UploadedDriveFile:
 
 
 class GoogleWorkspaceClient:
-    def __init__(self, *, service_account_info: dict, drive_folder_id: str, spreadsheet_id: str, sheet_name: str) -> None:
-        credentials = service_account.Credentials.from_service_account_info(service_account_info, scopes=SCOPES)
+    def __init__(self, *, credentials, drive_folder_id: str, spreadsheet_id: str, sheet_name: str) -> None:
         self._drive = build("drive", "v3", credentials=credentials, cache_discovery=False)
         self._sheets = build("sheets", "v4", credentials=credentials, cache_discovery=False)
         self._drive_folder_id = drive_folder_id
@@ -87,15 +80,24 @@ class GoogleWorkspaceClient:
 
     def _upload_receipt_image_sync(self, file_name: str, mime_type: str, image_bytes: bytes) -> UploadedDriveFile:
         media = MediaInMemoryUpload(image_bytes, mimetype=mime_type, resumable=False)
-        response = (
-            self._drive.files()
-            .create(
-                body={"name": file_name, "parents": [self._drive_folder_id]},
-                media_body=media,
-                fields="id,webViewLink",
+        try:
+            response = (
+                self._drive.files()
+                .create(
+                    body={"name": file_name, "parents": [self._drive_folder_id]},
+                    media_body=media,
+                    fields="id,webViewLink",
+                )
+                .execute()
             )
-            .execute()
-        )
+        except HttpError as exc:
+            if _is_service_account_quota_error(exc):
+                raise RuntimeError(
+                    "Google Drive rejected the upload because service accounts do not have storage quota on personal "
+                    "My Drive. Use a Google Workspace shared drive or add OAuth refresh-token support for a user-owned "
+                    "Drive account."
+                ) from exc
+            raise
 
         return UploadedDriveFile(file_id=response["id"], web_view_link=response.get("webViewLink"))
 
@@ -110,5 +112,13 @@ class GoogleWorkspaceClient:
                 insertDataOption="INSERT_ROWS",
                 body={"values": [row]},
             )
-            .execute()
+                .execute()
         )
+
+
+def _is_service_account_quota_error(exc: HttpError) -> bool:
+    if getattr(exc, "resp", None) is not None and getattr(exc.resp, "status", None) != 403:
+        return False
+
+    text = str(exc)
+    return "storageQuotaExceeded" in text or "Service Accounts do not have storage quota" in text

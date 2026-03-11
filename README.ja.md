@@ -50,6 +50,7 @@ uv run harina bot run
 - `GOOGLE_DRIVE_FOLDER_ID`
 - `GOOGLE_SHEETS_SPREADSHEET_ID`
 - `GOOGLE_SERVICE_ACCOUNT_JSON` または `GOOGLE_SERVICE_ACCOUNT_KEY_FILE`
+- または `GOOGLE_OAUTH_CLIENT_JSON` / `GOOGLE_OAUTH_CLIENT_SECRET_FILE` と `GOOGLE_OAUTH_REFRESH_TOKEN`
 
 ## 🧰 HARINA CLI
 
@@ -63,6 +64,8 @@ uv run harina --help
 
 ```bash
 uv run harina bot run
+uv run harina google oauth-login --oauth-client-secret-file ./secrets/harina-oauth-client.json --env-file .env
+uv run harina google init-resources --service-account-key-file ./secrets/harina-v4-bot.json --env-file .env
 uv run harina dataset download "https://discord.com/channels/<guild_id>/<channel_id>" --limit 50
 uv run harina dataset smoke-test --dataset-dir ./dataset/v3-backfill --limit 2
 uv run harina bot upload-test --channel-id <channel_id> --image ./sample-receipt.jpg
@@ -73,6 +76,43 @@ uv run harina bot upload-test --channel-id <channel_id> --image ./sample-receipt
 - V4 の運用コマンド面を CLI に集約できる
 - Discord bot も同じ Python パッケージのロジックを再利用できる
 - 移行、再スキャン、Discord 上の実機確認まで同じツールから実行できる
+
+## ☁ Google 初期化
+
+Google へのブラウザログインは、Cloud project 作成、API 有効化、サービスアカウント JSON キー取得のときだけで十分です。その後は HARINA CLI から Drive フォルダと Spreadsheet を自動で作成できます。
+
+個人 Gmail で運用する場合は、OAuth refresh token 方式がいちばん自然です。
+
+```bash
+uv run harina google oauth-login --oauth-client-secret-file ./secrets/harina-oauth-client.json --env-file .env
+uv run harina google init-resources --env-file .env
+```
+
+```bash
+uv run harina google init-resources --service-account-key-file ./secrets/harina-v4-bot.json --env-file .env
+```
+
+よく使う例:
+
+```bash
+uv run harina google init-resources --service-account-key-file ./secrets/harina-v4-bot.json
+uv run harina google init-resources --service-account-key-file ./secrets/harina-v4-bot.json --share-with-email you@example.com
+uv run harina google init-resources --service-account-key-file ./secrets/harina-v4-bot.json --folder-name "Harina V4 Receipts" --spreadsheet-title "Harina V4 Receipts" --sheet-name Receipts --env-file .env
+```
+
+このコマンドで行うこと:
+
+- サービスアカウント所有の Drive フォルダを作成または再利用する
+- サービスアカウント所有の Spreadsheet を作成または再利用する
+- 目的のシートタブとヘッダー行を揃える
+- 必要なら自分の Google アカウントへ共有する
+- 環境変数の値を表示し、`.env` にも書き込める
+
+注意:
+
+- 個人の Google Drive では、サービスアカウントに Drive 容量がないためアップロードが拒否されることがあります
+- 個人 Gmail で運用するなら、OAuth refresh token ベースの認証を優先するのが安全です
+- service account は Google Workspace の共有ドライブや管理者前提の環境向けです
 
 ## 📦 データセットダウンローダー
 

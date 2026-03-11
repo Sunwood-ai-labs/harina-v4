@@ -22,6 +22,20 @@ Run the always-on Discord bot:
 uv run harina bot run
 ```
 
+## Google commands
+
+Run the one-time OAuth login flow and save a refresh token:
+
+```bash
+uv run harina google oauth-login --oauth-client-secret-file ./secrets/harina-oauth-client.json --env-file .env
+```
+
+Create or reuse the Drive folder and spreadsheet:
+
+```bash
+uv run harina google init-resources --env-file .env
+```
+
 ## Dataset commands
 
 Download Discord images into a dataset:
@@ -56,5 +70,7 @@ Notes:
 
 1. Use `harina dataset download` to export a small sample.
 2. Use `harina dataset smoke-test` to validate Gemini on about 2 images.
-3. Use `harina bot upload-test` to confirm live Discord behavior.
-4. Use `harina bot run` for the continuous production path.
+3. Use `harina google oauth-login` if you are on personal Gmail.
+4. Use `harina google init-resources` to create or confirm Drive and Sheets targets.
+5. Use `harina bot upload-test` to confirm live Discord behavior.
+6. Use `harina bot run` for the continuous production path.

@@ -1,0 +1,151 @@
+:root {
+  --vp-c-brand-1: #a67c6d;
+  --vp-c-brand-2: #c16f80;
+  --vp-c-brand-3: #d97e8e;
+  --vp-c-brand-soft: rgba(217, 126, 142, 0.18);
+
+  --vp-c-default-1: #cbb9b1;
+  --vp-c-default-2: #ded3c7;
+  --vp-c-default-3: #ece5dc;
+  --vp-c-default-soft: rgba(166, 124, 109, 0.14);
+
+  --vp-c-success-1: #4d8b68;
+  --vp-c-success-2: #69b18a;
+  --vp-c-success-3: #8ad4aa;
+  --vp-c-success-soft: rgba(189, 242, 208, 0.28);
+
+  --vp-c-warning-1: #8a5e4e;
+  --vp-c-warning-2: #a67c6d;
+  --vp-c-warning-3: #be9789;
+  --vp-c-warning-soft: rgba(166, 124, 109, 0.2);
+
+  --vp-c-danger-1: #a85163;
+  --vp-c-danger-2: #c76577;
+  --vp-c-danger-3: #d97e8e;
+  --vp-c-danger-soft: rgba(217, 126, 142, 0.18);
+
+  --vp-c-bg: #f2efdc;
+  --vp-c-bg-alt: #ebe6d2;
+  --vp-c-bg-elv: #faf7ea;
+  --vp-c-bg-soft: #e6e0cf;
+
+  --vp-c-border: rgba(166, 124, 109, 0.38);
+  --vp-c-divider: rgba(166, 124, 109, 0.2);
+  --vp-c-gutter: rgba(166, 124, 109, 0.16);
+
+  --vp-c-text-1: #0d0d0d;
+  --vp-c-text-2: #5b4740;
+  --vp-c-text-3: #8c7064;
+
+  --vp-button-brand-text: #f2efdc;
+  --vp-button-brand-bg: #d97e8e;
+  --vp-button-brand-hover-bg: #c16f80;
+  --vp-button-brand-active-bg: #a67c6d;
+
+  --vp-button-alt-text: #0d0d0d;
+  --vp-button-alt-bg: #bdf2d0;
+  --vp-button-alt-hover-bg: #aae1bf;
+  --vp-button-alt-active-bg: #93caa9;
+
+  --vp-home-hero-name-color: transparent;
+  --vp-home-hero-name-background: linear-gradient(120deg, #d97e8e 0%, #a67c6d 100%);
+  --vp-home-hero-image-background-image:
+    radial-gradient(circle at 30% 35%, rgba(189, 242, 208, 0.9) 0%, rgba(189, 242, 208, 0.4) 30%, transparent 60%),
+    radial-gradient(circle at 75% 30%, rgba(217, 126, 142, 0.45) 0%, transparent 55%),
+    radial-gradient(circle at 50% 75%, rgba(166, 124, 109, 0.24) 0%, transparent 60%);
+  --vp-home-hero-image-filter: drop-shadow(0 24px 48px rgba(13, 13, 13, 0.14));
+
+  --vp-local-search-highlight-bg: #d97e8e;
+  --vp-local-search-highlight-text: #f2efdc;
+}
+
+.dark {
+  --vp-c-brand-1: #f3b2bd;
+  --vp-c-brand-2: #d97e8e;
+  --vp-c-brand-3: #b66778;
+  --vp-c-brand-soft: rgba(217, 126, 142, 0.22);
+
+  --vp-c-default-1: #d2bbb2;
+  --vp-c-default-2: #6f584f;
+  --vp-c-default-3: #463833;
+  --vp-c-default-soft: rgba(166, 124, 109, 0.2);
+
+  --vp-c-success-1: #bdf2d0;
+  --vp-c-success-2: #86cf9f;
+  --vp-c-success-3: #5c9a73;
+  --vp-c-success-soft: rgba(189, 242, 208, 0.14);
+
+  --vp-c-warning-1: #e0b6a6;
+  --vp-c-warning-2: #c69686;
+  --vp-c-warning-3: #a67c6d;
+  --vp-c-warning-soft: rgba(166, 124, 109, 0.2);
+
+  --vp-c-danger-1: #f3b2bd;
+  --vp-c-danger-2: #d97e8e;
+  --vp-c-danger-3: #9b5567;
+  --vp-c-danger-soft: rgba(217, 126, 142, 0.18);
+
+  --vp-c-bg: #0d0d0d;
+  --vp-c-bg-alt: #171513;
+  --vp-c-bg-elv: #211d1a;
+  --vp-c-bg-soft: #26211f;
+
+  --vp-c-border: rgba(242, 239, 220, 0.14);
+  --vp-c-divider: rgba(242, 239, 220, 0.08);
+  --vp-c-gutter: #090909;
+
+  --vp-c-text-1: #f2efdc;
+  --vp-c-text-2: #d6c8bf;
+  --vp-c-text-3: #a67c6d;
+
+  --vp-button-brand-text: #0d0d0d;
+  --vp-button-brand-bg: #d97e8e;
+  --vp-button-brand-hover-bg: #f3b2bd;
+  --vp-button-brand-active-bg: #a67c6d;
+
+  --vp-button-alt-text: #0d0d0d;
+  --vp-button-alt-bg: #bdf2d0;
+  --vp-button-alt-hover-bg: #d1f7df;
+  --vp-button-alt-active-bg: #93caa9;
+
+  --vp-home-hero-image-background-image:
+    radial-gradient(circle at 30% 35%, rgba(189, 242, 208, 0.28) 0%, rgba(189, 242, 208, 0.12) 32%, transparent 60%),
+    radial-gradient(circle at 75% 30%, rgba(217, 126, 142, 0.28) 0%, transparent 55%),
+    radial-gradient(circle at 50% 75%, rgba(166, 124, 109, 0.24) 0%, transparent 60%);
+  --vp-home-hero-image-filter: drop-shadow(0 24px 48px rgba(0, 0, 0, 0.45));
+}
+
+body {
+  background:
+    linear-gradient(180deg, #faf7ea 0, #f2efdc 220px),
+    #f2efdc;
+}
+
+.dark body {
+  background:
+    linear-gradient(180deg, #171513 0, #0d0d0d 220px),
+    #0d0d0d;
+}
+
+.VPNavBar,
+.VPNavScreen,
+.VPLocalNav {
+  backdrop-filter: saturate(160%) blur(14px);
+}
+
+.VPFeature {
+  border: 1px solid var(--vp-c-border);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.5) 0%, rgba(189, 242, 208, 0.22) 100%);
+  box-shadow: 0 14px 36px rgba(13, 13, 13, 0.06);
+}
+
+.dark .VPFeature {
+  background:
+    linear-gradient(180deg, rgba(38, 33, 31, 0.92) 0%, rgba(189, 242, 208, 0.08) 100%);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.24);
+}
+
+.vp-doc blockquote {
+  border-left-color: #d97e8e;
+}

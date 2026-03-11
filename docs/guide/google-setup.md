@@ -53,6 +53,20 @@ The command will:
 - print the required `GOOGLE_*` values
 - optionally write those values into `.env`
 
+When `--env-file` is used, HARINA also records the generated resource URLs such as:
+
+- `GOOGLE_DRIVE_FOLDER_URL`
+- `GOOGLE_SHEETS_SPREADSHEET_URL`
+
+For operator-friendly bookkeeping, it is also useful to keep these optional metadata keys in `.env`:
+
+- `GOOGLE_CLOUD_PROJECT_ID`
+- `GOOGLE_CLOUD_PROJECT_NUMBER`
+- `GOOGLE_CLOUD_CONSOLE_URL`
+- `GOOGLE_CLOUD_CREDENTIALS_URL`
+- `GOOGLE_CLOUD_AUTH_OVERVIEW_URL`
+- `GOOGLE_OAUTH_CLIENT_ID`
+
 Important note:
 
 - Personal Google Drive accounts often reject service-account-owned uploads because service accounts do not have Drive storage quota there

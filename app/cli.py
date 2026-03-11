@@ -333,7 +333,9 @@ def handle_google_init_resources(args: Namespace, settings: Settings | None) -> 
 
     env_updates = build_google_env_updates(
         drive_folder_id=result.folder_id,
+        drive_folder_url=result.folder_url,
         spreadsheet_id=result.spreadsheet_id,
+        spreadsheet_url=result.spreadsheet_url,
         sheet_name=result.sheet_name,
         service_account_key_file=Path(service_account_key_file).as_posix() if service_account_key_file else None,
         oauth_client_secret_file=Path(oauth_client_secret_file).as_posix() if oauth_client_secret_file else None,

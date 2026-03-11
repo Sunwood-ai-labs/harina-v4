@@ -101,7 +101,9 @@ def test_upsert_env_file_replaces_existing_keys(tmp_path: Path) -> None:
 
     updates = build_google_env_updates(
         drive_folder_id="folder-123",
+        drive_folder_url="https://drive.google.com/drive/folders/folder-123",
         spreadsheet_id="sheet-123",
+        spreadsheet_url="https://docs.google.com/spreadsheets/d/sheet-123/edit",
         sheet_name="Receipts",
         service_account_key_file="D:/Prj/harina-v3/secrets/harina-v4-bot-service-account.json",
     )
@@ -110,7 +112,9 @@ def test_upsert_env_file_replaces_existing_keys(tmp_path: Path) -> None:
     contents = env_file.read_text(encoding="utf-8")
     assert "GOOGLE_SERVICE_ACCOUNT_KEY_FILE=D:/Prj/harina-v3/secrets/harina-v4-bot-service-account.json" in contents
     assert "GOOGLE_DRIVE_FOLDER_ID=folder-123" in contents
+    assert "GOOGLE_DRIVE_FOLDER_URL=https://drive.google.com/drive/folders/folder-123" in contents
     assert "GOOGLE_SHEETS_SPREADSHEET_ID=sheet-123" in contents
+    assert "GOOGLE_SHEETS_SPREADSHEET_URL=https://docs.google.com/spreadsheets/d/sheet-123/edit" in contents
     assert "GOOGLE_SHEETS_SHEET_NAME=Receipts" in contents
     assert "OTHER=value" in contents
 
@@ -118,7 +122,9 @@ def test_upsert_env_file_replaces_existing_keys(tmp_path: Path) -> None:
 def test_build_google_env_updates_supports_oauth() -> None:
     updates = build_google_env_updates(
         drive_folder_id="folder-123",
+        drive_folder_url="https://drive.google.com/drive/folders/folder-123",
         spreadsheet_id="sheet-123",
+        spreadsheet_url="https://docs.google.com/spreadsheets/d/sheet-123/edit",
         sheet_name="Receipts",
         oauth_client_secret_file="D:/Prj/harina-v3/secrets/harina-oauth.json",
         oauth_refresh_token="refresh-token",
@@ -126,3 +132,5 @@ def test_build_google_env_updates_supports_oauth() -> None:
 
     assert updates["GOOGLE_OAUTH_CLIENT_SECRET_FILE"] == "D:/Prj/harina-v3/secrets/harina-oauth.json"
     assert updates["GOOGLE_OAUTH_REFRESH_TOKEN"] == "refresh-token"
+    assert updates["GOOGLE_DRIVE_FOLDER_URL"] == "https://drive.google.com/drive/folders/folder-123"
+    assert updates["GOOGLE_SHEETS_SPREADSHEET_URL"] == "https://docs.google.com/spreadsheets/d/sheet-123/edit"

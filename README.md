@@ -106,13 +106,22 @@ What this command does:
 - Creates or reuses a spreadsheet owned by the service account
 - Ensures the target sheet tab and header row exist
 - Optionally shares both resources with your Google account
-- Prints the environment values and can write them into `.env`
+- Prints the environment values and can write IDs plus URLs into `.env`
 
 Important note:
 
 - Personal Google Drive accounts often reject service-account-owned uploads because service accounts do not have Drive storage quota there
 - If you are using a personal Gmail account, prefer an OAuth refresh-token flow for Drive and Sheets
 - Keep service accounts for Google Workspace shared drives or admin-managed environments
+
+Recommended `.env` metadata for later lookup:
+
+- `GOOGLE_CLOUD_PROJECT_ID`
+- `GOOGLE_CLOUD_PROJECT_NUMBER`
+- `GOOGLE_CLOUD_CONSOLE_URL`
+- `GOOGLE_CLOUD_CREDENTIALS_URL`
+- `GOOGLE_CLOUD_AUTH_OVERVIEW_URL`
+- `GOOGLE_OAUTH_CLIENT_ID`
 
 ## 📦 Dataset Downloader
 

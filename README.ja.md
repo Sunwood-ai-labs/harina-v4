@@ -106,13 +106,22 @@ uv run harina google init-resources --service-account-key-file ./secrets/harina-
 - サービスアカウント所有の Spreadsheet を作成または再利用する
 - 目的のシートタブとヘッダー行を揃える
 - 必要なら自分の Google アカウントへ共有する
-- 環境変数の値を表示し、`.env` にも書き込める
+- 環境変数の値を表示し、ID と URL を `.env` にも書き込める
 
 注意:
 
 - 個人の Google Drive では、サービスアカウントに Drive 容量がないためアップロードが拒否されることがあります
 - 個人 Gmail で運用するなら、OAuth refresh token ベースの認証を優先するのが安全です
 - service account は Google Workspace の共有ドライブや管理者前提の環境向けです
+
+あとから確認しやすいように、`.env` には次のような運用メタ情報も残しておくのがおすすめです。
+
+- `GOOGLE_CLOUD_PROJECT_ID`
+- `GOOGLE_CLOUD_PROJECT_NUMBER`
+- `GOOGLE_CLOUD_CONSOLE_URL`
+- `GOOGLE_CLOUD_CREDENTIALS_URL`
+- `GOOGLE_CLOUD_AUTH_OVERVIEW_URL`
+- `GOOGLE_OAUTH_CLIENT_ID`
 
 ## 📦 データセットダウンローダー
 

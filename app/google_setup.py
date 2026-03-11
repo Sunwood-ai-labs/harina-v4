@@ -142,7 +142,9 @@ class GoogleResourceBootstrapper:
 def build_google_env_updates(
     *,
     drive_folder_id: str,
+    drive_folder_url: str,
     spreadsheet_id: str,
+    spreadsheet_url: str,
     sheet_name: str,
     service_account_key_file: str | None = None,
     oauth_client_secret_file: str | None = None,
@@ -150,7 +152,9 @@ def build_google_env_updates(
 ) -> dict[str, str]:
     values = {
         "GOOGLE_DRIVE_FOLDER_ID": drive_folder_id,
+        "GOOGLE_DRIVE_FOLDER_URL": drive_folder_url,
         "GOOGLE_SHEETS_SPREADSHEET_ID": spreadsheet_id,
+        "GOOGLE_SHEETS_SPREADSHEET_URL": spreadsheet_url,
         "GOOGLE_SHEETS_SHEET_NAME": sheet_name,
     }
     if service_account_key_file:

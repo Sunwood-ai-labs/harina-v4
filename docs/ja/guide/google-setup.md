@@ -53,6 +53,20 @@ uv run harina google init-resources --env-file .env
 - 必要な `GOOGLE_*` 値を表示する
 - 必要ならその値を `.env` に書き込む
 
+`--env-file` を使うと、次のような成果物 URL も `.env` に残せます。
+
+- `GOOGLE_DRIVE_FOLDER_URL`
+- `GOOGLE_SHEETS_SPREADSHEET_URL`
+
+運用メモとして、次の optional な Cloud Console 情報も `.env` に残しておくと見返しやすいです。
+
+- `GOOGLE_CLOUD_PROJECT_ID`
+- `GOOGLE_CLOUD_PROJECT_NUMBER`
+- `GOOGLE_CLOUD_CONSOLE_URL`
+- `GOOGLE_CLOUD_CREDENTIALS_URL`
+- `GOOGLE_CLOUD_AUTH_OVERVIEW_URL`
+- `GOOGLE_OAUTH_CLIENT_ID`
+
 注意:
 
 - 個人の Google Drive では、サービスアカウントに Drive 容量がないためアップロードが拒否されることがあります

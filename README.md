@@ -1,7 +1,7 @@
 <div align="center">
   <img src="./docs/public/brand/harina-hero.svg" alt="Harina Receipt Bot hero" width="100%" />
   <h1>Harina Receipt Bot</h1>
-  <p>Discord receipt intake for Gemini, Google Drive, and Google Sheets.</p>
+  <p>Discord receipt intake for Gemini, Google Drive, Google Sheets, and migration-friendly dataset backfills.</p>
 </div>
 
 [日本語](./README.ja.md)
@@ -14,24 +14,25 @@
 
 ## ✨ Overview
 
-Harina Receipt Bot is a Python Discord bot for self-hosted receipt capture workflows. Drop a receipt image into Discord, let Gemini extract the structured fields, archive the original image in Google Drive, and append the normalized result to Google Sheets.
+Harina Receipt Bot is a self-hosted Python Discord bot for receipt workflows. It supports two complementary jobs:
+
+- Always-on receipt intake from Discord into Gemini, Google Drive, and Google Sheets
+- One-shot historical image backfills for V1, V2, V3 migrations and re-scans after prompt or model updates
 
 ## 🚀 Highlights
 
 - Watches receipt images posted in Discord channels
 - Extracts merchant, date, totals, tax, payment method, OCR-like text, and line items with Gemini
-- Uploads the original image into a Google Drive folder
+- Uploads the original image into Google Drive
 - Appends one receipt row per image into Google Sheets
+- Downloads historical Discord images into a local dataset for migration and replay workflows
 - Runs locally with `uv` and on home servers with Docker Compose
 
-## 🧭 Flow
+## 🔄 Typical Workflows
 
-1. A user uploads a receipt image in Discord.
-2. The bot downloads the attachment and sends it to Gemini.
-3. Gemini returns normalized JSON.
-4. The source image is stored in Google Drive.
-5. A matching row is appended to Google Sheets.
-6. Discord receives a short processing summary.
+1. Real-time intake: users upload receipt images and the bot processes them automatically.
+2. Data migration: pull historical images from V1, V2, or V3 Discord channels into a local dataset.
+3. Re-scan pipeline: rerun older receipts after changing prompts, models, schemas, or extraction logic.
 
 ## ⚡ Quick Start
 
@@ -50,14 +51,20 @@ Required environment variables:
 - `GOOGLE_SHEETS_SPREADSHEET_ID`
 - `GOOGLE_SERVICE_ACCOUNT_JSON` or `GOOGLE_SERVICE_ACCOUNT_KEY_FILE`
 
-## Dataset Downloader
+## 📦 Dataset Downloader
 
-You can also use the repo as a one-shot Discord image dataset downloader.
+You can also use the repo as a one-shot Discord image dataset downloader for migrations and replay jobs.
 
 ```bash
-cp .env.example .env
-uv sync
 uv run python -m app.dataset_downloader "https://discord.com/channels/<guild_id>/<channel_id>"
+```
+
+Useful examples:
+
+```bash
+uv run python -m app.dataset_downloader "https://discord.com/channels/<guild_id>/<channel_id>" --limit 5
+uv run python -m app.dataset_downloader "https://discord.com/channels/<guild_id>/<channel_id>" --output-dir ./dataset/v3-backfill
+uv run python -m app.dataset_downloader "https://discord.com/channels/<guild_id>/<channel_id>" --overwrite
 ```
 
 Optional flags:
@@ -67,7 +74,13 @@ Optional flags:
 - `--include-bots`
 - `--overwrite`
 
-The downloader keeps the uploaded filename unchanged by storing each attachment under `guild-<name-or-id>/channel-<name-or-id>/message-<id>/attachment-<id>/`, and it writes a `metadata.jsonl` file beside the dataset root. If the server or channel name contains Japanese characters, that name segment is skipped and the folder falls back to the numeric ID.
+The downloader keeps the uploaded filename unchanged. Files are stored under `guild-<name-or-id>/channel-<name-or-id>/message-<id>/attachment-<id>/`, and a `metadata.jsonl` file is written beside the dataset root. If a server or channel name contains Japanese characters, that name segment is skipped and the folder falls back to the numeric ID.
+
+Common use cases:
+
+- Migrate historical images from V1, V2, or V3 before retiring an older workflow
+- Build a fixed dataset snapshot for regression tests and evaluation
+- Re-scan old receipts after switching Gemini models, prompts, or output schemas
 
 Bot requirements:
 
@@ -88,10 +101,11 @@ If you use a file-based Google service account key, place it under `./secrets` a
 
 - [Docs site](https://sunwood-ai-labs.github.io/harina-v4/)
 - [Overview](./docs/guide/overview.md)
+- [Dataset Downloader](./docs/guide/dataset-downloader.md)
 - [Google setup](./docs/guide/google-setup.md)
 - [Deployment guide](./docs/guide/deployment.md)
 
-## 🧱 Repository Layout
+## 🗂 Repository Layout
 
 ```text
 app/                  Python bot implementation
@@ -101,14 +115,15 @@ Dockerfile            Container image definition
 docker-compose.yml    Self-hosted runtime
 ```
 
-## 🔐 Operations Notes
+## 🛠 Operations Notes
 
 - Leave `DISCORD_CHANNEL_IDS` empty to process every accessible channel
 - Use a comma-separated `DISCORD_CHANNEL_IDS` value to restrict intake
 - The bot creates the destination sheet header row automatically on startup
 - Startup fails fast when required Google settings are missing
+- `DISCORD_DATASET_OUTPUT_DIR` sets the default dataset output path for downloader runs
 
-## 🛠 Development
+## 💻 Development
 
 ```bash
 uv sync

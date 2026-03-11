@@ -4,7 +4,7 @@ const repo = "https://github.com/Sunwood-ai-labs/harina-v4";
 
 export default defineConfig({
   title: "Harina Receipt Bot",
-  description: "Discord receipt recognition bot with Gemini, Google Drive, and Google Sheets.",
+  description: "Discord receipt recognition bot with Gemini, Google Drive, Google Sheets, and migration dataset backfills.",
   base: "/harina-v4/",
   cleanUrls: true,
   lastUpdated: true,
@@ -28,6 +28,7 @@ export default defineConfig({
       themeConfig: {
         nav: [
           { text: "Guide", link: "/guide/overview" },
+          { text: "Dataset", link: "/guide/dataset-downloader" },
           { text: "Deploy", link: "/guide/deployment" },
           { text: "GitHub", link: repo }
         ],
@@ -36,6 +37,7 @@ export default defineConfig({
             text: "Guide",
             items: [
               { text: "Overview", link: "/guide/overview" },
+              { text: "Dataset Downloader", link: "/guide/dataset-downloader" },
               { text: "Google Setup", link: "/guide/google-setup" },
               { text: "Deployment", link: "/guide/deployment" }
             ]
@@ -54,6 +56,7 @@ export default defineConfig({
       themeConfig: {
         nav: [
           { text: "ガイド", link: "/ja/guide/overview" },
+          { text: "データセット", link: "/ja/guide/dataset-downloader" },
           { text: "デプロイ", link: "/ja/guide/deployment" },
           { text: "GitHub", link: repo }
         ],
@@ -62,13 +65,14 @@ export default defineConfig({
             text: "ガイド",
             items: [
               { text: "概要", link: "/ja/guide/overview" },
+              { text: "データセットダウンローダー", link: "/ja/guide/dataset-downloader" },
               { text: "Google 設定", link: "/ja/guide/google-setup" },
               { text: "デプロイ", link: "/ja/guide/deployment" }
             ]
           }
         ],
         footer: {
-          message: "MIT License で公開しています。",
+          message: "MIT License のもとで公開しています。",
           copyright: "Copyright 2026 Sunwood AI Labs"
         }
       }

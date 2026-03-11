@@ -3,21 +3,21 @@ layout: home
 
 hero:
   name: Harina Receipt Bot
-  text: Turn Discord receipt images into Drive files and spreadsheet rows
-  tagline: A Python self-hosted Discord bot that reads receipts with Gemini, archives the original image to Google Drive, and writes structured bookkeeping data to Google Sheets.
+  text: Run real-time receipt intake and historical Discord backfills from one codebase
+  tagline: A Python self-hosted Discord bot that processes live receipt uploads with Gemini, archives originals to Google Drive, writes structured rows to Google Sheets, and can also rebuild datasets for V1, V2, V3 migrations or model re-scan workflows.
   image:
     src: /brand/harina-mark.svg
     alt: Harina Receipt Bot logo
   actions:
     - theme: brand
-      text: Quick Start
+      text: Overview
       link: /guide/overview
+    - theme: alt
+      text: Dataset Downloader
+      link: /guide/dataset-downloader
     - theme: alt
       text: Deployment Guide
       link: /guide/deployment
-    - theme: alt
-      text: GitHub
-      link: https://github.com/Sunwood-ai-labs/harina-v4
 
 features:
   - title: Discord-native intake
@@ -26,6 +26,6 @@ features:
     details: Extract merchant, date, totals, tax, payment method, OCR-like text, and line items into normalized JSON.
   - title: Google Workspace handoff
     details: Upload the source image to Drive and append a ledger-friendly row to Sheets in the same processing flow.
-  - title: Home-server friendly
-    details: Ship the bot with Python, uv, Docker Compose, and environment-based secrets so it is easy to self-host.
+  - title: Migration and replay ready
+    details: Download historical Discord images for V1, V2, V3 migrations, regression datasets, and re-scans after model or prompt changes.
 ---

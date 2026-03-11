@@ -1,11 +1,19 @@
 # Deployment
 
+Use `app.main` for the always-on bot service. Use `app.dataset_downloader` when you only need a one-shot migration or re-scan export.
+
 ## Local development
 
 ```bash
 uv sync
 uv run pytest
 uv run python -m app.main
+```
+
+## One-shot downloader runs
+
+```bash
+uv run python -m app.dataset_downloader "https://discord.com/channels/<guild_id>/<channel_id>" --limit 50
 ```
 
 ## Docker Compose
@@ -34,3 +42,4 @@ docker compose logs -f
 - Set `DISCORD_CHANNEL_IDS` to a comma-separated list to limit intake
 - The bot creates the target sheet header row automatically
 - Startup fails fast when required configuration is missing
+- `DISCORD_DATASET_OUTPUT_DIR` sets the default output root for downloader runs

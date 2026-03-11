@@ -15,6 +15,14 @@ If HARINA writes into a personal Google Drive account, use OAuth refresh-token c
 
 If you are using Codex, the browser-side Google Cloud Console steps can be automated with the `logged-in-google-chrome` skill. That is a good fit for creating the Cloud project, configuring OAuth consent, downloading the OAuth client JSON, and completing the one-time consent flow in a logged-in Chrome profile.
 
+Suggested Codex prompt:
+
+```text
+Use [$logged-in-google-chrome](D:\Prj\logged-in-google-chrome-skill\SKILL.md) with D:\Prj\onizuka-playwright-profile and set up HARINA's Google side.
+Create or reuse the HARINA Google Cloud project, enable Drive API and Sheets API, configure OAuth consent, create a desktop OAuth client, download the client JSON into ./secrets, run the one-time OAuth flow, update .env, and then run `uv run harina google init-resources --env-file .env`.
+Record the resulting Google Cloud Console URLs, OAuth client ID, Drive folder URL, and Spreadsheet URL in .env so they can be checked later.
+```
+
 1. Create an OAuth client in Google Cloud.
 2. Download the OAuth client JSON into `./secrets`.
 3. Run:

@@ -83,6 +83,14 @@ You only need browser-based Google login once to create the Cloud project, enabl
 
 If you are operating HARINA through Codex, the browser-side Google Cloud Console work can also be driven with the `logged-in-google-chrome` skill so project creation, OAuth client setup, and token issuance stay reproducible.
 
+Example Codex setup prompt:
+
+```text
+Use [$logged-in-google-chrome](D:\Prj\logged-in-google-chrome-skill\SKILL.md) with D:\Prj\onizuka-playwright-profile and set up HARINA's Google side.
+Create or reuse the HARINA Google Cloud project, enable Drive API and Sheets API, configure OAuth consent, create a desktop OAuth client, download the client JSON into ./secrets, run the one-time OAuth flow, update .env, and then run `uv run harina google init-resources --env-file .env`.
+Record the resulting Google Cloud Console URLs, OAuth client ID, Drive folder URL, and Spreadsheet URL in .env so they can be checked later.
+```
+
 For personal Gmail setups, OAuth refresh tokens are usually the right path:
 
 ```bash

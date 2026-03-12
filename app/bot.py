@@ -7,7 +7,7 @@ import discord
 
 from app.config import Settings
 from app.discord_debug import DiscordDebugSession, serialize_message
-from app.formatters import build_receipt_embed, is_image_attachment
+from app.formatters import build_receipt_embed, build_receipt_links_view, is_image_attachment
 from app.gemini_client import GeminiReceiptExtractor
 from app.google_workspace import GoogleWorkspaceClient
 from app.processor import ProcessedReceipt, ReceiptProcessor
@@ -27,6 +27,7 @@ THREAD_NAME_PREFIX = "receipt"
 class AttachmentProcessingOutcome:
     attachment: discord.Attachment
     embed: discord.Embed
+    view: discord.ui.View | None
     ok: bool
 
 
@@ -140,7 +141,7 @@ class ReceiptBot(discord.Client):
                     )
                 )
 
-            await self._reply_with_embeds(target=response_thread, embeds=[outcome.embed for outcome in outcomes])
+            await self._reply_with_outcomes(target=response_thread, outcomes=outcomes)
             self.debug_session.write_event(
                 "message_processed",
                 message_id=message.id,
@@ -167,22 +168,27 @@ class ReceiptBot(discord.Client):
                 attachment_count=len(receipt_attachments),
             )
 
-    async def _reply_with_embeds(self, *, target: discord.abc.Messageable, embeds: list[discord.Embed]) -> None:
-        if not embeds:
+    async def _reply_with_outcomes(
+        self,
+        *,
+        target: discord.abc.Messageable,
+        outcomes: list[AttachmentProcessingOutcome],
+    ) -> None:
+        if not outcomes:
             return
 
-        for start in range(0, len(embeds), 10):
-            chunk = embeds[start : start + 10]
+        for outcome in outcomes:
             logger.info(
-                "Sending %s embed(s) to Discord target %s",
-                len(chunk),
+                "Sending receipt embed to Discord target %s",
                 self._describe_messageable(target),
             )
-            await target.send(embeds=chunk)
+            await target.send(embed=outcome.embed, view=outcome.view)
             self.debug_session.write_event(
-                "embeds_sent",
+                "embed_sent",
                 target=self._describe_messageable(target),
-                embed_titles=[embed.title for embed in chunk],
+                embed_title=outcome.embed.title,
+                source_filename=outcome.attachment.filename,
+                has_view=outcome.view is not None,
             )
 
     async def _send_error_embed(
@@ -287,6 +293,7 @@ class ReceiptBot(discord.Client):
                     description=f"{ERROR_MESSAGE}\nSource: `{attachment.filename}`",
                     color=discord.Color.red(),
                 ),
+                view=None,
                 ok=False,
             )
 
@@ -311,7 +318,12 @@ class ReceiptBot(discord.Client):
                 title=title,
                 extraction=processed.extraction,
                 drive_file_url=processed.drive_file_url,
+                spreadsheet_url=processed.spreadsheet_url,
                 source_label=attachment.filename,
+            ),
+            view=build_receipt_links_view(
+                drive_file_url=processed.drive_file_url,
+                spreadsheet_url=processed.spreadsheet_url,
             ),
             ok=True,
         )

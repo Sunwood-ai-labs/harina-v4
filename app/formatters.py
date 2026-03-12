@@ -202,6 +202,7 @@ def build_receipt_embed(
     title: str,
     extraction: ReceiptExtraction,
     drive_file_url: str | None,
+    spreadsheet_url: str | None = None,
     source_label: str | None = None,
     image_url: str | None = None,
 ) -> discord.Embed:
@@ -223,8 +224,13 @@ def build_receipt_embed(
     embed.add_field(name="Confidence", value=confidence, inline=True)
     if source_label:
         embed.add_field(name="Source", value=source_label, inline=True)
-    if drive_file_url:
-        embed.add_field(name="Drive", value=drive_file_url, inline=False)
+    if drive_file_url or spreadsheet_url:
+        destinations: list[str] = []
+        if drive_file_url:
+            destinations.append("Google Drive")
+        if spreadsheet_url:
+            destinations.append("Google Sheets")
+        embed.add_field(name="Saved To", value=", ".join(destinations), inline=False)
 
     item_preview = format_line_item_preview(extraction.line_items)
     if item_preview:
@@ -238,6 +244,28 @@ def build_receipt_embed(
         embed.set_image(url=image_url)
 
     return embed
+
+
+def build_receipt_links_view(
+    *,
+    drive_file_url: str | None,
+    spreadsheet_url: str | None = None,
+) -> discord.ui.View | None:
+    buttons: list[discord.ui.Button] = []
+    if drive_file_url:
+        buttons.append(discord.ui.Button(label="Open Drive", style=discord.ButtonStyle.link, url=drive_file_url))
+    if spreadsheet_url:
+        buttons.append(
+            discord.ui.Button(label="Open Sheet", style=discord.ButtonStyle.link, url=spreadsheet_url)
+        )
+
+    if not buttons:
+        return None
+
+    view = discord.ui.View(timeout=None)
+    for button in buttons:
+        view.add_item(button)
+    return view
 
 
 def build_base_receipt_cells(

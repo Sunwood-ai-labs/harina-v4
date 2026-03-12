@@ -22,6 +22,7 @@ class ProcessedReceipt:
     summary: str
     drive_file_id: str | None
     drive_file_url: str | None
+    spreadsheet_url: str | None
     rows: list[list[str]]
     google_write_performed: bool
 
@@ -34,6 +35,7 @@ class ProcessedReceipt:
             "summary": self.summary,
             "drive_file_id": self.drive_file_id,
             "drive_file_url": self.drive_file_url,
+            "spreadsheet_url": self.spreadsheet_url,
             "row_count": len(self.rows),
             "row": self.row,
             "rows": self.rows,
@@ -87,6 +89,7 @@ class ReceiptProcessor:
 
         drive_file_id: str | None = None
         drive_file_url: str | None = None
+        spreadsheet_url: str | None = None
         if write_to_google:
             if self.google_workspace is None:
                 raise RuntimeError("Google Workspace is not configured for receipt uploads.")
@@ -97,6 +100,7 @@ class ReceiptProcessor:
             )
             drive_file_id = drive_file.file_id
             drive_file_url = drive_file.web_view_link
+            spreadsheet_url = self.google_workspace.spreadsheet_url
 
         rows = build_receipt_rows(
             context=context,
@@ -112,6 +116,7 @@ class ReceiptProcessor:
             summary=format_receipt_summary(extraction, drive_file_url),
             drive_file_id=drive_file_id,
             drive_file_url=drive_file_url,
+            spreadsheet_url=spreadsheet_url,
             rows=rows,
             google_write_performed=write_to_google,
         )

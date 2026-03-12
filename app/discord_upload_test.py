@@ -109,11 +109,13 @@ class DiscordUploadTestBot(ReceiptBot):
             len(message.embeds),
         )
         self.debug_session.write_event("upload_test_reply_observed", message=serialize_message(message))
-        self._result_event.set()
+        observed_embed_count = sum(len(reply_message.embeds) for reply_message in self.reply_messages)
+        if observed_embed_count >= len(self.image_paths):
+            self._result_event.set()
 
-    async def _reply_with_embeds(self, *, target: discord.abc.Messageable, embeds: list[discord.Embed]) -> None:
+    async def _reply_with_outcomes(self, *, target: discord.abc.Messageable, outcomes) -> None:
         try:
-            await super()._reply_with_embeds(target=target, embeds=embeds)
+            await super()._reply_with_outcomes(target=target, outcomes=outcomes)
         finally:
             self._send_complete_event.set()
 

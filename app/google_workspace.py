@@ -56,6 +56,10 @@ class GoogleWorkspaceClient:
     async def move_file(self, *, file_id: str, destination_folder_id: str) -> None:
         await asyncio.to_thread(self._move_file_sync, file_id, destination_folder_id)
 
+    @property
+    def spreadsheet_url(self) -> str:
+        return f"https://docs.google.com/spreadsheets/d/{self._spreadsheet_id}/edit"
+
     def _ensure_receipt_sheet_sync(self) -> None:
         spreadsheet = (
             self._sheets.spreadsheets()

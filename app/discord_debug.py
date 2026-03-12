@@ -59,6 +59,19 @@ def serialize_channel(channel: discord.abc.Snowflake) -> dict[str, object]:
     }
 
 
+def serialize_component(component: Any) -> dict[str, object]:
+    children = getattr(component, "children", None)
+    return {
+        "type": component.__class__.__name__,
+        "label": getattr(component, "label", None),
+        "style": str(getattr(component, "style", "")) or None,
+        "url": getattr(component, "url", None),
+        "custom_id": getattr(component, "custom_id", None),
+        "disabled": getattr(component, "disabled", None),
+        "children": [serialize_component(child) for child in children] if children else [],
+    }
+
+
 def serialize_message(message: discord.Message) -> dict[str, object]:
     return {
         "id": message.id,
@@ -70,6 +83,7 @@ def serialize_message(message: discord.Message) -> dict[str, object]:
         "jump_url": message.jump_url,
         "attachments": [serialize_attachment(attachment) for attachment in message.attachments],
         "embeds": [embed.to_dict() for embed in message.embeds],
+        "components": [serialize_component(component) for component in getattr(message, "components", [])],
         "reference": {
             "message_id": getattr(message.reference, "message_id", None),
             "channel_id": getattr(message.reference, "channel_id", None),

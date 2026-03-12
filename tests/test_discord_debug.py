@@ -59,6 +59,19 @@ def test_serialize_message_includes_content_author_and_attachments() -> None:
         jump_url="https://discord.com/channels/10/20/50",
         attachments=[attachment],
         embeds=[discord.Embed(title="Receipt")],
+        components=[
+            SimpleNamespace(
+                children=[
+                    SimpleNamespace(
+                        label="Open Drive",
+                        style=discord.ButtonStyle.link,
+                        url="https://drive.example/file",
+                        custom_id=None,
+                        disabled=False,
+                    )
+                ]
+            )
+        ],
         reference=None,
         thread=None,
     )
@@ -70,3 +83,4 @@ def test_serialize_message_includes_content_author_and_attachments() -> None:
     assert payload["channel"]["id"] == 20
     assert payload["attachments"][0]["filename"] == "receipt.jpg"
     assert payload["embeds"][0]["title"] == "Receipt"
+    assert payload["components"][0]["children"][0]["label"] == "Open Drive"

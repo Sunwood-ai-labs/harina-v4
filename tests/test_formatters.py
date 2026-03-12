@@ -5,6 +5,7 @@ from app.formatters import (
     build_drive_file_name,
     build_local_receipt_context,
     build_receipt_embed,
+    build_receipt_links_view,
     build_receipt_rows,
     format_receipt_summary,
 )
@@ -71,18 +72,29 @@ def test_build_receipt_rows_creates_one_row_per_line_item() -> None:
     assert second_row["itemTotalPrice"] == "300.0"
 
 
-def test_build_receipt_embed_includes_line_items_and_drive_link() -> None:
+def test_build_receipt_embed_includes_line_items_and_saved_destinations() -> None:
     embed = build_receipt_embed(
         title="Receipt",
         extraction=sample_extraction(),
         drive_file_url="https://drive.example/file",
+        spreadsheet_url="https://docs.google.com/spreadsheets/d/sheet-id/edit",
         source_label="receipt.jpg",
     )
 
     assert embed.title == "Receipt"
     assert embed.description == "Cafe Harina | 1100.0 JPY | 2026-03-11 | Items: 2"
-    assert any(field.name == "Drive" and field.value == "https://drive.example/file" for field in embed.fields)
+    assert any(field.name == "Saved To" and "Google Drive" in field.value and "Google Sheets" in field.value for field in embed.fields)
     assert any(field.name == "Line Items" and "Cabbage" in field.value for field in embed.fields)
+
+
+def test_build_receipt_links_view_creates_drive_and_sheet_buttons() -> None:
+    view = build_receipt_links_view(
+        drive_file_url="https://drive.example/file",
+        spreadsheet_url="https://docs.google.com/spreadsheets/d/sheet-id/edit",
+    )
+
+    assert view is not None
+    assert [child.label for child in view.children] == ["Open Drive", "Open Sheet"]
 
 
 def test_build_local_receipt_context_uses_cli_labels(tmp_path: Path) -> None:

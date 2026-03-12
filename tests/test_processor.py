@@ -22,6 +22,7 @@ class _FakeGoogleWorkspace:
     def __init__(self) -> None:
         self.upload_calls: list[tuple[str, str, bytes]] = []
         self.rows: list[list[str]] = []
+        self.spreadsheet_url = "https://docs.google.com/spreadsheets/d/sheet-id/edit"
 
     async def ensure_receipt_sheet(self) -> None:
         return None
@@ -78,6 +79,7 @@ def test_process_receipt_can_skip_google_writes(
     assert gemini.calls == [("image/jpeg", dataset_receipt_image_path.name)]
     assert result.drive_file_id is None
     assert result.drive_file_url is None
+    assert result.spreadsheet_url is None
     assert result.google_write_performed is False
     assert len(result.rows) == 2
     assert result.row[4] == "cli"
@@ -115,4 +117,5 @@ def test_process_receipt_writes_to_google_when_enabled(
     assert workspace.rows == result.rows
     assert len(result.rows) == 2
     assert result.drive_file_id == "drive-123"
+    assert result.spreadsheet_url == "https://docs.google.com/spreadsheets/d/sheet-id/edit"
     assert result.google_write_performed is True

@@ -119,10 +119,12 @@ def test_build_debug_status_embed_contains_operational_fields() -> None:
         timeout_seconds=45,
     )
 
-    assert embed.title == "[HARINA-TEST] debug-log-check"
-    assert any(field.name == "Mode" and "Discord Upload Verification" in field.value for field in embed.fields)
-    assert any(field.name == "Images" and field.value == "3" for field in embed.fields)
-    assert any(field.name == "Timeout" and field.value == "45s" for field in embed.fields)
+    assert embed.title == "デバッグログ確認"
+    assert embed.description == "画像を送信し、処理スレッドからの応答を待っています。"
+    assert any(field.name == "モード" and field.value == "Discord送信確認" for field in embed.fields)
+    assert any(field.name == "画像数" and field.value == "3枚" for field in embed.fields)
+    assert any(field.name == "待機時間" and field.value == "45秒" for field in embed.fields)
+    assert all(field.name != "Trigger" for field in embed.fields)
 
 
 def test_build_drive_intake_embed_contains_route_status() -> None:

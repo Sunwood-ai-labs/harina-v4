@@ -283,17 +283,16 @@ def build_debug_status_embed(
     image_count: int,
     timeout_seconds: float,
 ) -> discord.Embed:
-    title = f"{test_prefix} {caption}".strip()
+    localized_caption = localize_debug_caption(caption)
     embed = discord.Embed(
-        title=title,
-        description="Diagnostics packet queued. HARINA will upload the image set and wait for the processing thread.",
-        color=_pick_debug_color(title),
+        title=localized_caption,
+        description="画像を送信し、処理スレッドからの応答を待っています。",
+        color=_pick_debug_color(f"{test_prefix} {localized_caption}".strip()),
     )
-    embed.add_field(name="Mode", value="Discord Upload Verification", inline=True)
-    embed.add_field(name="Images", value=str(image_count), inline=True)
-    embed.add_field(name="Timeout", value=f"{timeout_seconds:.0f}s", inline=True)
-    embed.add_field(name="Trigger", value=f"`{title}`", inline=False)
-    embed.set_footer(text="HARINA V4 debug pipeline")
+    embed.add_field(name="モード", value="Discord送信確認", inline=True)
+    embed.add_field(name="画像数", value=f"{image_count}枚", inline=True)
+    embed.add_field(name="待機時間", value=f"{timeout_seconds:.0f}秒", inline=True)
+    embed.set_footer(text="HARINA V4 デバッグパイプライン")
     return embed
 
 
@@ -408,6 +407,15 @@ def sanitize_segment(value: str) -> str:
     value = value.strip()
     value = re.sub(r"[^\w.\-]+", "-", value, flags=re.UNICODE)
     return value.strip("-")[:48]
+
+
+def localize_debug_caption(caption: str) -> str:
+    normalized = caption.strip().lower().replace("_", "-")
+    if normalized == "debug-log-check":
+        return "デバッグログ確認"
+    if normalized == "cli-upload-test":
+        return "アップロード確認"
+    return caption.strip() or "デバッグ確認"
 
 
 def _pick_debug_color(seed: str) -> discord.Color:

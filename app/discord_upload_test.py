@@ -51,7 +51,7 @@ class DiscordUploadTestBot(ReceiptBot):
                 raise RuntimeError(f"Channel {self.channel_id} is not messageable.")
 
             prefix = self.settings.discord_test_message_prefix
-            content = f"{prefix} {self.caption}"
+            content = prefix
             files = [discord.File(image_path, filename=image_path.name) for image_path in self.image_paths]
             logger.info(
                 "Sending Discord upload test to channel %s with %s image(s): %s",

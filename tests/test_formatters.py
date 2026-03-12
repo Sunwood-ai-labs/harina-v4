@@ -136,4 +136,5 @@ def test_build_drive_intake_embed_contains_route_status() -> None:
     assert embed.title == "HARINA V4 Intake // Alice"
     assert any(field.name == "Route" and field.value == "Alice" for field in embed.fields)
     assert any(field.name == "Status" and field.value == "Processing" for field in embed.fields)
+    assert any(field.name == "Drive Source" and "https://drive.example/file/123" in field.value for field in embed.fields)
     assert embed.image.url == "attachment://receipt.jpg"

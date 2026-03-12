@@ -184,6 +184,9 @@ class DriveWatcherClient(discord.Client):
                 drive_file_url=drive_file_url,
                 image_url=f"attachment://{file_name}",
             ),
+            view=build_receipt_links_view(
+                drive_file_url=drive_file_url,
+            ),
         )
 
         result_embed = build_receipt_embed(

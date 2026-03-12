@@ -12,7 +12,8 @@ from googleapiclient.errors import HttpError
 
 from app.bot import ReceiptBot
 from app.config import Settings, load_settings
-from app.dataset_downloader import DEFAULT_OUTPUT_DIR, run_downloader
+from app.dataset_downloader import DEFAULT_OUTPUT_DIR, parse_channel_url, run_downloader
+from app.discord_debug import DEFAULT_DISCORD_DEBUG_LOG_DIR, collect_discord_logs
 from app.discord_upload_test import run_discord_upload_test
 from app.drive_watcher import run_drive_watch
 from app.gemini_smoke_test import run_smoke_test
@@ -51,7 +52,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Discord channel ID for the test. Defaults to DISCORD_TEST_CHANNEL_ID when set.",
     )
-    bot_upload_test_parser.add_argument("--image", required=True, help="Local image file to upload.")
+    bot_upload_test_parser.add_argument("--image", nargs="+", required=True, help="One or more local image files to upload.")
     bot_upload_test_parser.add_argument("--caption", default="CLI upload test", help="Text appended after the test prefix.")
     bot_upload_test_parser.add_argument(
         "--timeout-seconds",
@@ -60,6 +61,27 @@ def build_parser() -> argparse.ArgumentParser:
         help="How long to wait for the reply message. Default: 60",
     )
     bot_upload_test_parser.set_defaults(handler=handle_bot_upload_test)
+
+    bot_collect_logs_parser = bot_subparsers.add_parser(
+        "collect-logs",
+        help="Fetch recent Discord channel or thread messages and save them for debugging.",
+    )
+    bot_collect_logs_parser.add_argument(
+        "target_url",
+        help="Discord channel or message URL like https://discord.com/channels/<guild_id>/<channel_id>/<message_id>",
+    )
+    bot_collect_logs_parser.add_argument(
+        "--history-limit",
+        type=int,
+        default=50,
+        help="How many recent messages to collect from the channel/thread. Default: 50",
+    )
+    bot_collect_logs_parser.add_argument(
+        "--output-dir",
+        default=str(DEFAULT_DISCORD_DEBUG_LOG_DIR),
+        help=f"Directory where debug logs will be stored. Default: {DEFAULT_DISCORD_DEBUG_LOG_DIR}",
+    )
+    bot_collect_logs_parser.set_defaults(handler=handle_bot_collect_logs)
 
     receipt_parser = subparsers.add_parser(
         "receipt",
@@ -403,9 +425,24 @@ def handle_bot_upload_test(args: Namespace, settings: Settings | None) -> None:
         run_discord_upload_test(
             settings=settings,
             channel_id=channel_id,
-            image_path=Path(args.image),
+            image_paths=[Path(image) for image in args.image],
             caption=args.caption,
             timeout_seconds=args.timeout_seconds,
+        )
+    )
+    print(json.dumps(summary, ensure_ascii=True, indent=2))
+
+
+def handle_bot_collect_logs(args: Namespace, settings: Settings | None) -> None:
+    if settings is None:
+        raise RuntimeError("Bot settings were not loaded.")
+
+    summary = asyncio.run(
+        collect_discord_logs(
+            token=settings.require_discord_token(),
+            reference=parse_channel_url(args.target_url),
+            output_dir=Path(args.output_dir),
+            history_limit=args.history_limit,
         )
     )
     print(json.dumps(summary, ensure_ascii=True, indent=2))
@@ -705,7 +742,10 @@ def main() -> None:
     args = parser.parse_args()
     settings = None
     if args.command == "bot":
-        settings = load_settings(require_discord=True, require_gemini=True, require_google_workspace=True)
+        if args.bot_command == "collect-logs":
+            settings = load_settings(require_discord=True)
+        else:
+            settings = load_settings(require_discord=True, require_gemini=True, require_google_workspace=True)
     elif args.command == "receipt":
         settings = load_settings(require_gemini=True)
     elif args.command == "test":

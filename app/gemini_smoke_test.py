@@ -10,6 +10,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
+from app.config import load_settings
 from app.dataset_downloader import DEFAULT_OUTPUT_DIR
 from app.gemini_client import GeminiReceiptExtractor
 
@@ -95,11 +96,7 @@ def preview_text(value: str | None, *, limit: int = 240) -> str | None:
 
 
 async def run_smoke_test(args: argparse.Namespace) -> dict[str, object]:
-    api_key = os.getenv("GEMINI_API_KEY", "").strip()
-    if not api_key:
-        raise RuntimeError("Set GEMINI_API_KEY in your environment or .env before running the smoke test.")
-
-    model = os.getenv("GEMINI_MODEL", "gemini-3-flash-preview").strip() or "gemini-3-flash-preview"
+    settings = load_settings(require_gemini=True)
     dataset_dir = Path(args.dataset_dir)
     candidates = discover_dataset_images(dataset_dir)
     selected = select_sample_images(candidates, limit=args.limit, allow_duplicates=args.allow_duplicates)
@@ -107,7 +104,7 @@ async def run_smoke_test(args: argparse.Namespace) -> dict[str, object]:
     if not selected:
         raise RuntimeError(f"No supported dataset images found under: {dataset_dir}")
 
-    extractor = GeminiReceiptExtractor(api_key=api_key, model=model)
+    extractor = GeminiReceiptExtractor(api_keys=settings.require_gemini_api_keys(), model=settings.gemini_model)
 
     results: list[dict[str, object]] = []
     for path in selected:
@@ -128,7 +125,7 @@ async def run_smoke_test(args: argparse.Namespace) -> dict[str, object]:
         )
 
     summary: dict[str, object] = {
-        "model": model,
+        "model": settings.gemini_model,
         "dataset_dir": str(dataset_dir.resolve()),
         "candidate_count": len(candidates),
         "requested_limit": args.limit,

@@ -37,7 +37,7 @@ async def run_local_receipt_process(
 
     processor = ReceiptProcessor(
         gemini=GeminiReceiptExtractor(
-            api_key=settings.gemini_api_key or "",
+            api_keys=settings.require_gemini_api_keys(),
             model=settings.gemini_model,
         ),
         google_workspace=google_workspace,

@@ -125,7 +125,7 @@ class DriveWatcherClient(discord.Client):
         )
         self.watcher = DriveReceiptWatcher(
             gemini=GeminiReceiptExtractor(
-                api_key=settings.require_gemini_api_key(),
+                api_keys=settings.require_gemini_api_keys(),
                 model=settings.gemini_model,
             ),
             google_workspace=workspace,

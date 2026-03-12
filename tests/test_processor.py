@@ -1,4 +1,5 @@
 import asyncio
+from pathlib import Path
 
 from app.formatters import ReceiptRecordContext
 from app.models import ReceiptExtraction, ReceiptLineItem
@@ -6,12 +7,13 @@ from app.processor import ReceiptProcessor
 
 
 class _FakeGemini:
-    def __init__(self, extraction: ReceiptExtraction) -> None:
+    def __init__(self, extraction: ReceiptExtraction, *, expected_image_bytes: bytes) -> None:
         self.extraction = extraction
+        self.expected_image_bytes = expected_image_bytes
         self.calls: list[tuple[str, str]] = []
 
     async def extract(self, *, image_bytes: bytes, mime_type: str, filename: str) -> ReceiptExtraction:
-        assert image_bytes == b"receipt-image"
+        assert image_bytes == self.expected_image_bytes
         self.calls.append((mime_type, filename))
         return self.extraction
 
@@ -51,8 +53,11 @@ def sample_extraction() -> ReceiptExtraction:
     )
 
 
-def test_process_receipt_can_skip_google_writes() -> None:
-    gemini = _FakeGemini(sample_extraction())
+def test_process_receipt_can_skip_google_writes(
+    dataset_receipt_image_path: Path,
+    dataset_receipt_image_bytes: bytes,
+) -> None:
+    gemini = _FakeGemini(sample_extraction(), expected_image_bytes=dataset_receipt_image_bytes)
     processor = ReceiptProcessor(gemini=gemini)
 
     result = asyncio.run(
@@ -60,17 +65,17 @@ def test_process_receipt_can_skip_google_writes() -> None:
             context=ReceiptRecordContext(
                 channel_name="cli",
                 author_tag="harina-v4",
-                attachment_name="receipt.jpg",
-                attachment_url="D:/tmp/receipt.jpg",
+                attachment_name=dataset_receipt_image_path.name,
+                attachment_url=str(dataset_receipt_image_path),
             ),
-            filename="receipt.jpg",
+            filename=dataset_receipt_image_path.name,
             mime_type="image/jpeg",
-            image_bytes=b"receipt-image",
+            image_bytes=dataset_receipt_image_bytes,
             write_to_google=False,
         )
     )
 
-    assert gemini.calls == [("image/jpeg", "receipt.jpg")]
+    assert gemini.calls == [("image/jpeg", dataset_receipt_image_path.name)]
     assert result.drive_file_id is None
     assert result.drive_file_url is None
     assert result.google_write_performed is False
@@ -81,21 +86,27 @@ def test_process_receipt_can_skip_google_writes() -> None:
     assert result.rows[1][31] == "Juice"
 
 
-def test_process_receipt_writes_to_google_when_enabled() -> None:
+def test_process_receipt_writes_to_google_when_enabled(
+    dataset_receipt_image_path: Path,
+    dataset_receipt_image_bytes: bytes,
+) -> None:
     workspace = _FakeGoogleWorkspace()
-    processor = ReceiptProcessor(gemini=_FakeGemini(sample_extraction()), google_workspace=workspace)
+    processor = ReceiptProcessor(
+        gemini=_FakeGemini(sample_extraction(), expected_image_bytes=dataset_receipt_image_bytes),
+        google_workspace=workspace,
+    )
 
     result = asyncio.run(
         processor.process_receipt(
             context=ReceiptRecordContext(
                 channel_name="cli",
                 author_tag="harina-v4",
-                attachment_name="receipt.jpg",
-                attachment_url="D:/tmp/receipt.jpg",
+                attachment_name=dataset_receipt_image_path.name,
+                attachment_url=str(dataset_receipt_image_path),
             ),
-            filename="receipt.jpg",
+            filename=dataset_receipt_image_path.name,
             mime_type="image/jpeg",
-            image_bytes=b"receipt-image",
+            image_bytes=dataset_receipt_image_bytes,
             write_to_google=True,
         )
     )

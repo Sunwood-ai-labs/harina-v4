@@ -12,3 +12,4 @@ secrets/
 coverage/
 *.log
 dataset/
+logs/

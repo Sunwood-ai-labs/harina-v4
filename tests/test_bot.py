@@ -1,4 +1,4 @@
-from app.bot import should_process_message
+from app.bot import build_receipt_thread_name, should_process_message
 
 
 def test_should_process_regular_user_message() -> None:
@@ -47,3 +47,8 @@ def test_should_reject_message_outside_allowed_channel_ids() -> None:
         allowed_channel_ids={10},
         test_message_prefix="[HARINA-TEST]",
     )
+
+
+def test_build_receipt_thread_name_includes_attachment_count() -> None:
+    assert build_receipt_thread_name(message_id=123, attachment_count=1) == "receipt-123-receipt"
+    assert build_receipt_thread_name(message_id=123, attachment_count=2) == "receipt-123-2-receipts"

@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 
 from app.config import Settings
@@ -45,6 +47,28 @@ def test_settings_can_power_receipt_cli_without_discord_token() -> None:
     )
 
     assert settings.require_gemini_api_key() == "gemini-key"
+    assert settings.discord_debug_log_dir_path == Path("logs/discord")
+
+
+def test_settings_can_parse_gemini_rotation_key_list() -> None:
+    settings = Settings.model_validate(
+        {
+            "GEMINI_API_KEY": "gemini-key-1",
+            "GEMINI_API_KEY_ROTATION_LIST": "gemini-key-2,\n gemini-key-3 \n gemini-key-2",
+        }
+    )
+
+    assert settings.require_gemini_api_keys() == ["gemini-key-1", "gemini-key-2", "gemini-key-3"]
+
+
+def test_settings_can_use_rotation_key_list_without_primary_key() -> None:
+    settings = Settings.model_validate(
+        {
+            "GEMINI_API_KEY_ROTATION_LIST": "gemini-key-2,gemini-key-3",
+        }
+    )
+
+    assert settings.require_gemini_api_key() == "gemini-key-2"
 
 
 def test_require_google_workspace_rejects_missing_drive_targets() -> None:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 from typing import Any
 
 from dotenv import load_dotenv
@@ -18,7 +19,9 @@ class Settings(BaseModel):
     discord_test_channel_id: int | None = Field(default=None, alias="DISCORD_TEST_CHANNEL_ID")
     discord_test_message_prefix: str = Field(default="[HARINA-TEST]", alias="DISCORD_TEST_MESSAGE_PREFIX")
     discord_notify_channel_id: int | None = Field(default=None, alias="DISCORD_NOTIFY_CHANNEL_ID")
+    discord_debug_log_dir: str = Field(default="logs/discord", alias="DISCORD_DEBUG_LOG_DIR")
     gemini_api_key: str | None = Field(default=None, alias="GEMINI_API_KEY")
+    gemini_api_key_rotation_list: str | None = Field(default=None, alias="GEMINI_API_KEY_ROTATION_LIST")
     gemini_model: str = Field(default="gemini-3-flash-preview", alias="GEMINI_MODEL")
     google_service_account_json: str | None = Field(default=None, alias="GOOGLE_SERVICE_ACCOUNT_JSON")
     google_service_account_key_file: str | None = Field(default=None, alias="GOOGLE_SERVICE_ACCOUNT_KEY_FILE")
@@ -42,6 +45,28 @@ class Settings(BaseModel):
 
         values = {value.strip() for value in self.discord_channel_ids.split(",") if value.strip()}
         return {int(value) for value in values}
+
+    @property
+    def gemini_api_keys(self) -> list[str]:
+        values: list[str] = []
+        if self.gemini_api_key:
+            values.append(self.gemini_api_key)
+
+        if self.gemini_api_key_rotation_list:
+            for raw_value in self.gemini_api_key_rotation_list.replace("\r", "\n").replace(",", "\n").split("\n"):
+                normalized_value = raw_value.strip()
+                if normalized_value:
+                    values.append(normalized_value)
+
+        deduped_values: list[str] = []
+        for value in values:
+            if value not in deduped_values:
+                deduped_values.append(value)
+        return deduped_values
+
+    @property
+    def discord_debug_log_dir_path(self) -> Path:
+        return Path(self.discord_debug_log_dir)
 
     @property
     def service_account_info(self) -> dict[str, Any]:
@@ -76,6 +101,7 @@ class Settings(BaseModel):
 
     @field_validator(
         "discord_test_message_prefix",
+        "discord_debug_log_dir",
     )
     @classmethod
     def validate_not_blank(cls, value: str) -> str:
@@ -90,6 +116,7 @@ class Settings(BaseModel):
         "discord_test_channel_id",
         "discord_notify_channel_id",
         "gemini_api_key",
+        "gemini_api_key_rotation_list",
         "google_service_account_json",
         "google_service_account_key_file",
         "google_oauth_client_json",
@@ -125,9 +152,14 @@ class Settings(BaseModel):
         return self.discord_token
 
     def require_gemini_api_key(self) -> str:
-        if not self.gemini_api_key:
-            raise RuntimeError("Set GEMINI_API_KEY in your environment or .env before running receipt commands.")
-        return self.gemini_api_key
+        return self.require_gemini_api_keys()[0]
+
+    def require_gemini_api_keys(self) -> list[str]:
+        if not self.gemini_api_keys:
+            raise RuntimeError(
+                "Set GEMINI_API_KEY or GEMINI_API_KEY_ROTATION_LIST in your environment or .env before running receipt commands."
+            )
+        return self.gemini_api_keys
 
     def require_google_workspace(self) -> None:
         if not self.has_google_auth():
@@ -145,8 +177,10 @@ class Settings(BaseModel):
     def require_drive_watch(self) -> None:
         if not self.discord_token:
             raise RuntimeError("Set DISCORD_TOKEN in your environment or .env before running drive watch commands.")
-        if not self.gemini_api_key:
-            raise RuntimeError("Set GEMINI_API_KEY in your environment or .env before running drive watch commands.")
+        if not self.gemini_api_keys:
+            raise RuntimeError(
+                "Set GEMINI_API_KEY or GEMINI_API_KEY_ROTATION_LIST in your environment or .env before running drive watch commands."
+            )
         if not self.has_google_auth():
             raise RuntimeError(
                 "Configure either GOOGLE_SERVICE_ACCOUNT_JSON / GOOGLE_SERVICE_ACCOUNT_KEY_FILE or "

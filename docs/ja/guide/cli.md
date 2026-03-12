@@ -49,6 +49,12 @@ uv run harina-v4 bot run
 uv run harina-v4 bot upload-test --channel-id <channel_id> --image ./sample-receipt.jpg
 ```
 
+複数枚を 1 メッセージで送ることもできます:
+
+```bash
+uv run harina-v4 bot upload-test --channel-id <channel_id> --image ./docs/public/test/one/IMG_8923.jpg ./docs/public/test/two/IMG_9780.jpg
+```
+
 補足:
 
 - `test docs-public` は `docs/public/test` 配下の対応画像をすべて走査します

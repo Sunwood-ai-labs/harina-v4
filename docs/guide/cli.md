@@ -49,9 +49,16 @@ Upload a real image into Discord and wait for the bot reply:
 uv run harina-v4 bot upload-test --channel-id <channel_id> --image ./sample-receipt.jpg
 ```
 
+You can also upload multiple images in one message:
+
+```bash
+uv run harina-v4 bot upload-test --channel-id <channel_id> --image ./docs/public/test/one/IMG_8923.jpg ./docs/public/test/two/IMG_9780.jpg
+```
+
 Notes:
 
 - `test docs-public` scans every supported image under `docs/public/test`
+- When `docs/public/test` contains subdirectories such as `one/` and `two/`, each folder is treated as a separate test case
 - The default `--mode both` runs the local CLI pipeline and the live Discord upload check in one pass
 - Use `--mode cli` or `--mode discord` when you want to isolate one path
 - Discord-side checks default to `DISCORD_TEST_CHANNEL_ID` unless `--channel-id` is provided

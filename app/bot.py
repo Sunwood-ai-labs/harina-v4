@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 
 import discord
 
 from app.config import Settings
+from app.discord_debug import DiscordDebugSession, serialize_message
 from app.formatters import build_receipt_embed, is_image_attachment
 from app.gemini_client import GeminiReceiptExtractor
 from app.google_workspace import GoogleWorkspaceClient
@@ -13,11 +15,24 @@ from app.processor import ProcessedReceipt, ReceiptProcessor
 
 logger = logging.getLogger(__name__)
 
-PROCESSING_REACTION = "🔄"
+PROCESSING_REACTION = "🧾"
 ERROR_EMBED_TITLE = "Receipt Processing Failed"
 ERROR_MESSAGE = (
     "Receipt processing failed. Check the Gemini, Google Drive, and Google Sheets settings and image contents."
 )
+THREAD_NAME_PREFIX = "receipt"
+
+
+@dataclass(frozen=True)
+class AttachmentProcessingOutcome:
+    attachment: discord.Attachment
+    embed: discord.Embed
+    ok: bool
+
+
+def build_receipt_thread_name(*, message_id: int, attachment_count: int) -> str:
+    suffix = "receipt" if attachment_count == 1 else f"{attachment_count}-receipts"
+    return f"{THREAD_NAME_PREFIX}-{message_id}-{suffix}"
 
 
 def should_process_message(
@@ -54,8 +69,12 @@ class ReceiptBot(discord.Client):
 
         self.settings = settings
         self.settings.require_google_workspace()
+        self.debug_session = DiscordDebugSession.create(
+            base_dir=settings.discord_debug_log_dir_path,
+            purpose="receipt-bot",
+        )
         self.processor = ReceiptProcessor(
-            gemini=GeminiReceiptExtractor(api_key=settings.require_gemini_api_key(), model=settings.gemini_model),
+            gemini=GeminiReceiptExtractor(api_keys=settings.require_gemini_api_keys(), model=settings.gemini_model),
             google_workspace=GoogleWorkspaceClient(
                 credentials=settings.google_credentials,
                 drive_folder_id=settings.google_drive_folder_id or "",
@@ -70,6 +89,7 @@ class ReceiptBot(discord.Client):
     async def on_ready(self) -> None:
         if self.user:
             logger.info("Receipt bot is ready as %s", self.user)
+            self.debug_session.write_event("bot_ready", user_id=self.user.id, user_name=str(self.user))
 
     async def on_message(self, message: discord.Message) -> None:
         if not should_process_message(
@@ -87,49 +107,222 @@ class ReceiptBot(discord.Client):
         if not receipt_attachments:
             return
 
+        logger.info(
+            "Processing Discord message %s in channel %s with %s receipt attachment(s)",
+            message.id,
+            message.channel.id,
+            len(receipt_attachments),
+        )
+        self.debug_session.write_event(
+            "message_received",
+            message=serialize_message(message),
+            receipt_attachment_count=len(receipt_attachments),
+        )
+
         try:
             await message.add_reaction(PROCESSING_REACTION)
         except discord.HTTPException:
             logger.warning("Could not add reaction to message %s", message.id)
 
         try:
-            embeds = []
+            response_thread = await self._get_response_thread(
+                message=message,
+                attachment_count=len(receipt_attachments),
+            )
+            outcomes = []
             for index, attachment in enumerate(receipt_attachments, start=1):
-                processed = await self._process_attachment(message=message, attachment=attachment)
-                title = f"Receipt {index}" if len(receipt_attachments) > 1 else "Receipt"
-                embeds.append(
-                    build_receipt_embed(
-                        title=title,
-                        extraction=processed.extraction,
-                        drive_file_url=processed.drive_file_url,
-                        source_label=attachment.filename,
+                outcomes.append(
+                    await self._process_attachment_outcome(
+                        message=message,
+                        attachment=attachment,
+                        index=index,
+                        total_attachments=len(receipt_attachments),
                     )
                 )
 
-            await self._reply_with_embeds(message=message, embeds=embeds)
+            await self._reply_with_embeds(target=response_thread, embeds=[outcome.embed for outcome in outcomes])
+            self.debug_session.write_event(
+                "message_processed",
+                message_id=message.id,
+                target=self._describe_messageable(target=response_thread),
+                attachment_count=len(receipt_attachments),
+                ok_count=sum(1 for outcome in outcomes if outcome.ok),
+                error_count=sum(1 for outcome in outcomes if not outcome.ok),
+            )
         except Exception:  # noqa: BLE001
             logger.exception("Receipt processing failed for message %s", message.id)
+            self.debug_session.write_event(
+                "message_processing_failed",
+                message_id=message.id,
+                channel_id=message.channel.id,
+            )
             error_embed = discord.Embed(
                 title=ERROR_EMBED_TITLE,
                 description=ERROR_MESSAGE,
                 color=discord.Color.red(),
             )
-            await message.reply(embed=error_embed, mention_author=False)
+            await self._send_error_embed(
+                message=message,
+                error_embed=error_embed,
+                attachment_count=len(receipt_attachments),
+            )
 
-    async def _reply_with_embeds(self, *, message: discord.Message, embeds: list[discord.Embed]) -> None:
+    async def _reply_with_embeds(self, *, target: discord.abc.Messageable, embeds: list[discord.Embed]) -> None:
         if not embeds:
             return
 
         for start in range(0, len(embeds), 10):
             chunk = embeds[start : start + 10]
-            if start == 0:
-                await message.reply(embeds=chunk, mention_author=False)
-                continue
-
-            await message.channel.send(
-                embeds=chunk,
-                reference=message.to_reference(fail_if_not_exists=False),
+            logger.info(
+                "Sending %s embed(s) to Discord target %s",
+                len(chunk),
+                self._describe_messageable(target),
             )
+            await target.send(embeds=chunk)
+            self.debug_session.write_event(
+                "embeds_sent",
+                target=self._describe_messageable(target),
+                embed_titles=[embed.title for embed in chunk],
+            )
+
+    async def _send_error_embed(
+        self,
+        *,
+        message: discord.Message,
+        error_embed: discord.Embed,
+        attachment_count: int,
+    ) -> None:
+        try:
+            response_thread = await self._get_response_thread(message=message, attachment_count=attachment_count)
+            logger.info(
+                "Sending error embed for message %s to Discord target %s",
+                message.id,
+                self._describe_messageable(response_thread),
+            )
+            await response_thread.send(embed=error_embed)
+            self.debug_session.write_event(
+                "error_embed_sent",
+                message_id=message.id,
+                target=self._describe_messageable(response_thread),
+            )
+        except Exception:  # noqa: BLE001
+            logger.exception("Could not send thread error response for message %s", message.id)
+            logger.info("Falling back to direct reply for message %s", message.id)
+            self.debug_session.write_event(
+                "error_embed_send_failed",
+                message_id=message.id,
+                channel_id=message.channel.id,
+            )
+            await message.reply(embed=error_embed, mention_author=False)
+
+    async def _get_response_thread(
+        self,
+        *,
+        message: discord.Message,
+        attachment_count: int,
+    ) -> discord.Thread | discord.abc.Messageable:
+        existing_thread = getattr(message, "thread", None)
+        if existing_thread is not None:
+            logger.info("Using existing response thread %s for message %s", existing_thread.id, message.id)
+            return existing_thread
+
+        if isinstance(message.channel, discord.Thread):
+            logger.info("Message %s already arrived inside thread %s", message.id, message.channel.id)
+            return message.channel
+
+        thread_name = build_receipt_thread_name(message_id=message.id, attachment_count=attachment_count)
+        try:
+            logger.info("Creating response thread '%s' for message %s", thread_name, message.id)
+            thread = await message.create_thread(name=thread_name)
+            logger.info("Created response thread %s for message %s", thread.id, message.id)
+            self.debug_session.write_event(
+                "thread_created",
+                message_id=message.id,
+                thread_id=thread.id,
+                thread_name=thread.name,
+            )
+            return thread
+        except discord.HTTPException:
+            logger.exception("Could not create response thread for message %s", message.id)
+            logger.info("Falling back to parent channel %s for message %s", message.channel.id, message.id)
+            self.debug_session.write_event(
+                "thread_create_failed",
+                message_id=message.id,
+                channel_id=message.channel.id,
+            )
+            return message.channel
+
+    async def _process_attachment_outcome(
+        self,
+        *,
+        message: discord.Message,
+        attachment: discord.Attachment,
+        index: int,
+        total_attachments: int,
+    ) -> AttachmentProcessingOutcome:
+        title = f"Receipt {index}" if total_attachments > 1 else "Receipt"
+        try:
+            logger.info(
+                "Processing attachment %s/%s for message %s: %s",
+                index,
+                total_attachments,
+                message.id,
+                attachment.filename,
+            )
+            processed = await self._process_attachment(message=message, attachment=attachment)
+        except Exception:  # noqa: BLE001
+            logger.exception("Receipt processing failed for attachment %s on message %s", attachment.id, message.id)
+            self.debug_session.write_event(
+                "attachment_failed",
+                message_id=message.id,
+                attachment_id=attachment.id,
+                filename=attachment.filename,
+                index=index,
+                total_attachments=total_attachments,
+            )
+            return AttachmentProcessingOutcome(
+                attachment=attachment,
+                embed=discord.Embed(
+                    title=f"{title} Failed",
+                    description=f"{ERROR_MESSAGE}\nSource: `{attachment.filename}`",
+                    color=discord.Color.red(),
+                ),
+                ok=False,
+            )
+
+        logger.info(
+            "Processed attachment %s/%s for message %s successfully: %s",
+            index,
+            total_attachments,
+            message.id,
+            attachment.filename,
+        )
+        self.debug_session.write_event(
+            "attachment_processed",
+            message_id=message.id,
+            attachment_id=attachment.id,
+            filename=attachment.filename,
+            index=index,
+            total_attachments=total_attachments,
+        )
+        return AttachmentProcessingOutcome(
+            attachment=attachment,
+            embed=build_receipt_embed(
+                title=title,
+                extraction=processed.extraction,
+                drive_file_url=processed.drive_file_url,
+                source_label=attachment.filename,
+            ),
+            ok=True,
+        )
 
     async def _process_attachment(self, *, message: discord.Message, attachment: discord.Attachment) -> ProcessedReceipt:
         return await self.processor.process_attachment(message=message, attachment=attachment)
+
+    @staticmethod
+    def _describe_messageable(target: discord.abc.Messageable) -> str:
+        target_id = getattr(target, "id", "unknown")
+        target_name = getattr(target, "name", None)
+        if target_name:
+            return f"{target.__class__.__name__}(id={target_id}, name={target_name})"
+        return f"{target.__class__.__name__}(id={target_id})"

@@ -44,7 +44,7 @@ def test_build_drive_file_name_includes_merchant_and_date() -> None:
 
 def test_format_receipt_summary_contains_expected_fields() -> None:
     summary = format_receipt_summary(sample_extraction(), "https://drive.example/file")
-    assert summary == "Cafe Harina | 1100.0 JPY | 2026-03-11 | Items: 2 | Drive: https://drive.example/file"
+    assert summary == "Cafe Harina | 1100.0 JPY | 2026-03-11 | 商品数: 2 | Drive: https://drive.example/file"
 
 
 def test_build_receipt_rows_creates_one_row_per_line_item() -> None:
@@ -84,9 +84,9 @@ def test_build_receipt_embed_includes_line_items_and_saved_destinations() -> Non
     )
 
     assert embed.title == "Receipt"
-    assert embed.description == "Cafe Harina | 1100.0 JPY | 2026-03-11 | Items: 2"
-    assert any(field.name == "Saved To" and "Google Drive" in field.value and "Google Sheets" in field.value for field in embed.fields)
-    assert any(field.name == "Line Items" and "Cabbage" in field.value for field in embed.fields)
+    assert embed.description == "Cafe Harina | 1100.0 JPY | 2026-03-11 | 商品数: 2"
+    assert any(field.name == "保存先" and "Google Drive" in field.value and "Google Sheets" in field.value for field in embed.fields)
+    assert any(field.name == "明細" and "Cabbage" in field.value for field in embed.fields)
 
 
 def test_build_receipt_links_view_creates_drive_and_sheet_buttons() -> None:
@@ -134,7 +134,8 @@ def test_build_drive_intake_embed_contains_route_status() -> None:
     )
 
     assert embed.title == "HARINA V4 Intake // Alice"
-    assert any(field.name == "Route" and field.value == "Alice" for field in embed.fields)
-    assert any(field.name == "Status" and field.value == "Processing" for field in embed.fields)
+    assert embed.description == "Google Drive watcher が新しい画像を検知し、レシート処理を開始しました。"
+    assert any(field.name == "担当" and field.value == "Alice" for field in embed.fields)
+    assert any(field.name == "状態" and field.value == "処理中" for field in embed.fields)
     assert all(field.name != "Drive Source" for field in embed.fields)
     assert embed.image.url == "attachment://receipt.jpg"

@@ -195,11 +195,11 @@ def build_receipt_rows(
 
 
 def format_receipt_summary(extraction: ReceiptExtraction, drive_file_url: str | None) -> str:
-    merchant = extraction.merchant_name or "Unknown merchant"
-    total = f"{extraction.total} {extraction.currency or ''}".strip() if extraction.total is not None else "total unknown"
-    purchase_date = extraction.purchase_date or "date unknown"
+    merchant = extraction.merchant_name or "店舗不明"
+    total = f"{extraction.total} {extraction.currency or ''}".strip() if extraction.total is not None else "合計不明"
+    purchase_date = extraction.purchase_date or "日付不明"
     item_count = len(normalize_line_items(extraction.line_items))
-    parts = [merchant, total, purchase_date, f"Items: {item_count}"]
+    parts = [merchant, total, purchase_date, f"商品数: {item_count}"]
     if drive_file_url:
         parts.append(f"Drive: {drive_file_url}")
     return " | ".join(parts)
@@ -214,9 +214,9 @@ def build_receipt_embed(
     source_label: str | None = None,
     image_url: str | None = None,
 ) -> discord.Embed:
-    merchant = extraction.merchant_name or "Unknown merchant"
-    total = f"{extraction.total} {extraction.currency or ''}".strip() if extraction.total is not None else "unknown"
-    purchase_date = extraction.purchase_date or "unknown"
+    merchant = extraction.merchant_name or "店舗不明"
+    total = f"{extraction.total} {extraction.currency or ''}".strip() if extraction.total is not None else "不明"
+    purchase_date = extraction.purchase_date or "不明"
     confidence = format_confidence(extraction.confidence)
     item_count = len(normalize_line_items(extraction.line_items))
 
@@ -225,29 +225,29 @@ def build_receipt_embed(
         description=format_receipt_summary(extraction, drive_file_url=None),
         color=receipt_embed_color(extraction.confidence),
     )
-    embed.add_field(name="Store", value=merchant, inline=True)
-    embed.add_field(name="Total", value=total, inline=True)
-    embed.add_field(name="Date", value=purchase_date, inline=True)
-    embed.add_field(name="Items", value=str(item_count), inline=True)
-    embed.add_field(name="Confidence", value=confidence, inline=True)
+    embed.add_field(name="店舗", value=merchant, inline=True)
+    embed.add_field(name="合計", value=total, inline=True)
+    embed.add_field(name="日付", value=purchase_date, inline=True)
+    embed.add_field(name="商品数", value=str(item_count), inline=True)
+    embed.add_field(name="信頼度", value=confidence, inline=True)
     if source_label:
-        embed.add_field(name="Source", value=source_label, inline=True)
+        embed.add_field(name="元画像", value=source_label, inline=True)
     if drive_file_url or spreadsheet_url:
         destinations: list[str] = []
         if drive_file_url:
             destinations.append("Google Drive")
         if spreadsheet_url:
             destinations.append("Google Sheets")
-        embed.add_field(name="Saved To", value=", ".join(destinations), inline=False)
+        embed.add_field(name="保存先", value=", ".join(destinations), inline=False)
 
     item_preview = format_line_item_preview(extraction.line_items)
     if item_preview:
-        embed.add_field(name="Line Items", value=item_preview, inline=False)
+        embed.add_field(name="明細", value=item_preview, inline=False)
 
     if extraction.notes:
-        embed.add_field(name="Notes", value=truncate_field(extraction.notes), inline=False)
+        embed.add_field(name="メモ", value=truncate_field(extraction.notes), inline=False)
     if extraction.receipt_number:
-        embed.set_footer(text=f"Receipt No. {extraction.receipt_number}")
+        embed.set_footer(text=f"レシート番号 {extraction.receipt_number}")
     if image_url:
         embed.set_image(url=image_url)
 
@@ -264,12 +264,12 @@ def build_drive_intake_embed(
     del drive_file_url
     embed = discord.Embed(
         title=f"HARINA V4 Intake // {route_label}",
-        description="Google Drive watch detected a new image and started receipt processing.",
+        description="Google Drive watcher が新しい画像を検知し、レシート処理を開始しました。",
         color=discord.Color.from_rgb(52, 152, 219),
     )
-    embed.add_field(name="Route", value=route_label, inline=True)
-    embed.add_field(name="Image", value=file_name, inline=True)
-    embed.add_field(name="Status", value="Processing", inline=True)
+    embed.add_field(name="担当", value=route_label, inline=True)
+    embed.add_field(name="画像", value=file_name, inline=True)
+    embed.add_field(name="状態", value="処理中", inline=True)
     if image_url:
         embed.set_image(url=image_url)
     embed.set_footer(text="HARINA V4 Drive Watch")
@@ -306,9 +306,7 @@ def build_receipt_links_view(
     if drive_file_url:
         buttons.append(discord.ui.Button(label="Open Drive", style=discord.ButtonStyle.link, url=drive_file_url))
     if spreadsheet_url:
-        buttons.append(
-            discord.ui.Button(label="Open Sheet", style=discord.ButtonStyle.link, url=spreadsheet_url)
-        )
+        buttons.append(discord.ui.Button(label="Open Sheet", style=discord.ButtonStyle.link, url=spreadsheet_url))
 
     if not buttons:
         return None

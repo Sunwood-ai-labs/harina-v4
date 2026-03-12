@@ -93,7 +93,15 @@ class DiscordUploadTestBot(ReceiptBot):
             await self.close()
 
     async def on_message(self, message: discord.Message) -> None:
-        await super().on_message(message)
+        should_skip_self_processing = bool(
+            self.user
+            and message.author.id == self.user.id
+            and not isinstance(message.channel, discord.Thread)
+            and message.channel.id == self.channel_id
+            and (message.content or "").startswith(self.settings.discord_test_message_prefix)
+        )
+        if not should_skip_self_processing:
+            await super().on_message(message)
 
         if not self.sent_message or not self.user:
             return

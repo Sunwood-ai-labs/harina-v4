@@ -8,10 +8,18 @@ from io import BytesIO
 import discord
 
 from app.config import Settings
-from app.formatters import build_drive_receipt_context, build_receipt_embed, build_receipt_rows, format_receipt_summary
+from app.formatters import (
+    build_drive_intake_embed,
+    build_drive_receipt_context,
+    build_receipt_embed,
+    build_receipt_links_view,
+    build_receipt_rows,
+    format_receipt_summary,
+)
 from app.gemini_client import GeminiReceiptExtractor
 from app.google_workspace import DriveImageFile, GoogleWorkspaceClient
 from app.models import ReceiptExtraction
+from app.team_intake import DriveWatchRoute
 
 
 logger = logging.getLogger(__name__)
@@ -36,37 +44,38 @@ class DriveReceiptWatcher:
         gemini: GeminiReceiptExtractor,
         google_workspace: GoogleWorkspaceClient,
         notifier,
-        source_folder_id: str,
-        processed_folder_id: str,
+        routes: list[DriveWatchRoute],
     ) -> None:
         self.gemini = gemini
         self.google_workspace = google_workspace
         self.notifier = notifier
-        self.source_folder_id = source_folder_id
-        self.processed_folder_id = processed_folder_id
+        self.routes = routes
 
     async def ensure_receipt_sheet(self) -> None:
         await self.google_workspace.ensure_receipt_sheet()
 
     async def scan_once(self) -> DriveWatchScanSummary:
-        files = await self.google_workspace.list_image_files(folder_id=self.source_folder_id)
-        summary = DriveWatchScanSummary(scanned=len(files))
+        summary = DriveWatchScanSummary()
 
-        for drive_file in files:
-            try:
-                await self._process_file(drive_file)
-            except Exception:  # noqa: BLE001
-                summary.failed += 1
-                logger.exception("Drive watcher failed for file %s", drive_file.file_id)
-                continue
+        for route in self.routes:
+            files = await self.google_workspace.list_image_files(folder_id=route.source_folder_id)
+            summary.scanned += len(files)
 
-            summary.processed += 1
-            summary.notified += 1
-            summary.moved += 1
+            for drive_file in files:
+                try:
+                    await self._process_file(route, drive_file)
+                except Exception:  # noqa: BLE001
+                    summary.failed += 1
+                    logger.exception("Drive watcher failed for file %s on route %s", drive_file.file_id, route.key)
+                    continue
+
+                summary.processed += 1
+                summary.notified += 1
+                summary.moved += 1
 
         return summary
 
-    async def _process_file(self, drive_file: DriveImageFile) -> None:
+    async def _process_file(self, route: DriveWatchRoute, drive_file: DriveImageFile) -> None:
         image_bytes = await self.google_workspace.download_file(file_id=drive_file.file_id)
         extraction = await self.gemini.extract(
             image_bytes=image_bytes,
@@ -79,6 +88,8 @@ class DriveReceiptWatcher:
                 file_id=drive_file.file_id,
                 file_name=drive_file.name,
                 file_url=drive_file.web_view_link,
+                source_name=f"google-drive:{route.key}",
+                author_tag=route.label,
             ),
             extraction=extraction,
             drive_file_id=drive_file.file_id,
@@ -87,6 +98,7 @@ class DriveReceiptWatcher:
         await self.google_workspace.append_receipt_rows(rows)
 
         await self.notifier.send_receipt_notification(
+            route=route,
             file_name=drive_file.name,
             image_bytes=image_bytes,
             extraction=extraction,
@@ -94,7 +106,7 @@ class DriveReceiptWatcher:
         )
         await self.google_workspace.move_file(
             file_id=drive_file.file_id,
-            destination_folder_id=self.processed_folder_id,
+            destination_folder_id=route.processed_folder_id,
         )
 
 
@@ -111,7 +123,15 @@ class DriveWatcherClient(discord.Client):
         self.run_error: Exception | None = None
         self.last_summary: DriveWatchScanSummary | None = None
         self._watch_task: asyncio.Task[None] | None = None
-        self._notify_channel = settings.discord_notify_channel_id or 0
+        self._routes = settings.drive_watch_routes or [
+            DriveWatchRoute(
+                key="default",
+                label="Default Intake",
+                discord_channel_id=settings.discord_notify_channel_id or 0,
+                source_folder_id=settings.google_drive_watch_source_folder_id or "",
+                processed_folder_id=settings.google_drive_watch_processed_folder_id or "",
+            )
+        ]
         workspace = GoogleWorkspaceClient(
             credentials=settings.google_credentials,
             drive_folder_id=(
@@ -130,8 +150,7 @@ class DriveWatcherClient(discord.Client):
             ),
             google_workspace=workspace,
             notifier=self,
-            source_folder_id=settings.google_drive_watch_source_folder_id or "",
-            processed_folder_id=settings.google_drive_watch_processed_folder_id or "",
+            routes=self._routes,
         )
 
     async def setup_hook(self) -> None:
@@ -144,28 +163,49 @@ class DriveWatcherClient(discord.Client):
     async def send_receipt_notification(
         self,
         *,
+        route: DriveWatchRoute,
         file_name: str,
         image_bytes: bytes,
         extraction: ReceiptExtraction,
         drive_file_url: str | None,
     ) -> None:
-        channel = self.get_channel(self._notify_channel)
+        channel = self.get_channel(route.discord_channel_id)
         if channel is None:
-            channel = await self.fetch_channel(self._notify_channel)
+            channel = await self.fetch_channel(route.discord_channel_id)
         if not hasattr(channel, "send"):
-            raise RuntimeError(f"Channel {self._notify_channel} is not messageable.")
+            raise RuntimeError(f"Channel {route.discord_channel_id} is not messageable.")
 
-        file = discord.File(BytesIO(image_bytes), filename=file_name)
-        embed = build_receipt_embed(
-            title="Drive Watch Receipt",
+        intake_file = discord.File(BytesIO(image_bytes), filename=file_name)
+        intake_message = await channel.send(
+            file=intake_file,
+            embed=build_drive_intake_embed(
+                route_label=route.label,
+                file_name=file_name,
+                drive_file_url=drive_file_url,
+                image_url=f"attachment://{file_name}",
+            ),
+        )
+
+        result_embed = build_receipt_embed(
+            title=f"Drive Receipt // {route.label}",
             extraction=extraction,
             drive_file_url=drive_file_url,
-            source_label=file_name,
-            image_url=f"attachment://{file_name}",
+            spreadsheet_url=self.watcher.google_workspace.spreadsheet_url,
+            source_label=f"{route.label} / {file_name}",
         )
-        embed.description = format_receipt_summary(extraction, drive_file_url)
+        result_embed.description = format_receipt_summary(extraction, drive_file_url)
+        view = build_receipt_links_view(
+            drive_file_url=drive_file_url,
+            spreadsheet_url=self.watcher.google_workspace.spreadsheet_url,
+        )
 
-        await channel.send(file=file, embed=embed)
+        response_target: discord.abc.Messageable = channel
+        try:
+            response_target = await intake_message.create_thread(name=f"drive-{route.key}-{intake_message.id}")
+        except discord.HTTPException:
+            logger.warning("Could not create thread for drive intake message %s", intake_message.id)
+
+        await response_target.send(embed=result_embed, view=view)
 
     async def _run_watch_loop(self) -> None:
         try:

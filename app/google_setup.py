@@ -8,6 +8,7 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
 from app.google_workspace import GoogleWorkspaceClient
+from app.team_intake import DriveWatchRoute, TeamMemberSpec, build_drive_watch_routes_env_value
 
 
 FOLDER_MIME_TYPE = "application/vnd.google-apps.folder"
@@ -38,6 +39,35 @@ class GoogleDriveWatchBootstrapResult:
 
     def as_dict(self) -> dict[str, str | None]:
         return asdict(self)
+
+
+@dataclass(slots=True)
+class GoogleDriveWatchRouteResource:
+    key: str
+    label: str
+    source_folder_id: str
+    source_folder_url: str
+    processed_folder_id: str
+    processed_folder_url: str
+
+    def as_dict(self) -> dict[str, str]:
+        return asdict(self)
+
+
+@dataclass(slots=True)
+class GoogleTeamDriveWatchBootstrapResult:
+    parent_folder_id: str | None
+    parent_folder_url: str | None
+    routes: list[GoogleDriveWatchRouteResource]
+    shared_with_email: str | None
+
+    def as_dict(self) -> dict[str, object]:
+        return {
+            "parent_folder_id": self.parent_folder_id,
+            "parent_folder_url": self.parent_folder_url,
+            "routes": [route.as_dict() for route in self.routes],
+            "shared_with_email": self.shared_with_email,
+        }
 
 
 class GoogleResourceBootstrapper:
@@ -100,6 +130,61 @@ class GoogleResourceBootstrapper:
             processed_folder_url=processed_folder.get("webViewLink")
             or f"https://drive.google.com/drive/folders/{processed_folder['id']}",
             parent_folder_id=parent_folder_id,
+            shared_with_email=share_with_email,
+        )
+
+    def bootstrap_team_drive_watch(
+        self,
+        *,
+        members: list[TeamMemberSpec],
+        parent_folder_id: str | None = None,
+        parent_folder_name: str | None = None,
+        share_with_email: str | None = None,
+    ) -> GoogleTeamDriveWatchBootstrapResult:
+        resolved_parent_folder: dict[str, str] | None = None
+        if parent_folder_id:
+            resolved_parent_folder = {
+                "id": parent_folder_id,
+                "webViewLink": f"https://drive.google.com/drive/folders/{parent_folder_id}",
+            }
+        elif parent_folder_name:
+            resolved_parent_folder = self._ensure_drive_folder(parent_folder_name)
+
+        routes: list[GoogleDriveWatchRouteResource] = []
+        for member in members:
+            source_folder = self._ensure_drive_folder(
+                member.source_folder_name,
+                parent_folder_id=resolved_parent_folder["id"] if resolved_parent_folder else None,
+            )
+            processed_folder = self._ensure_drive_folder(
+                member.processed_folder_name,
+                parent_folder_id=source_folder["id"],
+            )
+
+            if share_with_email:
+                self._share_file(source_folder["id"], share_with_email)
+                self._share_file(processed_folder["id"], share_with_email)
+
+            routes.append(
+                GoogleDriveWatchRouteResource(
+                    key=member.key,
+                    label=member.label,
+                    source_folder_id=source_folder["id"],
+                    source_folder_url=source_folder.get("webViewLink")
+                    or f"https://drive.google.com/drive/folders/{source_folder['id']}",
+                    processed_folder_id=processed_folder["id"],
+                    processed_folder_url=processed_folder.get("webViewLink")
+                    or f"https://drive.google.com/drive/folders/{processed_folder['id']}",
+                )
+            )
+
+        if share_with_email and resolved_parent_folder is not None:
+            self._share_file(resolved_parent_folder["id"], share_with_email)
+
+        return GoogleTeamDriveWatchBootstrapResult(
+            parent_folder_id=resolved_parent_folder["id"] if resolved_parent_folder else None,
+            parent_folder_url=resolved_parent_folder.get("webViewLink") if resolved_parent_folder else None,
+            routes=routes,
             shared_with_email=share_with_email,
         )
 
@@ -227,6 +312,22 @@ def build_drive_watch_env_updates(
         "GOOGLE_DRIVE_WATCH_SOURCE_FOLDER_URL": source_folder_url,
         "GOOGLE_DRIVE_WATCH_PROCESSED_FOLDER_ID": processed_folder_id,
         "GOOGLE_DRIVE_WATCH_PROCESSED_FOLDER_URL": processed_folder_url,
+    }
+    if poll_interval_seconds is not None:
+        values["DRIVE_POLL_INTERVAL_SECONDS"] = str(poll_interval_seconds)
+    return values
+
+
+def build_team_drive_watch_env_updates(
+    *,
+    routes: list[DriveWatchRoute],
+    poll_interval_seconds: int | None = None,
+) -> dict[str, str]:
+    if poll_interval_seconds is not None and poll_interval_seconds <= 0:
+        raise ValueError("poll_interval_seconds must be greater than 0.")
+
+    values = {
+        "DRIVE_WATCH_ROUTES_JSON": build_drive_watch_routes_env_value(routes),
     }
     if poll_interval_seconds is not None:
         values["DRIVE_POLL_INTERVAL_SECONDS"] = str(poll_interval_seconds)

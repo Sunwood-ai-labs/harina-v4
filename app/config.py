@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
 
 from app.google_auth import build_google_credentials, load_oauth_client_info, load_service_account_info
+from app.team_intake import DriveWatchRoute, parse_drive_watch_routes_json
 
 
 load_dotenv()
@@ -36,15 +37,23 @@ class Settings(BaseModel):
         default=None,
         alias="GOOGLE_DRIVE_WATCH_PROCESSED_FOLDER_ID",
     )
+    drive_watch_routes_json: str | None = Field(default=None, alias="DRIVE_WATCH_ROUTES_JSON")
     drive_poll_interval_seconds: int = Field(default=60, alias="DRIVE_POLL_INTERVAL_SECONDS")
 
     @property
     def allowed_channel_ids(self) -> set[int]:
-        if not self.discord_channel_ids:
-            return set()
+        values: set[int] = set()
 
-        values = {value.strip() for value in self.discord_channel_ids.split(",") if value.strip()}
-        return {int(value) for value in values}
+        if self.discord_channel_ids:
+            parsed_values = {value.strip() for value in self.discord_channel_ids.split(",") if value.strip()}
+            values.update(int(value) for value in parsed_values)
+
+        values.update(route.discord_channel_id for route in self.drive_watch_routes)
+        return values
+
+    @property
+    def drive_watch_routes(self) -> list[DriveWatchRoute]:
+        return parse_drive_watch_routes_json(self.drive_watch_routes_json)
 
     @property
     def gemini_api_keys(self) -> list[str]:
@@ -125,6 +134,7 @@ class Settings(BaseModel):
         "google_drive_folder_id",
         "google_drive_watch_source_folder_id",
         "google_drive_watch_processed_folder_id",
+        "drive_watch_routes_json",
         "google_sheets_spreadsheet_id",
         mode="before",
     )
@@ -190,6 +200,16 @@ class Settings(BaseModel):
             raise RuntimeError(
                 "Set GOOGLE_SHEETS_SPREADSHEET_ID in your environment or .env before running drive watch commands."
             )
+        if self.drive_watch_routes:
+            for route in self.drive_watch_routes:
+                if not route.source_folder_id:
+                    raise RuntimeError("Each drive watch route must include source_folder_id.")
+                if not route.processed_folder_id:
+                    raise RuntimeError("Each drive watch route must include processed_folder_id.")
+                if route.discord_channel_id <= 0:
+                    raise RuntimeError("Each drive watch route must include a positive discord_channel_id.")
+            return
+
         if not self.google_drive_watch_source_folder_id:
             raise RuntimeError(
                 "Set GOOGLE_DRIVE_WATCH_SOURCE_FOLDER_ID in your environment or .env before running drive watch commands."

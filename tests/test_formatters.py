@@ -2,6 +2,8 @@ from pathlib import Path
 
 from app.formatters import (
     RECEIPT_SHEET_HEADERS,
+    build_debug_status_embed,
+    build_drive_intake_embed,
     build_drive_file_name,
     build_local_receipt_context,
     build_receipt_embed,
@@ -107,3 +109,31 @@ def test_build_local_receipt_context_uses_cli_labels(tmp_path: Path) -> None:
     assert context.author_tag == "tester"
     assert context.attachment_name == "receipt.jpg"
     assert context.attachment_url == str(image_path.resolve())
+
+
+def test_build_debug_status_embed_contains_operational_fields() -> None:
+    embed = build_debug_status_embed(
+        test_prefix="[HARINA-TEST]",
+        caption="debug-log-check",
+        image_count=3,
+        timeout_seconds=45,
+    )
+
+    assert embed.title == "[HARINA-TEST] debug-log-check"
+    assert any(field.name == "Mode" and "Discord Upload Verification" in field.value for field in embed.fields)
+    assert any(field.name == "Images" and field.value == "3" for field in embed.fields)
+    assert any(field.name == "Timeout" and field.value == "45s" for field in embed.fields)
+
+
+def test_build_drive_intake_embed_contains_route_status() -> None:
+    embed = build_drive_intake_embed(
+        route_label="Alice",
+        file_name="receipt.jpg",
+        drive_file_url="https://drive.example/file/123",
+        image_url="attachment://receipt.jpg",
+    )
+
+    assert embed.title == "HARINA V4 Intake // Alice"
+    assert any(field.name == "Route" and field.value == "Alice" for field in embed.fields)
+    assert any(field.name == "Status" and field.value == "Processing" for field in embed.fields)
+    assert embed.image.url == "attachment://receipt.jpg"

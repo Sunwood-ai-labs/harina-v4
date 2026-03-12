@@ -9,6 +9,7 @@ import discord
 from app.bot import ERROR_EMBED_TITLE, ReceiptBot, build_receipt_thread_name
 from app.config import Settings
 from app.discord_debug import DiscordDebugSession, collect_debug_snapshot, serialize_message
+from app.formatters import build_debug_status_embed
 
 
 logger = logging.getLogger(__name__)
@@ -65,7 +66,16 @@ class DiscordUploadTestBot(ReceiptBot):
                 image_paths=[str(image_path.resolve()) for image_path in self.image_paths],
                 caption=self.caption,
             )
-            self.sent_message = await channel.send(content=content, files=files)
+            self.sent_message = await channel.send(
+                content=content,
+                files=files,
+                embed=build_debug_status_embed(
+                    test_prefix=prefix,
+                    caption=self.caption,
+                    image_count=len(self.image_paths),
+                    timeout_seconds=self.timeout_seconds,
+                ),
+            )
             logger.info("Sent Discord upload test message %s", self.sent_message.id)
             self.debug_session.write_event("upload_test_message_sent", message=serialize_message(self.sent_message))
 

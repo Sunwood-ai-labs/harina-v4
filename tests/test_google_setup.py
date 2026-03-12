@@ -4,8 +4,10 @@ from app.google_setup import (
     GoogleResourceBootstrapper,
     build_drive_watch_env_updates,
     build_google_env_updates,
+    build_team_drive_watch_env_updates,
     upsert_env_file,
 )
+from app.team_intake import DriveWatchRoute, build_team_member_spec
 
 
 class _Execute:
@@ -213,3 +215,58 @@ def test_build_drive_watch_env_updates_rejects_non_positive_poll_interval() -> N
         assert "greater than 0" in str(exc)
     else:
         raise AssertionError("Expected ValueError for non-positive poll interval")
+
+
+def test_bootstrap_team_drive_watch_creates_member_folders(monkeypatch) -> None:
+    drive = _FakeDriveService(folder_files=[], spreadsheet_files=[])
+
+    monkeypatch.setattr(
+        "app.google_setup.build",
+        lambda service_name, version, credentials, cache_discovery: drive,
+    )
+
+    members = [build_team_member_spec("Alice"), build_team_member_spec("Bob")]
+    result = GoogleResourceBootstrapper(credentials=object()).bootstrap_team_drive_watch(
+        members=members,
+        parent_folder_name="Harina V4 Team Intake",
+        share_with_email="owner@example.com",
+    )
+
+    assert result.parent_folder_id == "folder-1"
+    assert [route.key for route in result.routes] == ["alice", "bob"]
+    assert drive.files_service.created == [
+        {"name": "Harina V4 Team Intake", "mimeType": "application/vnd.google-apps.folder"},
+        {"name": "Alice", "mimeType": "application/vnd.google-apps.folder", "parents": ["folder-1"]},
+        {"name": "_processed", "mimeType": "application/vnd.google-apps.folder", "parents": ["folder-2"]},
+        {"name": "Bob", "mimeType": "application/vnd.google-apps.folder", "parents": ["folder-1"]},
+        {"name": "_processed", "mimeType": "application/vnd.google-apps.folder", "parents": ["folder-4"]},
+    ]
+    assert drive.permissions_service.calls == [
+        ("folder-2", "owner@example.com"),
+        ("folder-3", "owner@example.com"),
+        ("folder-4", "owner@example.com"),
+        ("folder-5", "owner@example.com"),
+        ("folder-1", "owner@example.com"),
+    ]
+
+
+def test_build_team_drive_watch_env_updates_serializes_routes() -> None:
+    updates = build_team_drive_watch_env_updates(
+        routes=[
+            DriveWatchRoute(
+                key="alice",
+                label="Alice",
+                discord_channel_id=111,
+                channel_name="alice",
+                source_folder_id="source-1",
+                source_folder_url="https://drive.example/source-1",
+                processed_folder_id="processed-1",
+                processed_folder_url="https://drive.example/processed-1",
+            )
+        ],
+        poll_interval_seconds=75,
+    )
+
+    assert '"key":"alice"' in updates["DRIVE_WATCH_ROUTES_JSON"]
+    assert '"discord_channel_id":111' in updates["DRIVE_WATCH_ROUTES_JSON"]
+    assert updates["DRIVE_POLL_INTERVAL_SECONDS"] == "75"

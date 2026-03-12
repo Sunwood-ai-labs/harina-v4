@@ -52,6 +52,13 @@ RECEIPT_SHEET_HEADERS = [
 ]
 
 MAX_EMBED_LINE_ITEMS = 6
+DEBUG_EMBED_PALETTE = (
+    (255, 99, 132),
+    (54, 162, 235),
+    (75, 192, 192),
+    (255, 159, 64),
+    (153, 102, 255),
+)
 
 
 @dataclass(slots=True)
@@ -117,10 +124,11 @@ def build_drive_receipt_context(
     file_name: str,
     file_url: str | None,
     source_name: str = "google-drive-watch",
+    author_tag: str = "google-drive",
 ) -> ReceiptRecordContext:
     return ReceiptRecordContext(
         channel_name=source_name,
-        author_tag="google-drive",
+        author_tag=author_tag,
         attachment_id=file_id,
         attachment_name=file_name,
         attachment_url=file_url or "",
@@ -246,6 +254,50 @@ def build_receipt_embed(
     return embed
 
 
+def build_drive_intake_embed(
+    *,
+    route_label: str,
+    file_name: str,
+    drive_file_url: str | None,
+    image_url: str | None = None,
+) -> discord.Embed:
+    embed = discord.Embed(
+        title=f"HARINA V4 Intake // {route_label}",
+        description="Google Drive watch detected a new image and started receipt processing.",
+        color=discord.Color.from_rgb(52, 152, 219),
+    )
+    embed.add_field(name="Route", value=route_label, inline=True)
+    embed.add_field(name="Image", value=file_name, inline=True)
+    embed.add_field(name="Status", value="Processing", inline=True)
+    if drive_file_url:
+        embed.add_field(name="Drive Source", value=drive_file_url, inline=False)
+    if image_url:
+        embed.set_image(url=image_url)
+    embed.set_footer(text="HARINA V4 Drive Watch")
+    return embed
+
+
+def build_debug_status_embed(
+    *,
+    test_prefix: str,
+    caption: str,
+    image_count: int,
+    timeout_seconds: float,
+) -> discord.Embed:
+    title = f"{test_prefix} {caption}".strip()
+    embed = discord.Embed(
+        title=title,
+        description="Diagnostics packet queued. HARINA will upload the image set and wait for the processing thread.",
+        color=_pick_debug_color(title),
+    )
+    embed.add_field(name="Mode", value="Discord Upload Verification", inline=True)
+    embed.add_field(name="Images", value=str(image_count), inline=True)
+    embed.add_field(name="Timeout", value=f"{timeout_seconds:.0f}s", inline=True)
+    embed.add_field(name="Trigger", value=f"`{title}`", inline=False)
+    embed.set_footer(text="HARINA V4 debug pipeline")
+    return embed
+
+
 def build_receipt_links_view(
     *,
     drive_file_url: str | None,
@@ -359,3 +411,9 @@ def sanitize_segment(value: str) -> str:
     value = value.strip()
     value = re.sub(r"[^\w.\-]+", "-", value, flags=re.UNICODE)
     return value.strip("-")[:48]
+
+
+def _pick_debug_color(seed: str) -> discord.Color:
+    index = sum(ord(character) for character in seed) % len(DEBUG_EMBED_PALETTE)
+    red, green, blue = DEBUG_EMBED_PALETTE[index]
+    return discord.Color.from_rgb(red, green, blue)

@@ -3,6 +3,7 @@ import asyncio
 from app.drive_watcher import DriveReceiptWatcher
 from app.google_workspace import DriveImageFile
 from app.models import ReceiptExtraction, ReceiptLineItem
+from app.team_intake import DriveWatchRoute
 
 
 class _FakeGemini:
@@ -62,6 +63,7 @@ class _FakeNotifier:
     async def send_receipt_notification(
         self,
         *,
+        route: DriveWatchRoute,
         file_name: str,
         image_bytes: bytes,
         extraction: ReceiptExtraction,
@@ -69,6 +71,7 @@ class _FakeNotifier:
     ) -> None:
         self.calls.append(
             {
+                "route": route,
                 "file_name": file_name,
                 "image_bytes": image_bytes,
                 "extraction": extraction,
@@ -84,8 +87,15 @@ def test_drive_watcher_processes_files_and_moves_them() -> None:
         gemini=_FakeGemini(),
         google_workspace=workspace,
         notifier=notifier,
-        source_folder_id="source-folder",
-        processed_folder_id="processed-folder",
+        routes=[
+            DriveWatchRoute(
+                key="alice",
+                label="Alice",
+                discord_channel_id=123,
+                source_folder_id="source-folder",
+                processed_folder_id="processed-folder",
+            )
+        ],
     )
 
     summary = asyncio.run(watcher.scan_once())
@@ -96,12 +106,13 @@ def test_drive_watcher_processes_files_and_moves_them() -> None:
     assert summary.notified == 1
     assert summary.moved == 1
     assert len(workspace.rows) == 2
-    assert workspace.rows[0][4] == "google-drive-watch"
+    assert workspace.rows[0][4] == "google-drive:alice"
     assert workspace.rows[0][9] == "drive-file-123"
     assert workspace.rows[0][12] == "drive-file-123"
     assert workspace.rows[0][31] == "Cabbage"
     assert workspace.rows[1][31] == "Juice"
     assert workspace.moves == [("drive-file-123", "processed-folder")]
+    assert notifier.calls[0]["route"].key == "alice"
     assert notifier.calls[0]["file_name"] == "receipt.jpg"
     assert notifier.calls[0]["image_bytes"] == b"drive-image"
     assert "Cafe Harina" == notifier.calls[0]["extraction"].merchant_name
@@ -116,8 +127,15 @@ def test_drive_watcher_continues_after_file_failure() -> None:
         gemini=_FakeGemini(),
         google_workspace=_BrokenWorkspace(),
         notifier=_FakeNotifier(),
-        source_folder_id="source-folder",
-        processed_folder_id="processed-folder",
+        routes=[
+            DriveWatchRoute(
+                key="alice",
+                label="Alice",
+                discord_channel_id=123,
+                source_folder_id="source-folder",
+                processed_folder_id="processed-folder",
+            )
+        ],
     )
 
     summary = asyncio.run(watcher.scan_once())

@@ -26,6 +26,7 @@ from app.google_setup import (
     upsert_env_file,
 )
 from app.local_receipt_runner import run_local_receipt_process
+from app.team_setup import run_team_intake_setup
 from app.test_asset_runner import DEFAULT_TEST_ASSET_DIR, run_test_asset_suite
 
 
@@ -185,6 +186,56 @@ def build_parser() -> argparse.ArgumentParser:
         help="Allow the CLI-side test path to upload to Drive and append to Sheets.",
     )
     test_docs_public_parser.set_defaults(handler=handle_test_docs_public)
+
+    setup_parser = subparsers.add_parser(
+        "setup",
+        help="Provision Discord channels and Google Drive folders for HARINA intake routing.",
+    )
+    setup_subparsers = setup_parser.add_subparsers(dest="setup_command", required=True)
+
+    setup_team_intake_parser = setup_subparsers.add_parser(
+        "team-intake",
+        help="Create a HARINA V4 category, one channel per member, and matching Drive watch folders.",
+    )
+    setup_team_intake_parser.add_argument("--guild-id", type=int, required=True, help="Discord guild ID.")
+    setup_team_intake_parser.add_argument(
+        "--category-name",
+        default="HARINA V4",
+        help="Discord category name. Default: HARINA V4",
+    )
+    setup_team_intake_parser.add_argument(
+        "--member",
+        action="append",
+        required=True,
+        help="Repeat for each intake member, for example: --member Alice --member Bob --member Carol",
+    )
+    setup_team_intake_parser.add_argument(
+        "--drive-parent-folder-id",
+        default=None,
+        help="Optional existing Drive parent folder ID. Defaults to GOOGLE_DRIVE_FOLDER_ID when set.",
+    )
+    setup_team_intake_parser.add_argument(
+        "--drive-parent-folder-name",
+        default="Harina V4 Team Intake",
+        help="Drive parent folder name when no parent folder ID is provided.",
+    )
+    setup_team_intake_parser.add_argument(
+        "--share-with-email",
+        default=None,
+        help="Optional Google account email to share the created folders with.",
+    )
+    setup_team_intake_parser.add_argument(
+        "--poll-interval-seconds",
+        type=int,
+        default=60,
+        help="Value to save into DRIVE_POLL_INTERVAL_SECONDS. Default: 60",
+    )
+    setup_team_intake_parser.add_argument(
+        "--env-file",
+        default=None,
+        help="Optional .env file to update with DISCORD_CHANNEL_IDS and DRIVE_WATCH_ROUTES_JSON.",
+    )
+    setup_team_intake_parser.set_defaults(handler=handle_setup_team_intake)
 
     drive_parser = subparsers.add_parser("drive", help="Watch Google Drive folders and forward receipt notifications.")
     drive_subparsers = drive_parser.add_subparsers(dest="drive_command", required=True)
@@ -521,6 +572,31 @@ def handle_test_docs_public(args: Namespace, settings: Settings | None) -> None:
     print(json.dumps(summary, ensure_ascii=True, indent=2))
 
 
+def handle_setup_team_intake(args: Namespace, settings: Settings | None) -> None:
+    if settings is None:
+        raise RuntimeError("Setup settings were not loaded.")
+    if not settings.has_google_auth():
+        raise RuntimeError(
+            "Configure either GOOGLE_SERVICE_ACCOUNT_JSON / GOOGLE_SERVICE_ACCOUNT_KEY_FILE or "
+            "GOOGLE_OAUTH_CLIENT_JSON / GOOGLE_OAUTH_CLIENT_SECRET_FILE plus GOOGLE_OAUTH_REFRESH_TOKEN."
+        )
+
+    summary = asyncio.run(
+        run_team_intake_setup(
+            settings=settings,
+            guild_id=args.guild_id,
+            category_name=args.category_name,
+            member_labels=args.member,
+            drive_parent_folder_id=args.drive_parent_folder_id or os.getenv("GOOGLE_DRIVE_FOLDER_ID"),
+            drive_parent_folder_name=args.drive_parent_folder_name,
+            share_with_email=args.share_with_email,
+            poll_interval_seconds=args.poll_interval_seconds,
+            env_file=Path(args.env_file) if args.env_file else None,
+        )
+    )
+    print(json.dumps(summary, ensure_ascii=True, indent=2))
+
+
 def handle_drive_watch(args: Namespace, settings: Settings | None) -> None:
     if settings is None:
         raise RuntimeError("Drive watcher settings were not loaded.")
@@ -758,6 +834,8 @@ def main() -> None:
         )
     elif args.command == "drive":
         settings = load_settings(require_discord=True, require_gemini=True)
+    elif args.command == "setup":
+        settings = load_settings(require_discord=True)
     args.handler(args, settings)
 
 

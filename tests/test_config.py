@@ -110,6 +110,32 @@ def test_require_drive_watch_accepts_complete_configuration() -> None:
     assert settings.drive_poll_interval_seconds == 30
 
 
+def test_drive_watch_routes_json_populates_routes_and_allowed_channels() -> None:
+    settings = Settings.model_validate(
+        {
+            "DISCORD_TOKEN": "discord-token",
+            "GEMINI_API_KEY": "gemini-key",
+            "GOOGLE_OAUTH_CLIENT_JSON": (
+                '{"installed":{"client_id":"client-id","client_secret":"client-secret",'
+                '"token_uri":"https://oauth2.googleapis.com/token"}}'
+            ),
+            "GOOGLE_OAUTH_REFRESH_TOKEN": "refresh-token",
+            "GOOGLE_SHEETS_SPREADSHEET_ID": "sheet-id",
+            "DRIVE_WATCH_ROUTES_JSON": (
+                '[{"key":"alice","label":"Alice","discord_channel_id":111,'
+                '"source_folder_id":"source-1","processed_folder_id":"processed-1"},'
+                '{"key":"bob","label":"Bob","discord_channel_id":222,'
+                '"source_folder_id":"source-2","processed_folder_id":"processed-2"}]'
+            ),
+        }
+    )
+
+    settings.require_drive_watch()
+
+    assert [route.key for route in settings.drive_watch_routes] == ["alice", "bob"]
+    assert settings.allowed_channel_ids == {111, 222}
+
+
 def test_drive_poll_interval_must_be_positive() -> None:
     with pytest.raises(ValueError, match="greater than 0"):
         Settings.model_validate(

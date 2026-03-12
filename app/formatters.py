@@ -261,6 +261,7 @@ def build_drive_intake_embed(
     drive_file_url: str | None,
     image_url: str | None = None,
 ) -> discord.Embed:
+    del drive_file_url
     embed = discord.Embed(
         title=f"HARINA V4 Intake // {route_label}",
         description="Google Drive watch detected a new image and started receipt processing.",
@@ -269,8 +270,6 @@ def build_drive_intake_embed(
     embed.add_field(name="Route", value=route_label, inline=True)
     embed.add_field(name="Image", value=file_name, inline=True)
     embed.add_field(name="Status", value="Processing", inline=True)
-    if drive_file_url:
-        embed.add_field(name="Drive Source", value=drive_file_url, inline=False)
     if image_url:
         embed.set_image(url=image_url)
     embed.set_footer(text="HARINA V4 Drive Watch")

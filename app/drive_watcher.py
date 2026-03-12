@@ -14,7 +14,6 @@ from app.formatters import (
     build_receipt_embed,
     build_receipt_links_view,
     build_receipt_rows,
-    format_receipt_summary,
 )
 from app.gemini_client import GeminiReceiptExtractor
 from app.google_workspace import DriveImageFile, GoogleWorkspaceClient
@@ -196,7 +195,6 @@ class DriveWatcherClient(discord.Client):
             spreadsheet_url=self.watcher.google_workspace.spreadsheet_url,
             source_label=f"{route.label} / {file_name}",
         )
-        result_embed.description = format_receipt_summary(extraction, drive_file_url)
         view = build_receipt_links_view(
             drive_file_url=drive_file_url,
             spreadsheet_url=self.watcher.google_workspace.spreadsheet_url,

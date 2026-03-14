@@ -44,6 +44,7 @@ RECEIPT_SHEET_HEADERS = [
     "rowType",
     "itemIndex",
     "itemName",
+    "itemCategory",
     "itemQuantity",
     "itemUnitPrice",
     "itemTotalPrice",
@@ -170,6 +171,7 @@ def build_receipt_rows(
                 "",
                 "",
                 "",
+                "",
                 serialized_line_items,
             ]
         ]
@@ -183,6 +185,7 @@ def build_receipt_rows(
                 "line_item",
                 str(index),
                 item.name or "",
+                item.category or "",
                 number_cell(item.quantity),
                 number_cell(item.unit_price),
                 number_cell(item.total_price),
@@ -368,7 +371,8 @@ def format_line_item_preview(items: list[ReceiptLineItem]) -> str | None:
     for index, item in enumerate(normalized_items[:MAX_EMBED_LINE_ITEMS], start=1):
         quantity = f" x{item.quantity:g}" if item.quantity is not None else ""
         total = f" ({item.total_price:g})" if item.total_price is not None else ""
-        preview_lines.append(f"{index}. {item.name or 'Unnamed item'}{quantity}{total}")
+        category = f" [{item.category}]" if item.category else ""
+        preview_lines.append(f"{index}. {item.name or 'Unnamed item'}{category}{quantity}{total}")
 
     remaining = len(normalized_items) - len(preview_lines)
     if remaining > 0:

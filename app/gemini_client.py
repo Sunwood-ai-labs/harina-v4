@@ -84,7 +84,14 @@ class GeminiReceiptExtractor:
         self._retry_count = retry_count
         self._sleep = sleep_func or asyncio.sleep
 
-    async def extract(self, *, image_bytes: bytes, mime_type: str, filename: str) -> ReceiptExtraction:
+    async def extract(
+        self,
+        *,
+        image_bytes: bytes,
+        mime_type: str,
+        filename: str,
+        category_options: list[str] | None = None,
+    ) -> ReceiptExtraction:
         last_retryable_error: Exception | None = None
 
         for client_index, client in enumerate(self._clients, start=1):
@@ -96,7 +103,10 @@ class GeminiReceiptExtractor:
                         model=self._model,
                         contents=[
                             types.Part.from_bytes(data=image_bytes, mime_type=mime_type),
-                            render_receipt_extraction_prompt(filename=filename),
+                            render_receipt_extraction_prompt(
+                                filename=filename,
+                                category_options=category_options,
+                            ),
                         ],
                         config=types.GenerateContentConfig(
                             temperature=0.1,

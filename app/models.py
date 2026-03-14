@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 
 class ReceiptLineItem(BaseModel):
     name: str | None = None
+    category: str | None = None
     quantity: float | None = None
     unit_price: float | None = None
     total_price: float | None = None
@@ -12,7 +13,7 @@ class ReceiptLineItem(BaseModel):
     def has_meaningful_data(self) -> bool:
         return any(
             value not in (None, "")
-            for value in (self.name, self.quantity, self.unit_price, self.total_price)
+            for value in (self.name, self.category, self.quantity, self.unit_price, self.total_price)
         )
 
 

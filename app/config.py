@@ -32,6 +32,10 @@ class Settings(BaseModel):
     google_drive_folder_id: str | None = Field(default=None, alias="GOOGLE_DRIVE_FOLDER_ID")
     google_sheets_spreadsheet_id: str | None = Field(default=None, alias="GOOGLE_SHEETS_SPREADSHEET_ID")
     google_sheets_sheet_name: str = Field(default="Receipts", alias="GOOGLE_SHEETS_SHEET_NAME")
+    google_sheets_category_sheet_name: str = Field(
+        default="Categories",
+        alias="GOOGLE_SHEETS_CATEGORY_SHEET_NAME",
+    )
     google_drive_watch_source_folder_id: str | None = Field(default=None, alias="GOOGLE_DRIVE_WATCH_SOURCE_FOLDER_ID")
     google_drive_watch_processed_folder_id: str | None = Field(
         default=None,
@@ -235,6 +239,9 @@ class Settings(BaseModel):
         self.google_sheets_sheet_name = self.google_sheets_sheet_name.strip()
         if not self.google_sheets_sheet_name:
             raise ValueError("GOOGLE_SHEETS_SHEET_NAME must not be blank.")
+        self.google_sheets_category_sheet_name = self.google_sheets_category_sheet_name.strip()
+        if not self.google_sheets_category_sheet_name:
+            raise ValueError("GOOGLE_SHEETS_CATEGORY_SHEET_NAME must not be blank.")
         return self
 
 

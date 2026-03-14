@@ -26,6 +26,7 @@ _RECEIPT_SCHEMA = {
     "line_items": [
         {
             "name": "string | null",
+            "category": "string | null",
             "quantity": "number | null",
             "unit_price": "number | null",
             "total_price": "number | null",
@@ -45,9 +46,12 @@ def _prompt_environment() -> Environment:
     )
 
 
-def render_receipt_extraction_prompt(*, filename: str) -> str:
+def render_receipt_extraction_prompt(*, filename: str, category_options: list[str] | None = None) -> str:
     template = _prompt_environment().get_template("receipt_extraction_prompt.j2")
+    normalized_category_options = [value for value in (category_options or []) if value]
     return template.render(
         filename=filename,
+        category_options=normalized_category_options,
+        category_options_json=json.dumps(normalized_category_options, ensure_ascii=False, indent=2),
         schema_json=json.dumps(_RECEIPT_SCHEMA, ensure_ascii=False, indent=2),
     )

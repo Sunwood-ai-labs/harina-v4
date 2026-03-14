@@ -70,7 +70,7 @@ class _FakeDriveService:
 
 def test_bootstrap_creates_resources_and_shares(monkeypatch) -> None:
     drive = _FakeDriveService(folder_files=[], spreadsheet_files=[])
-    ensured: list[tuple[str, str, str]] = []
+    ensured: list[tuple[str, str, str, str]] = []
 
     monkeypatch.setattr(
         "app.google_setup.build",
@@ -78,9 +78,17 @@ def test_bootstrap_creates_resources_and_shares(monkeypatch) -> None:
     )
 
     class _FakeWorkspaceClient:
-        def __init__(self, *, credentials, drive_folder_id: str, spreadsheet_id: str, sheet_name: str) -> None:
+        def __init__(
+            self,
+            *,
+            credentials,
+            drive_folder_id: str,
+            spreadsheet_id: str,
+            sheet_name: str,
+            category_sheet_name: str,
+        ) -> None:
             del credentials
-            ensured.append((drive_folder_id, spreadsheet_id, sheet_name))
+            ensured.append((drive_folder_id, spreadsheet_id, sheet_name, category_sheet_name))
 
         def _ensure_receipt_sheet_sync(self) -> None:
             return None
@@ -105,7 +113,7 @@ def test_bootstrap_creates_resources_and_shares(monkeypatch) -> None:
         }
     ]
     assert drive.permissions_service.calls == [("folder-1", "owner@example.com"), ("sheet-1", "owner@example.com")]
-    assert ensured == [("folder-1", "sheet-1", "Receipts")]
+    assert ensured == [("folder-1", "sheet-1", "Receipts", "Categories")]
 
 
 def test_bootstrap_drive_watch_creates_parented_folders_and_shares(monkeypatch) -> None:
@@ -166,6 +174,7 @@ def test_upsert_env_file_replaces_existing_keys(tmp_path: Path) -> None:
     assert "GOOGLE_SHEETS_SPREADSHEET_ID=sheet-123" in contents
     assert "GOOGLE_SHEETS_SPREADSHEET_URL=https://docs.google.com/spreadsheets/d/sheet-123/edit" in contents
     assert "GOOGLE_SHEETS_SHEET_NAME=Receipts" in contents
+    assert "GOOGLE_SHEETS_CATEGORY_SHEET_NAME=Categories" in contents
     assert "OTHER=value" in contents
 
 
@@ -184,6 +193,7 @@ def test_build_google_env_updates_supports_oauth() -> None:
     assert updates["GOOGLE_OAUTH_REFRESH_TOKEN"] == "refresh-token"
     assert updates["GOOGLE_DRIVE_FOLDER_URL"] == "https://drive.google.com/drive/folders/folder-123"
     assert updates["GOOGLE_SHEETS_SPREADSHEET_URL"] == "https://docs.google.com/spreadsheets/d/sheet-123/edit"
+    assert updates["GOOGLE_SHEETS_CATEGORY_SHEET_NAME"] == "Categories"
 
 
 def test_build_drive_watch_env_updates_includes_urls_and_poll_interval() -> None:

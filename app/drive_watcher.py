@@ -76,10 +76,16 @@ class DriveReceiptWatcher:
 
     async def _process_file(self, route: DriveWatchRoute, drive_file: DriveImageFile) -> None:
         image_bytes = await self.google_workspace.download_file(file_id=drive_file.file_id)
+        category_options = await self.google_workspace.list_receipt_categories()
         extraction = await self.gemini.extract(
             image_bytes=image_bytes,
             mime_type=drive_file.mime_type,
             filename=drive_file.name,
+            category_options=category_options,
+        )
+        await self.google_workspace.append_receipt_categories(
+            [item.category or "" for item in extraction.line_items],
+            source="gemini",
         )
 
         rows = build_receipt_rows(
@@ -141,6 +147,7 @@ class DriveWatcherClient(discord.Client):
             ),
             spreadsheet_id=settings.google_sheets_spreadsheet_id or "",
             sheet_name=settings.google_sheets_sheet_name,
+            category_sheet_name=settings.google_sheets_category_sheet_name,
         )
         self.watcher = DriveReceiptWatcher(
             gemini=GeminiReceiptExtractor(

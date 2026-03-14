@@ -81,6 +81,7 @@ class ReceiptBot(discord.Client):
                 drive_folder_id=settings.google_drive_folder_id or "",
                 spreadsheet_id=settings.google_sheets_spreadsheet_id or "",
                 sheet_name=settings.google_sheets_sheet_name,
+                category_sheet_name=settings.google_sheets_category_sheet_name,
             ),
         )
 

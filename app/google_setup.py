@@ -95,6 +95,7 @@ class GoogleResourceBootstrapper:
             drive_folder_id=folder["id"],
             spreadsheet_id=spreadsheet["spreadsheetId"],
             sheet_name=sheet_name,
+            category_sheet_name="Categories",
         )._ensure_receipt_sheet_sync()
 
         return GoogleResourceBootstrapResult(
@@ -276,6 +277,7 @@ def build_google_env_updates(
     spreadsheet_id: str,
     spreadsheet_url: str,
     sheet_name: str,
+    category_sheet_name: str = "Categories",
     service_account_key_file: str | None = None,
     oauth_client_secret_file: str | None = None,
     oauth_refresh_token: str | None = None,
@@ -286,6 +288,7 @@ def build_google_env_updates(
         "GOOGLE_SHEETS_SPREADSHEET_ID": spreadsheet_id,
         "GOOGLE_SHEETS_SPREADSHEET_URL": spreadsheet_url,
         "GOOGLE_SHEETS_SHEET_NAME": sheet_name,
+        "GOOGLE_SHEETS_CATEGORY_SHEET_NAME": category_sheet_name,
     }
     if service_account_key_file:
         values["GOOGLE_SERVICE_ACCOUNT_KEY_FILE"] = service_account_key_file

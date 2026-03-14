@@ -6,6 +6,14 @@ Numbers must be plain numbers without currency symbols or commas.
 Return each purchasable product as its own entry in line_items when it can be read confidently.
 Do not collapse multiple products into one generic line item.
 If the receipt lists quantities or unit prices, keep them on the matching product entry.
+For each line item, set category to the best matching category.
+{% if category_options %}
+Choose categories from this pre-approved list whenever possible:
+{{ category_options_json }}
+If none of these categories fit closely, you may propose one short new category name for that line item instead of forcing a bad match.
+{% else %}
+If no category list is provided, create one short category name per line item.
+{% endif %}
 Set confidence to a value between 0 and 1.
 Use snake_case keys matching this schema:
 {{ schema_json }}

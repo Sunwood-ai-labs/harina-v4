@@ -30,9 +30,10 @@ class _ServerError(Exception):
 class _FakeModels:
     def __init__(self, outcomes):
         self.outcomes = list(outcomes)
+        self.calls: list[dict[str, object]] = []
 
     def generate_content(self, **kwargs):
-        del kwargs
+        self.calls.append(kwargs)
         outcome = self.outcomes.pop(0)
         if isinstance(outcome, Exception):
             raise outcome
@@ -167,3 +168,26 @@ def test_extractor_retries_transient_errors_before_succeeding() -> None:
 
     assert result.merchant_name == "Cafe Harina"
     assert sleeps == [60]
+
+
+def test_extractor_includes_category_options_in_prompt() -> None:
+    client = _FakeClient([_FakeResponse('{"merchant_name":"Cafe Harina","total":1100}')])
+    extractor = GeminiReceiptExtractor(
+        api_keys=["primary"],
+        model="gemini-test",
+        client_factory=lambda _key: client,
+    )
+
+    result = asyncio.run(
+        extractor.extract(
+            image_bytes=b"receipt",
+            mime_type="image/jpeg",
+            filename="receipt.jpg",
+            category_options=["野菜・きのこ", "飲料"],
+        )
+    )
+
+    assert result.merchant_name == "Cafe Harina"
+    prompt = client.models.calls[0]["contents"][1]
+    assert '"野菜・きのこ"' in prompt
+    assert '"飲料"' in prompt

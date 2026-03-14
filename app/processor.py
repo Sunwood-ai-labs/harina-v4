@@ -81,11 +81,26 @@ class ReceiptProcessor:
         image_bytes: bytes,
         write_to_google: bool = True,
     ) -> ProcessedReceipt:
+        use_google_category_catalog = self.google_workspace is not None and write_to_google
+        category_options: list[str] = []
+        if use_google_category_catalog:
+            category_options = await self.google_workspace.list_receipt_categories()
+
         extraction = await self.gemini.extract(
             image_bytes=image_bytes,
             mime_type=mime_type,
             filename=filename,
+            category_options=category_options,
         )
+
+        if use_google_category_catalog:
+            await self.google_workspace.append_receipt_categories(
+                [
+                    item.category or ""
+                    for item in extraction.line_items
+                ],
+                source="gemini",
+            )
 
         drive_file_id: str | None = None
         drive_file_url: str | None = None

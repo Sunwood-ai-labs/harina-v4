@@ -9,8 +9,9 @@ from typing import Any
 from google import genai
 from google.genai import types
 
-from app.models import ReceiptExtraction
-from app.prompting import render_receipt_extraction_prompt
+from app.category_catalog import normalize_category_name
+from app.models import ReceiptCategoryInference, ReceiptExtraction, ReceiptLineItem
+from app.prompting import render_receipt_categorization_prompt, render_receipt_extraction_prompt
 
 
 logger = logging.getLogger(__name__)
@@ -92,6 +93,46 @@ class GeminiReceiptExtractor:
         filename: str,
         category_options: list[str] | None = None,
     ) -> ReceiptExtraction:
+        extraction = ReceiptExtraction.model_validate(
+            await self._generate_json_payload(
+                contents=[
+                    types.Part.from_bytes(data=image_bytes, mime_type=mime_type),
+                    render_receipt_extraction_prompt(filename=filename),
+                ],
+                parse_func=parse_receipt_payload,
+                request_name="receipt extraction",
+                temperature=0.1,
+            )
+        )
+
+        if not any(item.has_meaningful_data() for item in extraction.line_items):
+            return extraction
+
+        category_inference = ReceiptCategoryInference.model_validate(
+            await self._generate_json_payload(
+                contents=[
+                    types.Part.from_bytes(data=image_bytes, mime_type=mime_type),
+                    render_receipt_categorization_prompt(
+                        filename=filename,
+                        extraction=extraction,
+                        category_options=category_options,
+                    ),
+                ],
+                parse_func=parse_receipt_category_payload,
+                request_name="receipt categorization",
+                temperature=0.0,
+            )
+        )
+        return apply_line_item_categories(extraction, category_inference)
+
+    async def _generate_json_payload(
+        self,
+        *,
+        contents: list[object],
+        parse_func: Callable[[str], dict[str, object]],
+        request_name: str,
+        temperature: float,
+    ) -> dict[str, object]:
         last_retryable_error: Exception | None = None
 
         for client_index, client in enumerate(self._clients, start=1):
@@ -101,22 +142,16 @@ class GeminiReceiptExtractor:
                     response = await asyncio.to_thread(
                         client.models.generate_content,
                         model=self._model,
-                        contents=[
-                            types.Part.from_bytes(data=image_bytes, mime_type=mime_type),
-                            render_receipt_extraction_prompt(
-                                filename=filename,
-                                category_options=category_options,
-                            ),
-                        ],
+                        contents=contents,
                         config=types.GenerateContentConfig(
-                            temperature=0.1,
+                            temperature=temperature,
                             response_mime_type="application/json",
                         ),
                     )
                     if not response.text:
                         raise RuntimeError("Gemini returned an empty response.")
 
-                    return ReceiptExtraction.model_validate(parse_receipt_payload(response.text))
+                    return parse_func(response.text)
                 except Exception as exc:  # noqa: BLE001
                     if not is_retryable_gemini_error(exc):
                         raise
@@ -126,9 +161,10 @@ class GeminiReceiptExtractor:
                     if retry_failures >= self._retry_count:
                         if client_index < len(self._clients):
                             logger.warning(
-                                "Gemini %s error remained after %s retries on key %s/%s. Rotating to the next key.",
+                                "Gemini %s error remained after %s retries during %s on key %s/%s. Rotating to the next key.",
                                 error_kind,
                                 self._retry_count,
+                                request_name,
                                 client_index,
                                 len(self._clients),
                             )
@@ -137,8 +173,9 @@ class GeminiReceiptExtractor:
 
                     retry_failures += 1
                     logger.warning(
-                        "Gemini %s error on key %s/%s. Waiting %s seconds before retry %s/%s.",
+                        "Gemini %s error during %s on key %s/%s. Waiting %s seconds before retry %s/%s.",
                         error_kind,
+                        request_name,
                         client_index,
                         len(self._clients),
                         self._retry_delay_seconds,
@@ -163,3 +200,40 @@ def parse_receipt_payload(response_text: str) -> dict[str, object]:
         raise RuntimeError("Gemini returned JSON that was not a receipt object.")
 
     return payload
+
+
+def parse_receipt_category_payload(response_text: str) -> dict[str, object]:
+    payload = json.loads(response_text)
+    if isinstance(payload, list):
+        payload = {"line_items": payload}
+
+    if not isinstance(payload, dict):
+        raise RuntimeError("Gemini returned JSON that was not a category assignment object.")
+
+    line_items = payload.get("line_items")
+    if line_items is None:
+        raise RuntimeError("Gemini category response did not include line_items.")
+    if not isinstance(line_items, list):
+        raise RuntimeError("Gemini category response line_items was not a JSON array.")
+
+    return payload
+
+
+def apply_line_item_categories(
+    extraction: ReceiptExtraction,
+    category_inference: ReceiptCategoryInference,
+) -> ReceiptExtraction:
+    assignments = {
+        assignment.item_index: normalize_category_name(assignment.category or "") or None
+        for assignment in category_inference.line_items
+        if assignment.item_index > 0
+    }
+    line_items = [
+        _apply_category_to_line_item(item, assignments.get(index))
+        for index, item in enumerate(extraction.line_items, start=1)
+    ]
+    return extraction.model_copy(update={"line_items": line_items})
+
+
+def _apply_category_to_line_item(item: ReceiptLineItem, category: str | None) -> ReceiptLineItem:
+    return item.model_copy(update={"category": category})

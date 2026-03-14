@@ -33,3 +33,12 @@ class ReceiptExtraction(BaseModel):
     confidence: float | None = None
     raw_text: str | None = None
     line_items: list[ReceiptLineItem] = Field(default_factory=list)
+
+
+class ReceiptLineItemCategoryAssignment(BaseModel):
+    item_index: int
+    category: str | None = None
+
+
+class ReceiptCategoryInference(BaseModel):
+    line_items: list[ReceiptLineItemCategoryAssignment] = Field(default_factory=list)

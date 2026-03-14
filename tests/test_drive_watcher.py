@@ -140,7 +140,7 @@ def test_drive_watcher_processes_files_and_moves_them() -> None:
     assert notifier.calls[0]["route"].key == "alice"
     assert notifier.calls[0]["file_name"] == "receipt.jpg"
     assert notifier.calls[0]["image_bytes"] == b"drive-image"
-    assert "Cafe Harina" == notifier.calls[0]["extraction"].merchant_name
+    assert notifier.calls[0]["extraction"].merchant_name == "Cafe Harina"
 
 
 def test_drive_watcher_continues_after_file_failure() -> None:

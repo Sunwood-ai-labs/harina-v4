@@ -44,6 +44,7 @@ RECEIPT_SHEET_HEADERS = [
     "rowType",
     "itemIndex",
     "itemName",
+    "itemCategory",
     "itemQuantity",
     "itemUnitPrice",
     "itemTotalPrice",
@@ -170,6 +171,7 @@ def build_receipt_rows(
                 "",
                 "",
                 "",
+                "",
                 serialized_line_items,
             ]
         ]
@@ -183,6 +185,7 @@ def build_receipt_rows(
                 "line_item",
                 str(index),
                 item.name or "",
+                item.category or "",
                 number_cell(item.quantity),
                 number_cell(item.unit_price),
                 number_cell(item.total_price),
@@ -239,6 +242,14 @@ def build_receipt_embed(
         if spreadsheet_url:
             destinations.append("Google Sheets")
         embed.add_field(name="保存先", value=", ".join(destinations), inline=False)
+
+    category_preview = format_category_preview(extraction.line_items)
+    if category_preview:
+        embed.add_field(name="カテゴリ", value=category_preview, inline=False)
+
+    item_category_preview = format_item_category_preview(extraction.line_items)
+    if item_category_preview:
+        embed.add_field(name="商品カテゴリ", value=item_category_preview, inline=False)
 
     item_preview = format_line_item_preview(extraction.line_items)
     if item_preview:
@@ -368,7 +379,49 @@ def format_line_item_preview(items: list[ReceiptLineItem]) -> str | None:
     for index, item in enumerate(normalized_items[:MAX_EMBED_LINE_ITEMS], start=1):
         quantity = f" x{item.quantity:g}" if item.quantity is not None else ""
         total = f" ({item.total_price:g})" if item.total_price is not None else ""
-        preview_lines.append(f"{index}. {item.name or 'Unnamed item'}{quantity}{total}")
+        category = f" [{item.category}]" if item.category else ""
+        preview_lines.append(f"{index}. {item.name or 'Unnamed item'}{category}{quantity}{total}")
+
+    remaining = len(normalized_items) - len(preview_lines)
+    if remaining > 0:
+        preview_lines.append(f"...and {remaining} more")
+
+    return truncate_field("\n".join(preview_lines))
+
+
+def format_category_preview(items: list[ReceiptLineItem]) -> str | None:
+    normalized_items = normalize_line_items(items)
+    if not normalized_items:
+        return None
+
+    category_counts: dict[str, int] = {}
+    uncategorized_count = 0
+    for item in normalized_items:
+        category_name = (item.category or "").strip()
+        if not category_name:
+            uncategorized_count += 1
+            continue
+        category_counts[category_name] = category_counts.get(category_name, 0) + 1
+
+    preview_lines = [f"{category_name}: {count}件" for category_name, count in category_counts.items()]
+    if uncategorized_count:
+        preview_lines.append(f"未分類: {uncategorized_count}件")
+    if not preview_lines:
+        return None
+
+    return truncate_field("\n".join(preview_lines))
+
+
+def format_item_category_preview(items: list[ReceiptLineItem]) -> str | None:
+    normalized_items = normalize_line_items(items)
+    if not normalized_items:
+        return None
+
+    preview_lines: list[str] = []
+    for index, item in enumerate(normalized_items[:MAX_EMBED_LINE_ITEMS], start=1):
+        item_name = item.name or "Unnamed item"
+        category_name = (item.category or "").strip() or "未分類"
+        preview_lines.append(f"{index}. {item_name}: {category_name}")
 
     remaining = len(normalized_items) - len(preview_lines)
     if remaining > 0:

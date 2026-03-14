@@ -1,0 +1,19 @@
+You are assigning bookkeeping categories to line items that were already extracted from a receipt.
+Use both the receipt image and the extracted receipt JSON below.
+Do not change merchant details, dates, totals, quantities, or product names.
+Return JSON only.
+For each input line item, return exactly one output entry with the same item_index.
+Set category to the best matching category for that item.
+{% if category_options %}
+Choose categories from this pre-approved list whenever possible:
+{{ category_options_json }}
+Use short single-word category names such as "惣菜" or "飲料".
+If none of these categories fit closely, you may propose one short single-word new category name for that item instead of forcing a bad match.
+{% else %}
+Create one short single-word category name per line item.
+{% endif %}
+Use snake_case keys matching this schema:
+{{ schema_json }}
+Receipt file name: {{ filename }}
+Extracted receipt JSON:
+{{ receipt_json }}

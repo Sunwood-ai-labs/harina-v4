@@ -20,19 +20,28 @@ It supports two intake paths:
 - direct Discord uploads processed by the always-on bot
 - Google Drive uploads forwarded into Discord by a watcher service and then processed by the same pipeline
 
+Each receipt goes through a two-stage Gemini pipeline:
+
+1. extract merchant, totals, and line items from the image
+2. assign one short bookkeeping category to each line item using a Google Sheets-backed category catalog
+
 ## Highlights
 
 - Extract merchant, date, totals, tax, payment method, OCR-like text, and line items with Gemini
+- Use a `Categories` sheet as the approved category list for every run
+- Normalize categories to short single-word labels such as `野菜`, `惣菜`, and `飲料`
+- Allow Gemini to suggest a new category when no existing option fits, then append it back into Sheets
 - Store original images in Google Drive
-- Append one bookkeeping row per receipt into Google Sheets
+- Append one bookkeeping row per line item into Google Sheets, including `itemCategory`
 - Forward new Google Drive images into a Discord notification channel
+- Reply in Discord with category summary, per-item categories, and priced line items
 - Move processed Google Drive files into a separate folder after success
 - Run locally with `uv` or continuously with Docker Compose
 
 ## Typical workflows
 
-1. Discord intake: users upload receipt images to a watched Discord channel and the bot replies with a summary.
-2. Drive intake: users upload images to a Google Drive inbox folder and the watcher posts them into Discord, writes Sheets rows, and moves them into a processed folder.
+1. Discord intake: users upload receipt images to a watched Discord channel and the bot replies with a summary, category totals, and per-item categories.
+2. Drive intake: users upload images to a Google Drive inbox folder and the watcher posts them into Discord, writes Sheets line-item rows, and moves them into a processed folder.
 3. Backfill and replay: operators download historical Discord images into a local dataset and rerun Gemini checks after prompt or model changes.
 
 ## Architecture
@@ -58,6 +67,7 @@ Required environment variables for the bot:
 - `DISCORD_TOKEN`
 - `GEMINI_API_KEY`
 - `GOOGLE_SHEETS_SPREADSHEET_ID`
+- `GOOGLE_SHEETS_CATEGORY_SHEET_NAME` optional, defaults to `Categories`
 - `GOOGLE_SERVICE_ACCOUNT_JSON` or `GOOGLE_SERVICE_ACCOUNT_KEY_FILE`
 - or `GOOGLE_OAUTH_CLIENT_JSON` / `GOOGLE_OAUTH_CLIENT_SECRET_FILE` plus `GOOGLE_OAUTH_REFRESH_TOKEN`
 
@@ -115,11 +125,27 @@ Useful flags:
 - `--share-with-email you@example.com`
 - `--env-file .env`
 
+`google init-resources` also ensures two spreadsheet tabs:
+
+- `Receipts` for one row per line item
+- `Categories` for the approved category catalog that Gemini reads on every write-enabled run
+
+The default category seed uses short single-word labels such as `野菜`, `肉`, `惣菜`, `飲料`, and `手数料`.
+If Gemini returns a category that is not already in `Categories`, HARINA can append it automatically for future runs.
+
+## Category workflow
+
+1. Stage 1 extracts normalized receipt fields and line items from the image.
+2. Stage 2 reads the current `Categories` sheet and asks Gemini to assign one category per line item.
+3. If no existing category fits, Gemini may propose one short new category name.
+4. HARINA appends any new category into `Categories` and writes `itemCategory` into the `Receipts` rows.
+5. Discord replies show both a category summary and a `商品カテゴリ` section so each product-category pair is visible.
+
 ## Drive watcher flow
 
 1. Upload an image into `GOOGLE_DRIVE_WATCH_SOURCE_FOLDER_ID`.
 2. Run `uv run harina-v4 drive watch --once` for a one-shot check, or keep the watcher running continuously.
-3. HARINA downloads the Drive image, sends it to Gemini, writes a row into Sheets, posts the image into `DISCORD_NOTIFY_CHANNEL_ID`, and moves the Drive file into `GOOGLE_DRIVE_WATCH_PROCESSED_FOLDER_ID`.
+3. HARINA downloads the Drive image, runs extraction plus categorization, writes line-item rows into Sheets, posts the image into `DISCORD_NOTIFY_CHANNEL_ID`, and moves the Drive file into `GOOGLE_DRIVE_WATCH_PROCESSED_FOLDER_ID`.
 
 ## Docker Compose
 

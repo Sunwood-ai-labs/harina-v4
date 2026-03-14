@@ -6,6 +6,7 @@ Numbers must be plain numbers without currency symbols or commas.
 Return each purchasable product as its own entry in line_items when it can be read confidently.
 Do not collapse multiple products into one generic line item.
 If the receipt lists quantities or unit prices, keep them on the matching product entry.
+Do not assign categories in this stage. Leave category decisions for a later categorization stage.
 Set confidence to a value between 0 and 1.
 Use snake_case keys matching this schema:
 {{ schema_json }}

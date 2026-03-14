@@ -7,10 +7,21 @@ from app.team_intake import DriveWatchRoute
 
 
 class _FakeGemini:
-    async def extract(self, *, image_bytes: bytes, mime_type: str, filename: str) -> ReceiptExtraction:
+    def __init__(self) -> None:
+        self.calls: list[list[str]] = []
+
+    async def extract(
+        self,
+        *,
+        image_bytes: bytes,
+        mime_type: str,
+        filename: str,
+        category_options: list[str] | None = None,
+    ) -> ReceiptExtraction:
         assert image_bytes == b"drive-image"
         assert mime_type == "image/jpeg"
         assert filename == "receipt.jpg"
+        self.calls.append(list(category_options or []))
         return ReceiptExtraction(
             merchant_name="Cafe Harina",
             purchase_date="2026-03-11",
@@ -18,8 +29,8 @@ class _FakeGemini:
             total=1100,
             confidence=0.97,
             line_items=[
-                ReceiptLineItem(name="Cabbage", quantity=1, total_price=198),
-                ReceiptLineItem(name="Juice", quantity=2, unit_price=150, total_price=300),
+                ReceiptLineItem(name="Cabbage", category="野菜", quantity=1, total_price=198),
+                ReceiptLineItem(name="Juice", category="新カテゴリ", quantity=2, unit_price=150, total_price=300),
             ],
         )
 
@@ -28,9 +39,18 @@ class _FakeWorkspace:
     def __init__(self) -> None:
         self.rows: list[list[str]] = []
         self.moves: list[tuple[str, str]] = []
+        self.categories = ["野菜", "飲料"]
+        self.added_categories: list[tuple[list[str], str]] = []
 
     async def ensure_receipt_sheet(self) -> None:
         return None
+
+    async def list_receipt_categories(self) -> list[str]:
+        return self.categories
+
+    async def append_receipt_categories(self, categories: list[str], *, source: str = "gemini") -> list[str]:
+        self.added_categories.append((categories, source))
+        return ["新カテゴリ"]
 
     async def list_image_files(self, *, folder_id: str) -> list[DriveImageFile]:
         assert folder_id == "source-folder"
@@ -83,8 +103,9 @@ class _FakeNotifier:
 def test_drive_watcher_processes_files_and_moves_them() -> None:
     workspace = _FakeWorkspace()
     notifier = _FakeNotifier()
+    gemini = _FakeGemini()
     watcher = DriveReceiptWatcher(
-        gemini=_FakeGemini(),
+        gemini=gemini,
         google_workspace=workspace,
         notifier=notifier,
         routes=[
@@ -110,12 +131,16 @@ def test_drive_watcher_processes_files_and_moves_them() -> None:
     assert workspace.rows[0][9] == "drive-file-123"
     assert workspace.rows[0][12] == "drive-file-123"
     assert workspace.rows[0][31] == "Cabbage"
+    assert workspace.rows[0][32] == "野菜"
     assert workspace.rows[1][31] == "Juice"
+    assert workspace.rows[1][32] == "新カテゴリ"
     assert workspace.moves == [("drive-file-123", "processed-folder")]
+    assert workspace.added_categories == [(["野菜", "新カテゴリ"], "gemini")]
+    assert gemini.calls == [["野菜", "飲料"]]
     assert notifier.calls[0]["route"].key == "alice"
     assert notifier.calls[0]["file_name"] == "receipt.jpg"
     assert notifier.calls[0]["image_bytes"] == b"drive-image"
-    assert "Cafe Harina" == notifier.calls[0]["extraction"].merchant_name
+    assert notifier.calls[0]["extraction"].merchant_name == "Cafe Harina"
 
 
 def test_drive_watcher_continues_after_file_failure() -> None:

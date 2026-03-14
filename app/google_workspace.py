@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import UTC, datetime
 from dataclasses import dataclass
 from typing import Any
 
@@ -8,6 +9,13 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaInMemoryUpload
 
+from app.category_catalog import (
+    CATEGORY_SHEET_HEADERS,
+    DEFAULT_CATEGORY_DESCRIPTION_MAP,
+    build_default_category_rows,
+    dedupe_category_names,
+    normalize_category_name,
+)
 from app.formatters import RECEIPT_SHEET_HEADERS
 
 
@@ -28,15 +36,30 @@ class DriveImageFile:
 
 
 class GoogleWorkspaceClient:
-    def __init__(self, *, credentials, drive_folder_id: str, spreadsheet_id: str, sheet_name: str) -> None:
+    def __init__(
+        self,
+        *,
+        credentials,
+        drive_folder_id: str,
+        spreadsheet_id: str,
+        sheet_name: str,
+        category_sheet_name: str = "Categories",
+    ) -> None:
         self._drive = build("drive", "v3", credentials=credentials, cache_discovery=False)
         self._sheets = build("sheets", "v4", credentials=credentials, cache_discovery=False)
         self._drive_folder_id = drive_folder_id
         self._spreadsheet_id = spreadsheet_id
         self._sheet_name = sheet_name
+        self._category_sheet_name = category_sheet_name
 
     async def ensure_receipt_sheet(self) -> None:
         await asyncio.to_thread(self._ensure_receipt_sheet_sync)
+
+    async def list_receipt_categories(self) -> list[str]:
+        return await asyncio.to_thread(self._list_receipt_categories_sync)
+
+    async def append_receipt_categories(self, categories: list[str], *, source: str = "gemini") -> list[str]:
+        return await asyncio.to_thread(self._append_receipt_categories_sync, categories, source)
 
     async def upload_receipt_image(self, *, file_name: str, mime_type: str, image_bytes: bytes) -> UploadedDriveFile:
         return await asyncio.to_thread(self._upload_receipt_image_sync, file_name, mime_type, image_bytes)
@@ -61,22 +84,92 @@ class GoogleWorkspaceClient:
         return f"https://docs.google.com/spreadsheets/d/{self._spreadsheet_id}/edit"
 
     def _ensure_receipt_sheet_sync(self) -> None:
+        self._ensure_sheet_with_header_sync(sheet_name=self._sheet_name, headers=RECEIPT_SHEET_HEADERS)
+        self._ensure_category_sheet_sync()
+
+    def _ensure_category_sheet_sync(self) -> None:
+        self._ensure_sheet_with_header_sync(sheet_name=self._category_sheet_name, headers=CATEGORY_SHEET_HEADERS)
+
+        existing_rows = (
+            self._sheets.spreadsheets()
+            .values()
+            .get(
+                spreadsheetId=self._spreadsheet_id,
+                range=f"'{self._category_sheet_name}'!A2:F",
+            )
+            .execute()
+        ).get("values", [])
+        if existing_rows:
+            self._migrate_category_sheet_rows_sync(existing_rows)
+            return
+
+        seeded_rows = build_default_category_rows(timestamp=_timestamp_now())
+        (
+            self._sheets.spreadsheets()
+            .values()
+            .append(
+                spreadsheetId=self._spreadsheet_id,
+                range=f"'{self._category_sheet_name}'!A2",
+                valueInputOption="RAW",
+                insertDataOption="INSERT_ROWS",
+                body={"values": seeded_rows},
+            )
+            .execute()
+        )
+
+    def _migrate_category_sheet_rows_sync(self, rows: list[list[str]]) -> None:
+        updates: list[dict[str, object]] = []
+        timestamp = _timestamp_now()
+
+        for row_index, row in enumerate(rows, start=2):
+            raw_name = row[0] if row else ""
+            normalized_name = normalize_category_name(raw_name)
+            if not normalized_name:
+                continue
+
+            description = DEFAULT_CATEGORY_DESCRIPTION_MAP.get(normalized_name)
+            if normalized_name != raw_name:
+                updates.append(
+                    {
+                        "range": f"'{self._category_sheet_name}'!A{row_index}:B{row_index}",
+                        "values": [[normalized_name, description if description is not None else (row[1] if len(row) > 1 else "")]],
+                    }
+                )
+                updates.append(
+                    {
+                        "range": f"'{self._category_sheet_name}'!E{row_index}",
+                        "values": [[timestamp]],
+                    }
+                )
+
+        if not updates:
+            return
+
+        (
+            self._sheets.spreadsheets()
+            .values()
+            .batchUpdate(
+                spreadsheetId=self._spreadsheet_id,
+                body={"valueInputOption": "RAW", "data": updates},
+            )
+            .execute()
+        )
+
+    def _ensure_sheet_with_header_sync(self, *, sheet_name: str, headers: list[str]) -> None:
         spreadsheet = (
             self._sheets.spreadsheets()
             .get(spreadsheetId=self._spreadsheet_id, fields="sheets.properties.title")
             .execute()
         )
 
-        has_sheet = any(
-            sheet.get("properties", {}).get("title") == self._sheet_name for sheet in spreadsheet.get("sheets", [])
-        )
+        has_sheet = any(sheet.get("properties", {}).get("title") == sheet_name for sheet in spreadsheet.get("sheets", []))
 
         if not has_sheet:
             (
                 self._sheets.spreadsheets()
                 .batchUpdate(
                     spreadsheetId=self._spreadsheet_id,
-                    body={"requests": [{"addSheet": {"properties": {"title": self._sheet_name}}}]},
+                    body={"requests": [{"addSheet": {"properties": {"title": sheet_name}}}]},
                 )
                 .execute()
             )
@@ -84,12 +177,12 @@ class GoogleWorkspaceClient:
         current_header = (
             self._sheets.spreadsheets()
             .values()
-            .get(spreadsheetId=self._spreadsheet_id, range=f"'{self._sheet_name}'!1:1")
+            .get(spreadsheetId=self._spreadsheet_id, range=f"'{sheet_name}'!1:1")
             .execute()
         )
         header_values = (current_header.get("values") or [[]])[0]
 
-        if header_values == RECEIPT_SHEET_HEADERS:
+        if header_values == headers:
             return
 
         (
@@ -97,12 +190,69 @@ class GoogleWorkspaceClient:
             .values()
             .update(
                 spreadsheetId=self._spreadsheet_id,
-                range=f"'{self._sheet_name}'!A1",
+                range=f"'{sheet_name}'!A1",
                 valueInputOption="RAW",
-                body={"values": [RECEIPT_SHEET_HEADERS]},
+                body={"values": [headers]},
             )
             .execute()
         )
+
+    def _list_receipt_categories_sync(self) -> list[str]:
+        self._ensure_category_sheet_sync()
+
+        response = (
+            self._sheets.spreadsheets()
+            .values()
+            .get(
+                spreadsheetId=self._spreadsheet_id,
+                range=f"'{self._category_sheet_name}'!A2:C",
+            )
+            .execute()
+        )
+
+        categories: list[str] = []
+        for row in response.get("values", []):
+            category_name = normalize_category_name(row[0]) if row else ""
+            if not category_name:
+                continue
+
+            is_active = row[2].strip().lower() if len(row) >= 3 and row[2] is not None else "true"
+            if is_active in {"false", "0", "no", "inactive"}:
+                continue
+            categories.append(category_name)
+
+        return dedupe_category_names(categories)
+
+    def _append_receipt_categories_sync(self, categories: list[str], source: str) -> list[str]:
+        candidate_categories = dedupe_category_names(categories)
+        if not candidate_categories:
+            return []
+
+        existing_categories = self._list_receipt_categories_sync()
+        existing_keys = {value.casefold() for value in existing_categories}
+        categories_to_add = [value for value in candidate_categories if value.casefold() not in existing_keys]
+        if not categories_to_add:
+            return []
+
+        timestamp = _timestamp_now()
+        (
+            self._sheets.spreadsheets()
+            .values()
+            .append(
+                spreadsheetId=self._spreadsheet_id,
+                range=f"'{self._category_sheet_name}'!A2",
+                valueInputOption="RAW",
+                insertDataOption="INSERT_ROWS",
+                body={
+                    "values": [
+                        [category_name, "", "TRUE", timestamp, timestamp, source]
+                        for category_name in categories_to_add
+                    ]
+                },
+            )
+            .execute()
+        )
+        return categories_to_add
 
     def _upload_receipt_image_sync(self, file_name: str, mime_type: str, image_bytes: bytes) -> UploadedDriveFile:
         media = MediaInMemoryUpload(image_bytes, mimetype=mime_type, resumable=False)
@@ -213,3 +363,7 @@ def _parse_drive_image_files(items: list[dict[str, Any]]) -> list[DriveImageFile
         )
         for item in items
     ]
+
+
+def _timestamp_now() -> str:
+    return datetime.now(UTC).isoformat()

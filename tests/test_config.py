@@ -48,6 +48,7 @@ def test_settings_can_power_receipt_cli_without_discord_token() -> None:
 
     assert settings.require_gemini_api_key() == "gemini-key"
     assert settings.discord_debug_log_dir_path == Path("logs/discord")
+    assert settings.google_sheets_category_sheet_name == "Categories"
 
 
 def test_settings_can_parse_gemini_rotation_key_list() -> None:

@@ -29,7 +29,7 @@ class _FakeGoogleWorkspace:
     def __init__(self) -> None:
         self.upload_calls: list[tuple[str, str, bytes]] = []
         self.rows: list[list[str]] = []
-        self.categories = ["野菜・きのこ", "飲料"]
+        self.categories = ["野菜", "飲料"]
         self.added_categories: list[tuple[list[str], str]] = []
         self.spreadsheet_url = "https://docs.google.com/spreadsheets/d/sheet-id/edit"
 
@@ -64,7 +64,7 @@ def sample_extraction() -> ReceiptExtraction:
         total=1100,
         confidence=0.92,
         line_items=[
-            ReceiptLineItem(name="Cabbage", category="野菜・きのこ", quantity=1, total_price=198),
+            ReceiptLineItem(name="Cabbage", category="野菜", quantity=1, total_price=198),
             ReceiptLineItem(name="Juice", category="新カテゴリ", quantity=2, unit_price=150, total_price=300),
         ],
     )
@@ -101,7 +101,7 @@ def test_process_receipt_can_skip_google_writes(
     assert result.row[4] == "cli"
     assert result.row[14] == "Cafe Harina"
     assert result.rows[0][31] == "Cabbage"
-    assert result.rows[0][32] == "野菜・きのこ"
+    assert result.rows[0][32] == "野菜"
     assert result.rows[1][31] == "Juice"
     assert result.rows[1][32] == "新カテゴリ"
 
@@ -138,5 +138,5 @@ def test_process_receipt_writes_to_google_when_enabled(
     assert result.drive_file_id == "drive-123"
     assert result.spreadsheet_url == "https://docs.google.com/spreadsheets/d/sheet-id/edit"
     assert result.google_write_performed is True
-    assert gemini.calls == [("image/jpeg", dataset_receipt_image_path.name, ["野菜・きのこ", "飲料"])]
-    assert workspace.added_categories == [(["野菜・きのこ", "新カテゴリ"], "gemini")]
+    assert gemini.calls == [("image/jpeg", dataset_receipt_image_path.name, ["野菜", "飲料"])]
+    assert workspace.added_categories == [(["野菜", "新カテゴリ"], "gemini")]

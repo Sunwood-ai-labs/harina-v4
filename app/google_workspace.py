@@ -11,6 +11,7 @@ from googleapiclient.http import MediaInMemoryUpload
 
 from app.category_catalog import (
     CATEGORY_SHEET_HEADERS,
+    DEFAULT_CATEGORY_DESCRIPTION_MAP,
     build_default_category_rows,
     dedupe_category_names,
     normalize_category_name,
@@ -99,6 +100,7 @@ class GoogleWorkspaceClient:
             .execute()
         ).get("values", [])
         if existing_rows:
+            self._migrate_category_sheet_rows_sync(existing_rows)
             return
 
         seeded_rows = build_default_category_rows(timestamp=_timestamp_now())
@@ -111,6 +113,44 @@ class GoogleWorkspaceClient:
                 valueInputOption="RAW",
                 insertDataOption="INSERT_ROWS",
                 body={"values": seeded_rows},
+            )
+            .execute()
+        )
+
+    def _migrate_category_sheet_rows_sync(self, rows: list[list[str]]) -> None:
+        updates: list[dict[str, object]] = []
+        timestamp = _timestamp_now()
+
+        for row_index, row in enumerate(rows, start=2):
+            raw_name = row[0] if row else ""
+            normalized_name = normalize_category_name(raw_name)
+            if not normalized_name:
+                continue
+
+            description = DEFAULT_CATEGORY_DESCRIPTION_MAP.get(normalized_name)
+            if normalized_name != raw_name:
+                updates.append(
+                    {
+                        "range": f"'{self._category_sheet_name}'!A{row_index}:B{row_index}",
+                        "values": [[normalized_name, description if description is not None else (row[1] if len(row) > 1 else "")]],
+                    }
+                )
+                updates.append(
+                    {
+                        "range": f"'{self._category_sheet_name}'!E{row_index}",
+                        "values": [[timestamp]],
+                    }
+                )
+
+        if not updates:
+            return
+
+        (
+            self._sheets.spreadsheets()
+            .values()
+            .batchUpdate(
+                spreadsheetId=self._spreadsheet_id,
+                body={"valueInputOption": "RAW", "data": updates},
             )
             .execute()
         )

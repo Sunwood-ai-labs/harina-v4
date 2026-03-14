@@ -29,7 +29,7 @@ class _FakeGemini:
             total=1100,
             confidence=0.97,
             line_items=[
-                ReceiptLineItem(name="Cabbage", category="野菜・きのこ", quantity=1, total_price=198),
+                ReceiptLineItem(name="Cabbage", category="野菜", quantity=1, total_price=198),
                 ReceiptLineItem(name="Juice", category="新カテゴリ", quantity=2, unit_price=150, total_price=300),
             ],
         )
@@ -39,7 +39,7 @@ class _FakeWorkspace:
     def __init__(self) -> None:
         self.rows: list[list[str]] = []
         self.moves: list[tuple[str, str]] = []
-        self.categories = ["野菜・きのこ", "飲料"]
+        self.categories = ["野菜", "飲料"]
         self.added_categories: list[tuple[list[str], str]] = []
 
     async def ensure_receipt_sheet(self) -> None:
@@ -131,12 +131,12 @@ def test_drive_watcher_processes_files_and_moves_them() -> None:
     assert workspace.rows[0][9] == "drive-file-123"
     assert workspace.rows[0][12] == "drive-file-123"
     assert workspace.rows[0][31] == "Cabbage"
-    assert workspace.rows[0][32] == "野菜・きのこ"
+    assert workspace.rows[0][32] == "野菜"
     assert workspace.rows[1][31] == "Juice"
     assert workspace.rows[1][32] == "新カテゴリ"
     assert workspace.moves == [("drive-file-123", "processed-folder")]
-    assert workspace.added_categories == [(["野菜・きのこ", "新カテゴリ"], "gemini")]
-    assert gemini.calls == [["野菜・きのこ", "飲料"]]
+    assert workspace.added_categories == [(["野菜", "新カテゴリ"], "gemini")]
+    assert gemini.calls == [["野菜", "飲料"]]
     assert notifier.calls[0]["route"].key == "alice"
     assert notifier.calls[0]["file_name"] == "receipt.jpg"
     assert notifier.calls[0]["image_bytes"] == b"drive-image"

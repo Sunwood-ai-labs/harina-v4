@@ -76,7 +76,7 @@ def test_parse_receipt_category_payload_requires_line_items() -> None:
         parse_receipt_category_payload('{"category":"飲料"}')
 
 
-def test_apply_line_item_categories_merges_by_item_index() -> None:
+def test_apply_line_item_categories_merges_by_item_index_and_normalizes_names() -> None:
     extraction = ReceiptExtraction(
         line_items=[
             ReceiptLineItem(name="Cabbage", quantity=1, total_price=198),
@@ -94,7 +94,7 @@ def test_apply_line_item_categories_merges_by_item_index() -> None:
 
     categorized = apply_line_item_categories(extraction, category_inference)
 
-    assert categorized.line_items[0].category == "野菜・きのこ"
+    assert categorized.line_items[0].category == "野菜"
     assert categorized.line_items[1].category == "飲料"
 
 
@@ -217,7 +217,7 @@ def test_extractor_runs_categorization_stage_with_category_options() -> None:
                     '"line_items":[{"name":"Cabbage","quantity":1,"total_price":198}]}'
                 )
             ),
-            _FakeResponse('{"line_items":[{"item_index":1,"category":"野菜・きのこ"}]}'),
+            _FakeResponse('{"line_items":[{"item_index":1,"category":"野菜"}]}'),
         ]
     )
     extractor = GeminiReceiptExtractor(
@@ -231,14 +231,15 @@ def test_extractor_runs_categorization_stage_with_category_options() -> None:
             image_bytes=b"receipt",
             mime_type="image/jpeg",
             filename="receipt.jpg",
-            category_options=["野菜・きのこ", "飲料"],
+            category_options=["野菜", "飲料"],
         )
     )
 
-    assert result.line_items[0].category == "野菜・きのこ"
+    assert result.line_items[0].category == "野菜"
     assert len(client.models.calls) == 2
     extraction_prompt = client.models.calls[0]["contents"][1]
     categorization_prompt = client.models.calls[1]["contents"][1]
     assert "Do not assign categories in this stage." in extraction_prompt
-    assert '"野菜・きのこ"' in categorization_prompt
+    assert "single-word category names" in categorization_prompt
+    assert '"野菜"' in categorization_prompt
     assert '"item_index": 1' in categorization_prompt

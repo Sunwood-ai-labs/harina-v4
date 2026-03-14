@@ -7,9 +7,10 @@ Set category to the best matching category for that item.
 {% if category_options %}
 Choose categories from this pre-approved list whenever possible:
 {{ category_options_json }}
-If none of these categories fit closely, you may propose one short new category name for that item instead of forcing a bad match.
+Use short single-word category names such as "惣菜" or "飲料".
+If none of these categories fit closely, you may propose one short single-word new category name for that item instead of forcing a bad match.
 {% else %}
-If no category list is provided, create one short category name per line item.
+Create one short single-word category name per line item.
 {% endif %}
 Use snake_case keys matching this schema:
 {{ schema_json }}

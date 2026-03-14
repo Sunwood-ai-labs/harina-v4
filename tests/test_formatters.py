@@ -27,7 +27,7 @@ def sample_extraction() -> ReceiptExtraction:
         language="ja",
         confidence=0.94,
         line_items=[
-            ReceiptLineItem(name="Cabbage", category="野菜・きのこ", quantity=1, total_price=198),
+            ReceiptLineItem(name="Cabbage", category="野菜", quantity=1, total_price=198),
             ReceiptLineItem(name="Juice", category="飲料", quantity=2, unit_price=150, total_price=300),
         ],
     )
@@ -65,7 +65,7 @@ def test_build_receipt_rows_creates_one_row_per_line_item() -> None:
     assert first_row["rowType"] == "line_item"
     assert first_row["itemIndex"] == "1"
     assert first_row["itemName"] == "Cabbage"
-    assert first_row["itemCategory"] == "野菜・きのこ"
+    assert first_row["itemCategory"] == "野菜"
     assert first_row["itemTotalPrice"] == "198.0"
 
     assert second_row["itemIndex"] == "2"
@@ -88,7 +88,9 @@ def test_build_receipt_embed_includes_line_items_and_saved_destinations() -> Non
     assert embed.title == "Receipt"
     assert embed.description == "Cafe Harina | 1100.0 JPY | 2026-03-11 | 商品数: 2"
     assert any(field.name == "保存先" and "Google Drive" in field.value and "Google Sheets" in field.value for field in embed.fields)
-    assert any(field.name == "明細" and "Cabbage [野菜・きのこ]" in field.value for field in embed.fields)
+    assert any(field.name == "カテゴリ" and "野菜: 1件" in field.value and "飲料: 1件" in field.value for field in embed.fields)
+    assert any(field.name == "商品カテゴリ" and "1. Cabbage: 野菜" in field.value and "2. Juice: 飲料" in field.value for field in embed.fields)
+    assert any(field.name == "明細" and "Cabbage [野菜]" in field.value for field in embed.fields)
 
 
 def test_build_receipt_links_view_creates_drive_and_sheet_buttons() -> None:

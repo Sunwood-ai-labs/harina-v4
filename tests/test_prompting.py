@@ -25,12 +25,13 @@ def test_render_receipt_categorization_prompt_mentions_candidates_and_item_index
                 ReceiptLineItem(name="Juice", quantity=2, total_price=300),
             ],
         ),
-        category_options=["野菜・きのこ", "飲料"],
+        category_options=["野菜", "飲料"],
     )
 
     assert "Receipt file name: receipt.jpg" in prompt
     assert "Choose categories from this pre-approved list whenever possible" in prompt
-    assert '"野菜・きのこ"' in prompt
+    assert "single-word category names" in prompt
+    assert '"野菜"' in prompt
     assert '"item_index"' in prompt
     assert '"category"' in prompt
     assert '"name": "Cabbage"' in prompt

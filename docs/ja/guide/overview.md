@@ -3,21 +3,26 @@
 Harina Receipt Bot は、レシート画像の取り込み、OCR、台帳化を自前で回すための自動化スタックです。
 Discord 起点と Google Drive 起点の両方に対応します。
 
+各レシートは Gemini の段階分離フローで扱います。
+
+1. 正規化済みレシート情報と明細を抽出
+2. Google Sheets のカテゴリ一覧を使って各商品へカテゴリを付与
+
 ## 2 つの動作モード
 
 ### 1. Discord レシート受付
 
 - Discord チャンネルの画像添付を監視
-- 各レシート画像を Gemini へ送って構造化抽出
+- 各レシート画像に対して抽出とカテゴリ付与を実行
 - 元画像を Google Drive に保存
-- Google Sheets に 1 レシート 1 行で追記
-- Discord に短い要約を返信
+- Google Sheets に商品ごとの 1 行を追記
+- Discord にカテゴリ要約、商品ごとのカテゴリ、金額つき明細を返信
 
 ### 2. Google Drive watcher 受付
 
 - Google Drive の inbox フォルダをポーリング
 - 新着画像を Drive から直接ダウンロード
-- Gemini で抽出して Google Sheets に追記
+- Gemini で抽出し、各商品にカテゴリを付与して Google Sheets に追記
 - 画像と要約を Discord 通知チャンネルへ投稿
 - 成功後に Drive ファイルを processed フォルダへ移動
 
@@ -43,19 +48,21 @@ HARINA V4 は Python パッケージ CLI を中心に整理されています。
 
 1. ユーザーが監視対象の Discord チャンネルにレシート画像を投稿
 2. bot が Discord から画像 bytes を取得
-3. Gemini が正規化済み JSON を返す
-4. 元画像を Google Drive に保存
-5. Google Sheets に対応する 1 行を書き込む
-6. Discord に要約返信を返す
+3. Gemini が正規化済みレシート JSON を返す
+4. Gemini が抽出結果と `Categories` シートを使って商品ごとのカテゴリを返す
+5. 元画像を Google Drive に保存
+6. `Receipts` に商品ごとの 1 行を書き込み、必要なら `Categories` に新カテゴリも追記する
+7. Discord に `カテゴリ`、`商品カテゴリ`、`明細` を含む返信を返す
 
 ### Drive watcher フロー
 
 1. ユーザーが Drive inbox フォルダにレシート画像をアップロード
 2. watcher が Drive を見て新着画像を取得
-3. Gemini が正規化済みのレシート情報を返す
-4. HARINA が Google Sheets に 1 行追記
-5. watcher が `DISCORD_NOTIFY_CHANNEL_ID` に画像つき通知を投稿
-6. Drive ファイルを processed フォルダへ移動
+3. Gemini が正規化済みのレシート情報と商品カテゴリを返す
+4. HARINA が `Receipts` に商品ごとの 1 行を追記
+5. HARINA が必要に応じて `Categories` に新カテゴリを追加
+6. watcher が `DISCORD_NOTIFY_CHANNEL_ID` に画像つき通知を投稿
+7. Drive ファイルを processed フォルダへ移動
 
 ### Downloader フロー
 
@@ -76,9 +83,9 @@ HARINA V4 は Python パッケージ CLI を中心に整理されています。
 ## この構成の良さ
 
 - 通知や運用の見える場所を Discord に寄せられる
-- Gemini で OCR と構造化抽出をまとめて処理できる
+- Gemini の抽出とカテゴリ付与を分けることで精度調整しやすい
 - Drive に原本を残せる
-- Sheets を台帳としてそのまま使いやすい
+- Sheets を `Receipts` と `Categories` に分けて監査しやすい
 - dataset downloader が移行と回帰確認の逃げ道になる
 
 ## 次に読むもの

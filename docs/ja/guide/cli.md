@@ -31,9 +31,10 @@ uv run harina-v4 test docs-public
 
 補足:
 
-- `receipt process` は Discord bot と同じ Gemini 中心の処理パイプラインを使います
-- `--skip-google-write` は `GEMINI_API_KEY` だけで抽出確認したいときに便利です
-- 外すと Drive への保存と Sheets 追記まで実行します
+- `receipt process` は Discord bot と同じ 2 段階 Gemini パイプラインを使います
+- `--skip-google-write` は `GEMINI_API_KEY` だけでローカル確認したいときに便利です
+- `--skip-google-write` 中は Sheets のカテゴリ一覧を読めないため、Gemini が短い自由カテゴリを付けます
+- 外すと Drive 保存、Sheets 追記、`Categories` シートを使ったカテゴリ付与まで実行します
 
 ## bot コマンド
 
@@ -61,6 +62,7 @@ uv run harina-v4 bot upload-test --channel-id <channel_id> --image ./docs/public
 - 既定の `--mode both` で CLI 経路と Discord 経路をまとめて確認できます
 - 片側だけ確認したい場合は `--mode cli` または `--mode discord` を使います
 - Discord 側は `--channel-id` を省略すると `DISCORD_TEST_CHANNEL_ID` を使います
+- 成功した Discord 返信には `カテゴリ`、`商品カテゴリ`、`明細` が表示されます
 
 ## Drive watcher コマンド
 
@@ -96,6 +98,12 @@ uv run harina-v4 google oauth-login --oauth-client-secret-file ./secrets/harina-
 ```bash
 uv run harina-v4 google init-resources --env-file .env
 ```
+
+補足:
+
+- `google init-resources` は `Receipts` と `Categories` の両方を保証します
+- `GOOGLE_SHEETS_CATEGORY_SHEET_NAME` の既定値は `Categories` です
+- `Categories` には `野菜`、`惣菜`、`飲料` などの一語カテゴリが初期投入されます
 
 watcher 用の Drive フォルダを作成または再利用:
 
@@ -133,3 +141,10 @@ uv run harina-v4 dataset smoke-test --dataset-dir ./dataset/v3-backfill --limit 
 5. `harina-v4 bot upload-test` で Discord 側の動作確認
 6. `harina-v4 drive watch --once` で Drive watcher の単発確認
 7. `harina-v4 bot run` と `harina-v4 drive watch` を常時稼働
+
+## カテゴリの挙動
+
+- 書き込みありの実行では毎回 `Categories` シートを読みます
+- カテゴリはレシート単位ではなく商品ごとに付きます
+- 既存候補に合わない場合は Gemini が短い新カテゴリを提案できます
+- 新カテゴリは次回以降に使えるよう `Categories` シートへ追記されます

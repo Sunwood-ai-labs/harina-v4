@@ -3,21 +3,26 @@
 Harina Receipt Bot is a self-hosted automation stack for receipt capture, OCR, and bookkeeping exports.
 It supports both Discord-first and Google Drive-first intake.
 
+Every receipt uses a staged Gemini workflow:
+
+1. extract normalized receipt fields and line items
+2. categorize each line item against a Google Sheets-backed category catalog
+
 ## Two operating modes
 
 ### 1. Discord receipt intake
 
 - Watch Discord channels for image attachments
-- Send each receipt image to Gemini for structured extraction
+- Send each receipt image through extraction and categorization
 - Upload the original image to Google Drive
-- Append one row per receipt into Google Sheets
-- Reply in Discord with a short processing summary
+- Append one row per line item into Google Sheets
+- Reply in Discord with category summary, per-item categories, and priced line items
 
 ### 2. Google Drive watcher intake
 
 - Poll a Google Drive inbox folder for new image uploads
 - Download the image directly from Drive
-- Extract fields with Gemini and append them into Google Sheets
+- Extract fields, categorize the line items, and append them into Google Sheets
 - Post the image and summary into a Discord notification channel
 - Move the file into a processed Drive folder after success
 
@@ -44,18 +49,20 @@ HARINA V4 is organized around a Python package CLI surface:
 1. A user uploads a receipt image to a watched Discord channel.
 2. The bot downloads the image bytes directly from Discord.
 3. Gemini returns normalized JSON using a strict prompt.
-4. The image is copied into Google Drive for source retention.
-5. A matching data row is written into Google Sheets.
-6. The bot posts a summary reply back into Discord.
+4. Gemini receives the extracted JSON plus the current `Categories` sheet and assigns one category per line item.
+5. The image is copied into Google Drive for source retention.
+6. One row per line item is written into `Receipts`, and any new category can be appended into `Categories`.
+7. The bot posts a summary reply back into Discord with `カテゴリ`, `商品カテゴリ`, and `明細`.
 
 ### Drive watcher flow
 
 1. A user uploads a receipt image into the Drive inbox folder.
 2. The watcher polls Drive and downloads new image files.
-3. Gemini extracts normalized receipt fields.
-4. HARINA appends one row into Google Sheets.
-5. The watcher posts the image and summary into `DISCORD_NOTIFY_CHANNEL_ID`.
-6. The Drive file is moved into the processed folder.
+3. Gemini extracts normalized receipt fields and then categorizes each line item.
+4. HARINA appends one row per line item into `Receipts`.
+5. HARINA can append newly proposed categories into `Categories`.
+6. The watcher posts the image and summary into `DISCORD_NOTIFY_CHANNEL_ID`.
+7. The Drive file is moved into the processed folder.
 
 ### Downloader flow
 
@@ -77,8 +84,9 @@ HARINA V4 is organized around a Python package CLI surface:
 
 - Discord stays the operator-friendly notification surface
 - Gemini handles OCR plus structured extraction
+- Google Sheets provides the live approved category catalog
 - Drive keeps original evidence and supports inbox-style uploads
-- Sheets stays easy to audit and export
+- Sheets stays easy to audit and export, with `Receipts` and `Categories` separated
 - The dataset downloader gives you a safe migration and regression path
 
 ## Next steps

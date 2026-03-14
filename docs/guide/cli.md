@@ -31,9 +31,10 @@ uv run harina-v4 test docs-public
 
 Notes:
 
-- `receipt process` uses the same Gemini-centered receipt pipeline as the Discord bot
-- `--skip-google-write` is the easiest way to debug extraction locally with only `GEMINI_API_KEY`
-- Omit `--skip-google-write` when you want the CLI to also upload to Drive and append to Sheets
+- `receipt process` uses the same two-stage Gemini pipeline as the Discord bot
+- `--skip-google-write` is the easiest way to debug locally with only `GEMINI_API_KEY`
+- when `--skip-google-write` is enabled, HARINA cannot read the Sheets-backed category catalog and Gemini will create short freeform category names
+- omit `--skip-google-write` when you want the CLI to upload to Drive, append to Sheets, and categorize against the live `Categories` sheet
 
 ## Bot commands
 
@@ -62,6 +63,7 @@ Notes:
 - The default `--mode both` runs the local CLI pipeline and the live Discord upload check in one pass
 - Use `--mode cli` or `--mode discord` when you want to isolate one path
 - Discord-side checks default to `DISCORD_TEST_CHANNEL_ID` unless `--channel-id` is provided
+- successful Discord replies now include `カテゴリ`, `商品カテゴリ`, and `明細`
 
 ## Drive watcher commands
 
@@ -97,6 +99,12 @@ Create or reuse the main Drive folder and spreadsheet:
 ```bash
 uv run harina-v4 google init-resources --env-file .env
 ```
+
+Notes:
+
+- `google init-resources` ensures both `Receipts` and `Categories`
+- `GOOGLE_SHEETS_CATEGORY_SHEET_NAME` defaults to `Categories`
+- `Categories` is seeded with short single-word labels such as `野菜`, `惣菜`, and `飲料`
 
 Create or reuse the Drive watcher folders:
 
@@ -134,3 +142,10 @@ uv run harina-v4 dataset smoke-test --dataset-dir ./dataset/v3-backfill --limit 
 5. Use `harina-v4 test docs-public` to exercise both the CLI path and the Discord path.
 6. Use `harina-v4 drive watch --once` to confirm one-shot Drive watcher behavior.
 7. Use `harina-v4 bot run` and `harina-v4 drive watch` for the continuous production path.
+
+## Category behavior
+
+- HARINA reads the `Categories` sheet on every write-enabled run
+- Gemini assigns one category per line item, not one category per receipt
+- New categories can be proposed when no approved option fits closely
+- Newly accepted categories are appended back into `Categories` for future runs

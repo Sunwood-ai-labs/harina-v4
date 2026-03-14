@@ -14,6 +14,11 @@ Use one of these approaches:
 - `GOOGLE_OAUTH_CLIENT_JSON` + `GOOGLE_OAUTH_REFRESH_TOKEN`
 - `GOOGLE_OAUTH_CLIENT_SECRET_FILE` + `GOOGLE_OAUTH_REFRESH_TOKEN`
 
+Useful sheet-related settings:
+
+- `GOOGLE_SHEETS_SHEET_NAME` defaults to `Receipts`
+- `GOOGLE_SHEETS_CATEGORY_SHEET_NAME` defaults to `Categories`
+
 For Docker Compose, file-based secrets are expected under `./secrets`, mounted to `/app/secrets`.
 
 ## 2. Prefer OAuth refresh tokens on personal Gmail
@@ -46,8 +51,12 @@ The command will:
 
 - create or reuse the main Drive folder
 - create or reuse the spreadsheet
-- ensure the target sheet tab and header row exist
+- ensure the `Receipts` and `Categories` sheet tabs and headers exist
+- seed `Categories` with short single-word labels when the sheet is empty
 - optionally write IDs and URLs into `.env`
+
+`Categories` is the live category catalog used by Gemini on every write-enabled run.
+Legacy labels such as `惣菜・弁当` or `惣菜/弁当` are normalized into the current short form such as `惣菜`.
 
 ## 4. Bootstrap Drive watcher folders
 
@@ -78,6 +87,9 @@ If `GOOGLE_DRIVE_FOLDER_ID` is already set, HARINA uses it as the default parent
 
 ## 5. Important notes
 
+- HARINA stores one row per line item in `Receipts`, not one row per receipt
+- `itemCategory` is written into `Receipts` for every categorized line item
+- Gemini reads `Categories` before categorization and can append a short new category when no approved option fits
 - Personal Google Drive accounts often reject service-account-owned uploads because service accounts do not have Drive storage quota there
 - For personal Gmail environments, prefer OAuth refresh tokens instead of pure service-account uploads
 - If you configure resources manually, make sure both the main Drive folder and the watcher folders are writable by the chosen credential

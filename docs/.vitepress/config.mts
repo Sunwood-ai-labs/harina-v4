@@ -4,7 +4,7 @@ const repo = "https://github.com/Sunwood-ai-labs/harina-v4";
 
 export default defineConfig({
   title: "Harina Receipt Bot",
-  description: "Discord receipt recognition bot with Gemini, Google Drive, Google Sheets, and migration dataset backfills.",
+  description: "Discord receipt automation with staged Gemini extraction, Sheets-backed line-item categories, Google Drive archiving, and migration dataset backfills.",
   base: "/harina-v4/",
   cleanUrls: true,
   lastUpdated: true,

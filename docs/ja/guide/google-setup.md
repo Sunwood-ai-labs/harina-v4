@@ -14,6 +14,11 @@
 - `GOOGLE_OAUTH_CLIENT_JSON` + `GOOGLE_OAUTH_REFRESH_TOKEN`
 - `GOOGLE_OAUTH_CLIENT_SECRET_FILE` + `GOOGLE_OAUTH_REFRESH_TOKEN`
 
+Sheets 関連の主な設定:
+
+- `GOOGLE_SHEETS_SHEET_NAME` の既定値は `Receipts`
+- `GOOGLE_SHEETS_CATEGORY_SHEET_NAME` の既定値は `Categories`
+
 Docker Compose では、ファイルベース secret を `./secrets` に置いて `/app/secrets` へマウントする前提です。
 
 ## 2. 個人 Gmail は OAuth refresh token を推奨
@@ -46,8 +51,12 @@ uv run harina-v4 google init-resources --env-file .env
 
 - メインの Drive フォルダを作成または再利用
 - Spreadsheet を作成または再利用
-- 対象シートタブとヘッダー行を保証
+- `Receipts` と `Categories` のシートタブとヘッダー行を保証
+- `Categories` が空なら一語カテゴリを初期投入
 - 必要に応じて ID と URL を `.env` へ保存
+
+`Categories` は Gemini が毎回読むライブのカテゴリ一覧です。  
+`惣菜・弁当` や `惣菜/弁当` のような旧表記が残っていても、現在の `惣菜` のような短い一語ラベルへ正規化されます。
 
 ## 4. Drive watcher 用フォルダを作る
 
@@ -78,6 +87,9 @@ uv run harina-v4 google init-drive-watch --env-file .env
 
 ## 5. 注意点
 
+- `Receipts` は 1 レシート 1 行ではなく、商品ごとに 1 行です
+- 各商品行には `itemCategory` も保存されます
+- カテゴリ付与の前に Gemini は `Categories` を読み、合う候補がなければ短い新カテゴリを提案できます
 - 個人 Google Drive では service account に Drive 容量がなく、アップロードが拒否されることがあります
 - 個人 Gmail 環境では OAuth refresh token を優先してください
 - 手動で作る場合も、メイン Drive フォルダと watcher 用フォルダの両方に対して選んだ認証主体が書き込みできる必要があります

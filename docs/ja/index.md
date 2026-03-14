@@ -13,6 +13,9 @@ hero:
       text: 概要
       link: /ja/guide/overview
     - theme: alt
+      text: リリースノート
+      link: /ja/guide/release-notes-v4.2.0
+    - theme: alt
       text: CLI
       link: /ja/guide/cli
     - theme: alt

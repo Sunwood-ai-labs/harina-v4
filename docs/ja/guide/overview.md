@@ -93,5 +93,6 @@ HARINA V4 は Python パッケージ CLI を中心に整理されています。
 - [CLI](./cli.md)
 - [Google セットアップ](./google-setup.md)
 - [デプロイ](./deployment.md)
+- [リリースノート v4.2.0](./release-notes-v4.2.0.md)
 - [データセットダウンローダー](./dataset-downloader.md)
 - [Gemini スモークテスト](./gemini-smoke-test.md)

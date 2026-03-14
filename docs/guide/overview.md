@@ -94,5 +94,6 @@ HARINA V4 is organized around a Python package CLI surface:
 - Read [CLI](./cli.md) for the operator commands
 - Read [Google Setup](./google-setup.md) before the live bot or Drive watcher flow
 - Read [Deployment](./deployment.md) when you are ready to run continuously
+- Read [Release Notes v4.2.0](./release-notes-v4.2.0.md) for the latest shipped changes
 - Read [Dataset Downloader](./dataset-downloader.md) if you are migrating from V1, V2, or V3
 - Read [Gemini Smoke Test](./gemini-smoke-test.md) for quick dataset verification

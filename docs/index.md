@@ -13,6 +13,9 @@ hero:
       text: Overview
       link: /guide/overview
     - theme: alt
+      text: Release Notes
+      link: /guide/release-notes-v4.2.0
+    - theme: alt
       text: CLI
       link: /guide/cli
     - theme: alt

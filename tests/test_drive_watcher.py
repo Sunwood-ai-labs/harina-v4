@@ -170,3 +170,43 @@ def test_drive_watcher_continues_after_file_failure() -> None:
     assert summary.failed == 1
     assert summary.notified == 0
     assert summary.moved == 0
+
+
+def test_drive_watcher_does_not_move_file_when_notification_fails_midway() -> None:
+    class _BrokenNotifier(_FakeNotifier):
+        async def send_receipt_notification(
+            self,
+            *,
+            route: DriveWatchRoute,
+            file_name: str,
+            image_bytes: bytes,
+            extraction: ReceiptExtraction,
+            drive_file_url: str | None,
+        ) -> None:
+            raise RuntimeError("discord send failed")
+
+    workspace = _FakeWorkspace()
+    watcher = DriveReceiptWatcher(
+        gemini=_FakeGemini(),
+        google_workspace=workspace,
+        notifier=_BrokenNotifier(),
+        routes=[
+            DriveWatchRoute(
+                key="alice",
+                label="Alice",
+                discord_channel_id=123,
+                source_folder_id="source-folder",
+                processed_folder_id="processed-folder",
+            )
+        ],
+    )
+
+    summary = asyncio.run(watcher.scan_once())
+
+    assert summary.scanned == 1
+    assert summary.processed == 0
+    assert summary.failed == 1
+    assert summary.notified == 0
+    assert summary.moved == 0
+    assert len(workspace.rows) == 2
+    assert workspace.moves == []

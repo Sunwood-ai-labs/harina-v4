@@ -21,6 +21,8 @@ ERROR_MESSAGE = (
     "Receipt processing failed. Check the Gemini, Google Drive, and Google Sheets settings and image contents."
 )
 THREAD_NAME_PREFIX = "receipt"
+BOT_EXHAUSTED_KEYS_RETRY_DELAY_SECONDS = 60 * 60
+BOT_EXHAUSTED_KEYS_RETRY_COUNT = 1
 
 
 @dataclass(frozen=True)
@@ -75,7 +77,12 @@ class ReceiptBot(discord.Client):
             purpose="receipt-bot",
         )
         self.processor = ReceiptProcessor(
-            gemini=GeminiReceiptExtractor(api_keys=settings.require_gemini_api_keys(), model=settings.gemini_model),
+            gemini=GeminiReceiptExtractor(
+                api_keys=settings.require_gemini_api_keys(),
+                model=settings.gemini_model,
+                exhausted_keys_retry_delay_seconds=BOT_EXHAUSTED_KEYS_RETRY_DELAY_SECONDS,
+                exhausted_keys_retry_count=BOT_EXHAUSTED_KEYS_RETRY_COUNT,
+            ),
             google_workspace=GoogleWorkspaceClient(
                 credentials=settings.google_credentials,
                 drive_folder_id=settings.google_drive_folder_id or "",

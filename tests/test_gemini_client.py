@@ -173,6 +173,42 @@ def test_extractor_raises_after_all_rotating_keys_are_exhausted() -> None:
     assert sleeps == [60] * 10
 
 
+def test_extractor_waits_and_retries_again_after_all_keys_are_exhausted_when_configured() -> None:
+    client_map = {
+        "primary": _FakeClient(
+            [_QuotaError() for _ in range(6)] + [_FakeResponse('{"merchant_name":"Cafe Harina","total":1100}')]
+        ),
+        "secondary": _FakeClient([_QuotaError() for _ in range(6)]),
+    }
+    sleeps: list[float] = []
+
+    async def fake_sleep(seconds: float) -> None:
+        sleeps.append(seconds)
+
+    extractor = GeminiReceiptExtractor(
+        api_keys=["primary", "secondary"],
+        model="gemini-test",
+        retry_delay_seconds=60,
+        retry_count=5,
+        exhausted_keys_retry_delay_seconds=3600,
+        exhausted_keys_retry_count=1,
+        client_factory=lambda key: client_map[key],
+        sleep_func=fake_sleep,
+    )
+
+    result = asyncio.run(
+        extractor.extract(
+            image_bytes=b"receipt",
+            mime_type="image/jpeg",
+            filename="receipt.jpg",
+        )
+    )
+
+    assert result.merchant_name == "Cafe Harina"
+    assert result.total == 1100
+    assert sleeps == [60] * 10 + [3600]
+
+
 def test_extractor_retries_transient_errors_before_succeeding() -> None:
     client_map = {
         "primary": _FakeClient(

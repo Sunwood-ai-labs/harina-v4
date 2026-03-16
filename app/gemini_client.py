@@ -18,6 +18,8 @@ logger = logging.getLogger(__name__)
 
 RETRY_DELAY_SECONDS = 60
 RETRY_COUNT = 5
+EXHAUSTED_KEYS_RETRY_DELAY_SECONDS = 0
+EXHAUSTED_KEYS_RETRY_COUNT = 0
 
 
 def is_quota_exhausted_error(exc: Exception) -> bool:
@@ -62,6 +64,8 @@ class GeminiReceiptExtractor:
         model: str,
         retry_delay_seconds: int = RETRY_DELAY_SECONDS,
         retry_count: int = RETRY_COUNT,
+        exhausted_keys_retry_delay_seconds: int = EXHAUSTED_KEYS_RETRY_DELAY_SECONDS,
+        exhausted_keys_retry_count: int = EXHAUSTED_KEYS_RETRY_COUNT,
         client_factory: Callable[[str], Any] | None = None,
         sleep_func: Callable[[float], Awaitable[None]] | None = None,
     ) -> None:
@@ -83,6 +87,8 @@ class GeminiReceiptExtractor:
         self._model = model
         self._retry_delay_seconds = retry_delay_seconds
         self._retry_count = retry_count
+        self._exhausted_keys_retry_delay_seconds = exhausted_keys_retry_delay_seconds
+        self._exhausted_keys_retry_count = exhausted_keys_retry_count
         self._sleep = sleep_func or asyncio.sleep
 
     async def extract(
@@ -134,55 +140,82 @@ class GeminiReceiptExtractor:
         temperature: float,
     ) -> dict[str, object]:
         last_retryable_error: Exception | None = None
+        exhausted_keys_retry_attempts = 0
 
-        for client_index, client in enumerate(self._clients, start=1):
-            retry_failures = 0
-            while True:
-                try:
-                    response = await asyncio.to_thread(
-                        client.models.generate_content,
-                        model=self._model,
-                        contents=contents,
-                        config=types.GenerateContentConfig(
-                            temperature=temperature,
-                            response_mime_type="application/json",
-                        ),
-                    )
-                    if not response.text:
-                        raise RuntimeError("Gemini returned an empty response.")
+        while True:
+            should_restart_from_first_key = False
 
-                    return parse_func(response.text)
-                except Exception as exc:  # noqa: BLE001
-                    if not is_retryable_gemini_error(exc):
-                        raise
+            for client_index, client in enumerate(self._clients, start=1):
+                retry_failures = 0
+                while True:
+                    try:
+                        response = await asyncio.to_thread(
+                            client.models.generate_content,
+                            model=self._model,
+                            contents=contents,
+                            config=types.GenerateContentConfig(
+                                temperature=temperature,
+                                response_mime_type="application/json",
+                            ),
+                        )
+                        if not response.text:
+                            raise RuntimeError("Gemini returned an empty response.")
 
-                    last_retryable_error = exc
-                    error_kind = "quota" if is_quota_exhausted_error(exc) else "transient"
-                    if retry_failures >= self._retry_count:
-                        if client_index < len(self._clients):
+                        return parse_func(response.text)
+                    except Exception as exc:  # noqa: BLE001
+                        if not is_retryable_gemini_error(exc):
+                            raise
+
+                        last_retryable_error = exc
+                        error_kind = "quota" if is_quota_exhausted_error(exc) else "transient"
+                        if retry_failures >= self._retry_count:
+                            if client_index < len(self._clients):
+                                logger.warning(
+                                    "Gemini %s error remained after %s retries during %s on key %s/%s. Rotating to the next key.",
+                                    error_kind,
+                                    self._retry_count,
+                                    request_name,
+                                    client_index,
+                                    len(self._clients),
+                                )
+                                break
+
+                            if exhausted_keys_retry_attempts >= self._exhausted_keys_retry_count:
+                                raise
+
+                            exhausted_keys_retry_attempts += 1
                             logger.warning(
-                                "Gemini %s error remained after %s retries during %s on key %s/%s. Rotating to the next key.",
+                                "Gemini %s error remained after exhausting all %s key(s) during %s. Waiting %s seconds before retry cycle %s/%s from the first key.",
                                 error_kind,
-                                self._retry_count,
-                                request_name,
-                                client_index,
                                 len(self._clients),
+                                request_name,
+                                self._exhausted_keys_retry_delay_seconds,
+                                exhausted_keys_retry_attempts,
+                                self._exhausted_keys_retry_count,
                             )
+                            await self._sleep(self._exhausted_keys_retry_delay_seconds)
+                            should_restart_from_first_key = True
                             break
-                        raise
 
-                    retry_failures += 1
-                    logger.warning(
-                        "Gemini %s error during %s on key %s/%s. Waiting %s seconds before retry %s/%s.",
-                        error_kind,
-                        request_name,
-                        client_index,
-                        len(self._clients),
-                        self._retry_delay_seconds,
-                        retry_failures,
-                        self._retry_count,
-                    )
-                    await self._sleep(self._retry_delay_seconds)
+                        retry_failures += 1
+                        logger.warning(
+                            "Gemini %s error during %s on key %s/%s. Waiting %s seconds before retry %s/%s.",
+                            error_kind,
+                            request_name,
+                            client_index,
+                            len(self._clients),
+                            self._retry_delay_seconds,
+                            retry_failures,
+                            self._retry_count,
+                        )
+                        await self._sleep(self._retry_delay_seconds)
+
+                if should_restart_from_first_key:
+                    break
+
+            if should_restart_from_first_key:
+                continue
+            break
 
         if last_retryable_error is not None:
             raise last_retryable_error

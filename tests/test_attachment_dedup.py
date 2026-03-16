@@ -217,6 +217,7 @@ class _FakeDriveWorkspace:
         self.categories = ["food"]
         self.rows: list[list[str]] = []
         self.moves: list[tuple[str, str]] = []
+        self.storage_folder_requests: list[tuple[str, str | None]] = []
 
     async def ensure_receipt_sheet(self) -> None:
         return None
@@ -250,6 +251,10 @@ class _FakeDriveWorkspace:
 
     async def append_receipt_rows(self, rows: list[list[str]]) -> None:
         self.rows.extend(rows)
+
+    async def ensure_receipt_storage_folder(self, *, root_folder_id: str | None = None, date_hint: str | None = None) -> str:
+        self.storage_folder_requests.append((root_folder_id or "", date_hint))
+        return f"{root_folder_id}/2026/03"
 
     async def move_file(self, *, file_id: str, destination_folder_id: str) -> None:
         self.moves.append((file_id, destination_folder_id))
@@ -304,7 +309,8 @@ def test_drive_watcher_skips_existing_attachment_name_and_moves_file() -> None:
     assert gemini.calls == []
     assert notifier.calls == []
     assert workspace.rows == []
-    assert workspace.moves == [("drive-file-1", "processed-folder")]
+    assert workspace.storage_folder_requests == [("processed-folder", "2026-03-16T00:00:00Z")]
+    assert workspace.moves == [("drive-file-1", "processed-folder/2026/03")]
 
 
 def test_drive_watcher_rescans_existing_attachment_name_when_requested() -> None:
@@ -330,3 +336,5 @@ def test_drive_watcher_rescans_existing_attachment_name_when_requested() -> None
     assert gemini.calls == ["receipt.jpg"]
     assert notifier.calls == ["receipt.jpg"]
     assert len(workspace.rows) == 1
+    assert workspace.storage_folder_requests == [("processed-folder", "2026-03-16")]
+    assert workspace.moves == [("drive-file-1", "processed-folder/2026/03")]

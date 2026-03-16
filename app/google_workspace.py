@@ -81,6 +81,19 @@ class GoogleWorkspaceClient:
     ) -> UploadedDriveFile:
         return await asyncio.to_thread(self._upload_receipt_image_sync, file_name, mime_type, image_bytes, purchase_date)
 
+    async def ensure_receipt_storage_folder(
+        self,
+        *,
+        root_folder_id: str | None = None,
+        date_hint: str | None = None,
+    ) -> str:
+        resolved_root_folder_id = root_folder_id or self._drive_folder_id
+        return await asyncio.to_thread(
+            self._ensure_receipt_storage_folder_sync,
+            resolved_root_folder_id,
+            date_hint,
+        )
+
     async def append_receipt_row(self, row: list[str]) -> None:
         await asyncio.to_thread(self._append_receipt_row_sync, row)
 
@@ -285,7 +298,7 @@ class GoogleWorkspaceClient:
         purchase_date: str | None,
     ) -> UploadedDriveFile:
         media = MediaInMemoryUpload(image_bytes, mimetype=mime_type, resumable=False)
-        parent_folder_id = self._ensure_receipt_storage_folder_sync(purchase_date=purchase_date)
+        parent_folder_id = self._ensure_receipt_storage_folder_sync(self._drive_folder_id, purchase_date)
         try:
             response = (
                 self._drive.files()
@@ -307,9 +320,9 @@ class GoogleWorkspaceClient:
 
         return UploadedDriveFile(file_id=response["id"], web_view_link=response.get("webViewLink"))
 
-    def _ensure_receipt_storage_folder_sync(self, *, purchase_date: str | None) -> str:
-        year, month = _resolve_drive_folder_parts(purchase_date)
-        year_folder_id = self._get_or_create_drive_folder_sync(parent_folder_id=self._drive_folder_id, folder_name=year)
+    def _ensure_receipt_storage_folder_sync(self, root_folder_id: str, date_hint: str | None) -> str:
+        year, month = _resolve_drive_folder_parts(date_hint)
+        year_folder_id = self._get_or_create_drive_folder_sync(parent_folder_id=root_folder_id, folder_name=year)
         return self._get_or_create_drive_folder_sync(parent_folder_id=year_folder_id, folder_name=month)
 
     def _get_or_create_drive_folder_sync(self, *, parent_folder_id: str, folder_name: str) -> str:

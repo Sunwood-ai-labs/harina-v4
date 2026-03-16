@@ -41,6 +41,7 @@ class _FakeWorkspace:
         self.moves: list[tuple[str, str]] = []
         self.categories = ["野菜", "飲料"]
         self.added_categories: list[tuple[list[str], str]] = []
+        self.storage_folder_requests: list[tuple[str, str | None]] = []
 
     async def ensure_receipt_sheet(self) -> None:
         return None
@@ -74,6 +75,10 @@ class _FakeWorkspace:
 
     async def append_receipt_rows(self, rows: list[list[str]]) -> None:
         self.rows.extend(rows)
+
+    async def ensure_receipt_storage_folder(self, *, root_folder_id: str | None = None, date_hint: str | None = None) -> str:
+        self.storage_folder_requests.append((root_folder_id or "", date_hint))
+        return f"{root_folder_id}/2026/03"
 
     async def move_file(self, *, file_id: str, destination_folder_id: str) -> None:
         self.moves.append((file_id, destination_folder_id))
@@ -138,7 +143,8 @@ def test_drive_watcher_processes_files_and_moves_them() -> None:
     assert workspace.rows[0][32] == "野菜"
     assert workspace.rows[1][31] == "Juice"
     assert workspace.rows[1][32] == "新カテゴリ"
-    assert workspace.moves == [("drive-file-123", "processed-folder")]
+    assert workspace.storage_folder_requests == [("processed-folder", "2026-03-11")]
+    assert workspace.moves == [("drive-file-123", "processed-folder/2026/03")]
     assert workspace.added_categories == [(["野菜", "新カテゴリ"], "gemini")]
     assert gemini.calls == [["野菜", "飲料"]]
     assert notifier.calls[0]["route"].key == "alice"

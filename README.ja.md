@@ -161,6 +161,8 @@ uv run harina-v4 google init-drive-watch --env-file .env
 
 - 保存したレシート画像は Google Drive の `YYYY/MM` フォルダに自動整理されます。
 
+- Drive watcher で取り込んだファイルは各 processed フォルダ配下の `YYYY/MM` へ移動します。
+
 ## Docker Compose
 
 ```bash

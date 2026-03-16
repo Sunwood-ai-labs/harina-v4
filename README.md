@@ -31,7 +31,8 @@ Each receipt goes through a two-stage Gemini pipeline:
 - Use a `Categories` sheet as the approved category list for every run
 - Normalize categories to short single-word labels such as `野菜`, `惣菜`, and `飲料`
 - Allow Gemini to suggest a new category when no existing option fits, then append it back into Sheets
-- Store original images in Google Drive under `YYYY/MM` archive folders
+- Store Discord-uploaded images in the main Google Drive archive under `YYYY/MM`
+- Move Drive watcher source files into `YYYY/MM` folders inside each processed folder
 - Append one bookkeeping row per line item into Google Sheets, including `itemCategory`
 - Skip duplicate receipts when the same `attachmentName` is already recorded in Google Sheets, with `--rescan` available for intentional reprocessing
 - Forward new Google Drive images into a Discord notification channel
@@ -156,8 +157,8 @@ If Gemini returns a category that is not already in `Categories`, HARINA can app
 
 1. Upload an image into `GOOGLE_DRIVE_WATCH_SOURCE_FOLDER_ID`.
 2. Run `uv run harina-v4 drive watch --once` for a one-shot check, or keep the watcher running continuously.
-3. HARINA downloads the Drive image, runs extraction plus categorization, archives the saved receipt image into the main Google Drive storage as `YYYY/MM`, writes line-item rows into Sheets, posts the image into `DISCORD_NOTIFY_CHANNEL_ID`, and moves the Drive watcher inbox file into `GOOGLE_DRIVE_WATCH_PROCESSED_FOLDER_ID`.
-4. If the same filename is already recorded in Sheets, HARINA skips Discord notification and row writes, then moves the duplicate directly into the processed folder.
+3. HARINA downloads the Drive image, runs extraction plus categorization, writes line-item rows into Sheets, posts the image into `DISCORD_NOTIFY_CHANNEL_ID`, and moves the original Drive file into `GOOGLE_DRIVE_WATCH_PROCESSED_FOLDER_ID/YYYY/MM`.
+4. If the same filename is already recorded in Sheets, HARINA skips Discord notification and row writes, then moves the duplicate directly into the matching `YYYY/MM` processed folder.
 5. If processing fails before completion, HARINA leaves the source file in place for a later retry.
 
 ## Docker Compose

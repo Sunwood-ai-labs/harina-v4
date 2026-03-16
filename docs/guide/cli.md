@@ -99,8 +99,9 @@ Notes:
 
 - `drive watch` reads images from `GOOGLE_DRIVE_WATCH_SOURCE_FOLDER_ID`
 - Notifications go to `DISCORD_NOTIFY_CHANNEL_ID`
-- Successfully handled files move into `GOOGLE_DRIVE_WATCH_PROCESSED_FOLDER_ID`
+- Successfully handled files move into `GOOGLE_DRIVE_WATCH_PROCESSED_FOLDER_ID/YYYY/MM`
 - Duplicate filenames already present in Sheets are skipped before Discord notification and then moved into the processed folder
+- The watcher chooses the processed subfolder from `purchaseDate` when available and falls back to the Drive file timestamp
 - Use `--rescan` when you intentionally want to reprocess duplicate filenames
 - Files that fail before processing completes stay in the source folder for a later retry
 - `DRIVE_POLL_INTERVAL_SECONDS` controls the polling interval

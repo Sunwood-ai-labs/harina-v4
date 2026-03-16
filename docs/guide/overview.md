@@ -15,7 +15,7 @@ Every receipt uses a staged Gemini workflow:
 - Watch Discord channels for image attachments
 - Skip duplicate filenames already recorded in Google Sheets unless you explicitly rerun with `--rescan`
 - Send each receipt image through extraction and categorization
-- Upload the original image to Google Drive under `YYYY/MM` archive folders
+- Upload the original image to the main Google Drive archive under `YYYY/MM`
 - Append one row per line item into Google Sheets
 - Reply in Discord with category summary, per-item categories, and priced line items
 
@@ -66,7 +66,7 @@ HARINA V4 is organized around a Python package CLI surface:
 5. HARINA appends one row per line item into `Receipts`.
 6. HARINA can append newly proposed categories into `Categories`.
 7. The watcher posts the image and summary into `DISCORD_NOTIFY_CHANNEL_ID`.
-8. The Drive file is moved into the processed folder.
+8. The Drive file is moved into a `YYYY/MM` folder under the route's processed folder.
 9. If processing fails before completion, the file stays in the source folder for a later retry.
 
 ### Downloader flow
@@ -85,9 +85,10 @@ HARINA V4 is organized around a Python package CLI surface:
 
 ## Drive archive layout
 
-- Saved receipt images are organized in the main Drive archive folder as `YYYY/MM`.
+- Discord and CLI uploads are copied into the main Drive archive folder as `GOOGLE_DRIVE_FOLDER_ID/YYYY/MM`.
+- Drive watcher intake keeps the original Drive file and moves it into `processed_folder/YYYY/MM` after success.
 - HARINA chooses the folder year and month from `purchaseDate` when Gemini extracts one.
-- If `purchaseDate` is missing, HARINA falls back to the current processing month.
+- If `purchaseDate` is missing, HARINA falls back to the source file timestamp or current processing month.
 
 ## Runtime stack
 

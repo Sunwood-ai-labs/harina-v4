@@ -80,9 +80,13 @@ class DriveReceiptWatcher:
                             route.key,
                             drive_file.name,
                         )
+                        destination_folder_id = await self.google_workspace.ensure_receipt_storage_folder(
+                            root_folder_id=route.processed_folder_id,
+                            date_hint=drive_file.created_time,
+                        )
                         await self.google_workspace.move_file(
                             file_id=drive_file.file_id,
-                            destination_folder_id=route.processed_folder_id,
+                            destination_folder_id=destination_folder_id,
                         )
                         summary.skipped += 1
                         summary.moved += 1
@@ -137,9 +141,13 @@ class DriveReceiptWatcher:
             drive_file_url=drive_file.web_view_link,
         )
         await self.google_workspace.append_receipt_rows(rows)
+        destination_folder_id = await self.google_workspace.ensure_receipt_storage_folder(
+            root_folder_id=route.processed_folder_id,
+            date_hint=extraction.purchase_date or drive_file.created_time,
+        )
         await self.google_workspace.move_file(
             file_id=drive_file.file_id,
-            destination_folder_id=route.processed_folder_id,
+            destination_folder_id=destination_folder_id,
         )
 
 

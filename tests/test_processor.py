@@ -27,7 +27,7 @@ class _FakeGemini:
 
 class _FakeGoogleWorkspace:
     def __init__(self) -> None:
-        self.upload_calls: list[tuple[str, str, bytes]] = []
+        self.upload_calls: list[tuple[str, str, bytes, str | None]] = []
         self.rows: list[list[str]] = []
         self.categories = ["野菜", "飲料"]
         self.added_categories: list[tuple[list[str], str]] = []
@@ -47,8 +47,15 @@ class _FakeGoogleWorkspace:
         self.added_categories.append((categories, source))
         return ["新カテゴリ"]
 
-    async def upload_receipt_image(self, *, file_name: str, mime_type: str, image_bytes: bytes):
-        self.upload_calls.append((file_name, mime_type, image_bytes))
+    async def upload_receipt_image(
+        self,
+        *,
+        file_name: str,
+        mime_type: str,
+        image_bytes: bytes,
+        purchase_date: str | None = None,
+    ):
+        self.upload_calls.append((file_name, mime_type, image_bytes, purchase_date))
 
         class _DriveFile:
             file_id = "drive-123"
@@ -137,6 +144,7 @@ def test_process_receipt_writes_to_google_when_enabled(
     )
 
     assert workspace.upload_calls[0][0].startswith("2026-03-11_Cafe-Harina_")
+    assert workspace.upload_calls[0][3] == "2026-03-11"
     assert workspace.rows == result.rows
     assert len(result.rows) == 2
     assert result.drive_file_id == "drive-123"

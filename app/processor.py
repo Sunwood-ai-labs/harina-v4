@@ -136,6 +136,7 @@ class ReceiptProcessor:
                 file_name=build_drive_file_name(filename, extraction),
                 mime_type=mime_type,
                 image_bytes=image_bytes,
+                purchase_date=extraction.purchase_date,
             )
             drive_file_id = drive_file.file_id
             drive_file_url = drive_file.web_view_link

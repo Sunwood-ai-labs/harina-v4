@@ -13,14 +13,16 @@ Every receipt uses a staged Gemini workflow:
 ### 1. Discord receipt intake
 
 - Watch Discord channels for image attachments
+- Skip duplicate filenames already recorded in Google Sheets unless you explicitly rerun with `--rescan`
 - Send each receipt image through extraction and categorization
-- Upload the original image to Google Drive
+- Upload the original image to Google Drive under `YYYY/MM` archive folders
 - Append one row per line item into Google Sheets
 - Reply in Discord with category summary, per-item categories, and priced line items
 
 ### 2. Google Drive watcher intake
 
 - Poll a Google Drive inbox folder for new image uploads
+- Skip duplicate filenames already recorded in Google Sheets before notifying Discord
 - Download the image directly from Drive
 - Extract fields, categorize the line items, and append them into Google Sheets
 - Post the image and summary into a Discord notification channel
@@ -48,21 +50,24 @@ HARINA V4 is organized around a Python package CLI surface:
 
 1. A user uploads a receipt image to a watched Discord channel.
 2. The bot downloads the image bytes directly from Discord.
-3. Gemini returns normalized JSON using a strict prompt.
-4. Gemini receives the extracted JSON plus the current `Categories` sheet and assigns one category per line item.
-5. The image is copied into Google Drive for source retention.
-6. One row per line item is written into `Receipts`, and any new category can be appended into `Categories`.
-7. The bot posts a summary reply back into Discord with `カテゴリ`, `商品カテゴリ`, and `明細`.
+3. If `attachmentName` is already present in Google Sheets, the bot stops early and replies with `Receipt Skipped`.
+4. Gemini returns normalized JSON using a strict prompt.
+5. Gemini receives the extracted JSON plus the current `Categories` sheet and assigns one category per line item.
+6. The image is copied into Google Drive for source retention under a `YYYY/MM` folder path.
+7. One row per line item is written into `Receipts`, and any new category can be appended into `Categories`.
+8. The bot posts a summary reply back into Discord with `カテゴリ`, `商品カテゴリ`, and `明細`.
 
 ### Drive watcher flow
 
 1. A user uploads a receipt image into the Drive inbox folder.
 2. The watcher polls Drive and downloads new image files.
-3. Gemini extracts normalized receipt fields and then categorizes each line item.
-4. HARINA appends one row per line item into `Receipts`.
-5. HARINA can append newly proposed categories into `Categories`.
-6. The watcher posts the image and summary into `DISCORD_NOTIFY_CHANNEL_ID`.
-7. The Drive file is moved into the processed folder.
+3. If the filename is already present in Google Sheets, HARINA skips Discord notification and row writes, then moves the duplicate file into the processed folder.
+4. Gemini extracts normalized receipt fields and then categorizes each line item.
+5. HARINA appends one row per line item into `Receipts`.
+6. HARINA can append newly proposed categories into `Categories`.
+7. The watcher posts the image and summary into `DISCORD_NOTIFY_CHANNEL_ID`.
+8. The Drive file is moved into the processed folder.
+9. If processing fails before completion, the file stays in the source folder for a later retry.
 
 ### Downloader flow
 
@@ -70,6 +75,19 @@ HARINA V4 is organized around a Python package CLI surface:
 2. The downloader walks message history with the bot token.
 3. Image attachments are saved into a dataset folder tree.
 4. `metadata.jsonl` is generated for replay, auditing, or downstream batch processing.
+
+## Duplicate attachment protection
+
+- HARINA uses `attachmentName` as the receipt-image primary key across the year-based receipt tabs in Google Sheets.
+- `receipt process` and Discord intake skip duplicates by default and only replay them when `--rescan` is enabled.
+- `drive watch` skips duplicates before Discord notification so operators do not get duplicate Drive intake posts.
+- The duplicate guard is intentionally filename-based, so keep source filenames stable when you want idempotent re-runs.
+
+## Drive archive layout
+
+- Saved receipt images are organized in the main Drive archive folder as `YYYY/MM`.
+- HARINA chooses the folder year and month from `purchaseDate` when Gemini extracts one.
+- If `purchaseDate` is missing, HARINA falls back to the current processing month.
 
 ## Runtime stack
 

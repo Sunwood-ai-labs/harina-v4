@@ -136,7 +136,15 @@ class _FakeProcessorWorkspace:
         del categories, source
         return []
 
-    async def upload_receipt_image(self, *, file_name: str, mime_type: str, image_bytes: bytes):
+    async def upload_receipt_image(
+        self,
+        *,
+        file_name: str,
+        mime_type: str,
+        image_bytes: bytes,
+        purchase_date: str | None = None,
+    ):
+        del purchase_date
         del mime_type, image_bytes
         self.upload_calls.append(file_name)
 

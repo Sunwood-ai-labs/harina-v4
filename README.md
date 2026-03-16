@@ -31,8 +31,9 @@ Each receipt goes through a two-stage Gemini pipeline:
 - Use a `Categories` sheet as the approved category list for every run
 - Normalize categories to short single-word labels such as `野菜`, `惣菜`, and `飲料`
 - Allow Gemini to suggest a new category when no existing option fits, then append it back into Sheets
-- Store original images in Google Drive
+- Store original images in Google Drive under `YYYY/MM` archive folders
 - Append one bookkeeping row per line item into Google Sheets, including `itemCategory`
+- Skip duplicate receipts when the same `attachmentName` is already recorded in Google Sheets, with `--rescan` available for intentional reprocessing
 - Forward new Google Drive images into a Discord notification channel
 - Reply in Discord with category summary, per-item categories, and priced line items
 - Move processed Google Drive files into a separate folder after success
@@ -43,6 +44,14 @@ Each receipt goes through a two-stage Gemini pipeline:
 1. Discord intake: users upload receipt images to a watched Discord channel and the bot replies with a summary, category totals, and per-item categories.
 2. Drive intake: users upload images to a Google Drive inbox folder and the watcher posts them into Discord, writes Sheets line-item rows, and moves them into a processed folder.
 3. Backfill and replay: operators download historical Discord images into a local dataset and rerun Gemini checks after prompt or model changes.
+
+## Duplicate attachment protection
+
+- HARINA treats `attachmentName` as the primary key for receipt images across the receipt tabs in Google Sheets.
+- Discord intake replies with `Receipt Skipped` instead of writing duplicate rows when the same filename is already recorded.
+- `drive watch` skips duplicate filenames before Discord notification, avoids writing duplicate rows, and moves the duplicate file into the processed folder.
+- `receipt process --rescan` and `drive watch --rescan` bypass the duplicate guard when you intentionally want a replay or backfill.
+- If a Drive watcher run fails before processing completes, the file stays in the source folder so it can be retried safely.
 
 ## Architecture
 
@@ -90,10 +99,12 @@ Core commands:
 uv run harina-v4 bot run
 uv run harina-v4 bot upload-test --channel-id <channel_id> --image ./sample-receipt.jpg
 uv run harina-v4 receipt process ./sample-receipt.jpg --skip-google-write
+uv run harina-v4 receipt process ./sample-receipt.jpg --rescan
 uv run harina-v4 google oauth-login --oauth-client-secret-file ./secrets/harina-oauth-client.json --env-file .env
 uv run harina-v4 google init-resources --env-file .env
 uv run harina-v4 google init-drive-watch --env-file .env
 uv run harina-v4 drive watch --once
+uv run harina-v4 drive watch --once --rescan
 uv run harina-v4 dataset download "https://discord.com/channels/<guild_id>/<channel_id>" --limit 50
 uv run harina-v4 dataset smoke-test --dataset-dir ./dataset/v3-backfill --limit 2
 uv run harina-v4 test docs-public
@@ -145,7 +156,9 @@ If Gemini returns a category that is not already in `Categories`, HARINA can app
 
 1. Upload an image into `GOOGLE_DRIVE_WATCH_SOURCE_FOLDER_ID`.
 2. Run `uv run harina-v4 drive watch --once` for a one-shot check, or keep the watcher running continuously.
-3. HARINA downloads the Drive image, runs extraction plus categorization, writes line-item rows into Sheets, posts the image into `DISCORD_NOTIFY_CHANNEL_ID`, and moves the Drive file into `GOOGLE_DRIVE_WATCH_PROCESSED_FOLDER_ID`.
+3. HARINA downloads the Drive image, runs extraction plus categorization, archives the saved receipt image into the main Google Drive storage as `YYYY/MM`, writes line-item rows into Sheets, posts the image into `DISCORD_NOTIFY_CHANNEL_ID`, and moves the Drive watcher inbox file into `GOOGLE_DRIVE_WATCH_PROCESSED_FOLDER_ID`.
+4. If the same filename is already recorded in Sheets, HARINA skips Discord notification and row writes, then moves the duplicate directly into the processed folder.
+5. If processing fails before completion, HARINA leaves the source file in place for a later retry.
 
 ## Docker Compose
 

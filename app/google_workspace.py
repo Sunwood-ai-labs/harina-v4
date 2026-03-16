@@ -24,6 +24,8 @@ RECEIPT_PROCESSED_AT_INDEX = RECEIPT_SHEET_HEADERS.index("processedAt")
 RECEIPT_PURCHASE_DATE_INDEX = RECEIPT_SHEET_HEADERS.index("purchaseDate")
 RECEIPT_ATTACHMENT_NAME_COLUMN = chr(ord("A") + RECEIPT_SHEET_HEADERS.index("attachmentName"))
 YEAR_PATTERN = re.compile(r"(?<!\d)((?:19|20|21)\d{2})(?!\d)")
+YEAR_MONTH_PATTERN = re.compile(r"(?<!\d)((?:19|20|21)\d{2})\D{0,3}(1[0-2]|0?[1-9])(?!\d)")
+GOOGLE_DRIVE_FOLDER_MIME_TYPE = "application/vnd.google-apps.folder"
 
 
 @dataclass(slots=True)
@@ -55,6 +57,7 @@ class GoogleWorkspaceClient:
         self._drive = build("drive", "v3", credentials=credentials, cache_discovery=False)
         self._sheets = build("sheets", "v4", credentials=credentials, cache_discovery=False)
         self._drive_folder_id = drive_folder_id
+        self._drive_folder_cache: dict[tuple[str, str], str] = {}
         self._spreadsheet_id = spreadsheet_id
         self._sheet_name = sheet_name
         self._category_sheet_name = category_sheet_name
@@ -68,8 +71,15 @@ class GoogleWorkspaceClient:
     async def append_receipt_categories(self, categories: list[str], *, source: str = "gemini") -> list[str]:
         return await asyncio.to_thread(self._append_receipt_categories_sync, categories, source)
 
-    async def upload_receipt_image(self, *, file_name: str, mime_type: str, image_bytes: bytes) -> UploadedDriveFile:
-        return await asyncio.to_thread(self._upload_receipt_image_sync, file_name, mime_type, image_bytes)
+    async def upload_receipt_image(
+        self,
+        *,
+        file_name: str,
+        mime_type: str,
+        image_bytes: bytes,
+        purchase_date: str | None = None,
+    ) -> UploadedDriveFile:
+        return await asyncio.to_thread(self._upload_receipt_image_sync, file_name, mime_type, image_bytes, purchase_date)
 
     async def append_receipt_row(self, row: list[str]) -> None:
         await asyncio.to_thread(self._append_receipt_row_sync, row)
@@ -267,13 +277,20 @@ class GoogleWorkspaceClient:
         )
         return categories_to_add
 
-    def _upload_receipt_image_sync(self, file_name: str, mime_type: str, image_bytes: bytes) -> UploadedDriveFile:
+    def _upload_receipt_image_sync(
+        self,
+        file_name: str,
+        mime_type: str,
+        image_bytes: bytes,
+        purchase_date: str | None,
+    ) -> UploadedDriveFile:
         media = MediaInMemoryUpload(image_bytes, mimetype=mime_type, resumable=False)
+        parent_folder_id = self._ensure_receipt_storage_folder_sync(purchase_date=purchase_date)
         try:
             response = (
                 self._drive.files()
                 .create(
-                    body={"name": file_name, "parents": [self._drive_folder_id]},
+                    body={"name": file_name, "parents": [parent_folder_id]},
                     media_body=media,
                     fields="id,webViewLink",
                 )
@@ -289,6 +306,52 @@ class GoogleWorkspaceClient:
             raise
 
         return UploadedDriveFile(file_id=response["id"], web_view_link=response.get("webViewLink"))
+
+    def _ensure_receipt_storage_folder_sync(self, *, purchase_date: str | None) -> str:
+        year, month = _resolve_drive_folder_parts(purchase_date)
+        year_folder_id = self._get_or_create_drive_folder_sync(parent_folder_id=self._drive_folder_id, folder_name=year)
+        return self._get_or_create_drive_folder_sync(parent_folder_id=year_folder_id, folder_name=month)
+
+    def _get_or_create_drive_folder_sync(self, *, parent_folder_id: str, folder_name: str) -> str:
+        cache_key = (parent_folder_id, folder_name)
+        cached_folder_id = self._drive_folder_cache.get(cache_key)
+        if cached_folder_id is not None:
+            return cached_folder_id
+
+        response = (
+            self._drive.files()
+            .list(
+                q=(
+                    f"'{_escape_drive_query_value(parent_folder_id)}' in parents and "
+                    f"name = '{_escape_drive_query_value(folder_name)}' and "
+                    f"mimeType = '{GOOGLE_DRIVE_FOLDER_MIME_TYPE}' and trashed = false"
+                ),
+                fields="files(id,name)",
+                pageSize=1,
+            )
+            .execute()
+        )
+        existing_files = response.get("files", [])
+        if existing_files:
+            folder_id = existing_files[0]["id"]
+            self._drive_folder_cache[cache_key] = folder_id
+            return folder_id
+
+        response = (
+            self._drive.files()
+            .create(
+                body={
+                    "name": folder_name,
+                    "parents": [parent_folder_id],
+                    "mimeType": GOOGLE_DRIVE_FOLDER_MIME_TYPE,
+                },
+                fields="id",
+            )
+            .execute()
+        )
+        folder_id = response["id"]
+        self._drive_folder_cache[cache_key] = folder_id
+        return folder_id
 
     def _append_receipt_row_sync(self, row: list[str]) -> None:
         self._append_receipt_rows_sync([row])
@@ -452,6 +515,20 @@ def _extract_year_from_cell(value: str) -> str | None:
     if match is None:
         return None
     return match.group(1)
+
+
+def _resolve_drive_folder_parts(purchase_date: str | None) -> tuple[str, str]:
+    if purchase_date:
+        match = YEAR_MONTH_PATTERN.search(purchase_date)
+        if match is not None:
+            return match.group(1), f"{int(match.group(2)):02d}"
+
+    now = datetime.now(UTC)
+    return str(now.year), f"{now.month:02d}"
+
+
+def _escape_drive_query_value(value: str) -> str:
+    return value.replace("\\", "\\\\").replace("'", "\\'")
 
 
 def _normalize_attachment_name(value: str) -> str:

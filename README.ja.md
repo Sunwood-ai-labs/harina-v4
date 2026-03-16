@@ -90,10 +90,12 @@ uv run harina-v4 --help
 uv run harina-v4 bot run
 uv run harina-v4 bot upload-test --channel-id <channel_id> --image ./sample-receipt.jpg
 uv run harina-v4 receipt process ./sample-receipt.jpg --skip-google-write
+uv run harina-v4 receipt process ./sample-receipt.jpg --rescan
 uv run harina-v4 google oauth-login --oauth-client-secret-file ./secrets/harina-oauth-client.json --env-file .env
 uv run harina-v4 google init-resources --env-file .env
 uv run harina-v4 google init-drive-watch --env-file .env
 uv run harina-v4 drive watch --once
+uv run harina-v4 drive watch --once --rescan
 uv run harina-v4 dataset download "https://discord.com/channels/<guild_id>/<channel_id>" --limit 50
 uv run harina-v4 dataset smoke-test --dataset-dir ./dataset/v3-backfill --limit 2
 uv run harina-v4 test docs-public
@@ -146,6 +148,18 @@ uv run harina-v4 google init-drive-watch --env-file .env
 1. `GOOGLE_DRIVE_WATCH_SOURCE_FOLDER_ID` に画像をアップロード
 2. `uv run harina-v4 drive watch --once` で単発確認、または watcher を常駐起動
 3. HARINA が Drive 画像を取得し、抽出とカテゴリ付与を行い、Sheets に商品行を追記し、`DISCORD_NOTIFY_CHANNEL_ID` へ画像つき通知を送り、最後に `GOOGLE_DRIVE_WATCH_PROCESSED_FOLDER_ID` へ移動
+
+## 重複ファイル名の保護
+
+- HARINA は Google Sheets のレシートタブ全体で `attachmentName` をレシート画像の主キーとして扱います。
+- Discord 取り込みでは同じファイル名が既に記録されていると `Receipt Skipped` を返し、重複行を書きません。
+- `drive watch` は重複ファイル名を Discord 通知前にスキップし、重複行を書かずに processed フォルダへ移動します。
+- `receipt process --rescan` と `drive watch --rescan` を使うと、明示的な再スキャンやバックフィルを実行できます。
+- Drive watcher が完了前に失敗したときは source フォルダに残るため、そのまま再試行できます。
+
+## Drive 保存先
+
+- 保存したレシート画像は Google Drive の `YYYY/MM` フォルダに自動整理されます。
 
 ## Docker Compose
 

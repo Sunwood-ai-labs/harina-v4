@@ -23,6 +23,12 @@ Process a local receipt image through the CLI-first pipeline:
 uv run harina-v4 receipt process ./sample-receipt.jpg --skip-google-write
 ```
 
+Force a replay even when the same filename is already recorded in Google Sheets:
+
+```bash
+uv run harina-v4 receipt process ./sample-receipt.jpg --rescan
+```
+
 Run both the CLI path and the Discord path against every sample under `docs/public/test`:
 
 ```bash
@@ -32,6 +38,8 @@ uv run harina-v4 test docs-public
 Notes:
 
 - `receipt process` uses the same two-stage Gemini pipeline as the Discord bot
+- when Google writes are enabled, `receipt process` skips duplicate filenames already present in Sheets
+- use `--rescan` when you intentionally want to replay a receipt with the same filename
 - `--skip-google-write` is the easiest way to debug locally with only `GEMINI_API_KEY`
 - when `--skip-google-write` is enabled, HARINA cannot read the Sheets-backed category catalog and Gemini will create short freeform category names
 - omit `--skip-google-write` when you want the CLI to upload to Drive, append to Sheets, and categorize against the live `Categories` sheet
@@ -65,12 +73,20 @@ Notes:
 - Discord-side checks default to `DISCORD_TEST_CHANNEL_ID` unless `--channel-id` is provided
 - successful Discord replies now include `カテゴリ`, `商品カテゴリ`, and `明細`
 
+- when the filename already exists in Sheets, the bot replies with `Receipt Skipped` and an `Open Sheet` link instead of processing the receipt again
+
 ## Drive watcher commands
 
 Run one watcher scan and exit:
 
 ```bash
 uv run harina-v4 drive watch --once
+```
+
+Force a replay scan even when duplicate filenames are already recorded in Google Sheets:
+
+```bash
+uv run harina-v4 drive watch --once --rescan
 ```
 
 Run the watcher continuously:
@@ -84,6 +100,9 @@ Notes:
 - `drive watch` reads images from `GOOGLE_DRIVE_WATCH_SOURCE_FOLDER_ID`
 - Notifications go to `DISCORD_NOTIFY_CHANNEL_ID`
 - Successfully handled files move into `GOOGLE_DRIVE_WATCH_PROCESSED_FOLDER_ID`
+- Duplicate filenames already present in Sheets are skipped before Discord notification and then moved into the processed folder
+- Use `--rescan` when you intentionally want to reprocess duplicate filenames
+- Files that fail before processing completes stay in the source folder for a later retry
 - `DRIVE_POLL_INTERVAL_SECONDS` controls the polling interval
 
 ## Google commands

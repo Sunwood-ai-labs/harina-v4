@@ -23,6 +23,12 @@ uv run harina-v4 --help
 uv run harina-v4 receipt process ./sample-receipt.jpg --skip-google-write
 ```
 
+同じファイル名が Google Sheets に既にあっても明示的に再実行したい場合:
+
+```bash
+uv run harina-v4 receipt process ./sample-receipt.jpg --rescan
+```
+
 `docs/public/test` の画像を使って CLI と Discord の両方をまとめて確認:
 
 ```bash
@@ -70,6 +76,12 @@ uv run harina-v4 bot upload-test --channel-id <channel_id> --image ./docs/public
 
 ```bash
 uv run harina-v4 drive watch --once
+```
+
+重複ファイル名も明示的に再処理したい場合:
+
+```bash
+uv run harina-v4 drive watch --once --rescan
 ```
 
 watcher を常駐実行:

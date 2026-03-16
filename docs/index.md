@@ -31,7 +31,9 @@ features:
   - title: Two-stage Gemini pipeline
     details: Extract receipt structure first, then assign one category per line item against the live Sheets catalog.
   - title: Google Workspace handoff
-    details: Upload the source image to Drive, write one row per line item to `Receipts`, and maintain a reusable `Categories` sheet.
+    details: Upload the source image to Drive under `YYYY/MM`, write one row per line item to `Receipts`, and maintain a reusable `Categories` sheet.
+  - title: Duplicate-safe intake
+    details: Treat `attachmentName` as the primary key, skip duplicates by default, and use `--rescan` only when you intentionally want to replay a receipt.
   - title: Migration and replay ready
     details: Download historical Discord images for V1, V2, V3 migrations, regression datasets, and re-scans after model or prompt changes.
   - title: Category-aware Discord replies

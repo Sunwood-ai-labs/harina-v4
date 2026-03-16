@@ -84,6 +84,7 @@ uv run harina-v4 google init-drive-watch --env-file .env
 - `DRIVE_POLL_INTERVAL_SECONDS`
 
 すでに `GOOGLE_DRIVE_FOLDER_ID` がある場合は、それを watcher フォルダの親として自動利用します。
+watcher の実行時には、`GOOGLE_DRIVE_WATCH_PROCESSED_FOLDER_ID` 配下に `YYYY/MM` サブフォルダを必要に応じて自動作成します。
 
 ## 5. 注意点
 

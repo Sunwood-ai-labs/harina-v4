@@ -94,7 +94,8 @@ uv run harina-v4 drive watch
 
 - `drive watch` は `GOOGLE_DRIVE_WATCH_SOURCE_FOLDER_ID` から画像を読みます
 - 通知先は `DISCORD_NOTIFY_CHANNEL_ID` です
-- 成功したファイルは `GOOGLE_DRIVE_WATCH_PROCESSED_FOLDER_ID` へ移動します
+- 成功したファイルは `GOOGLE_DRIVE_WATCH_PROCESSED_FOLDER_ID/YYYY/MM` へ移動します
+- 重複ファイル名をスキップした場合も、同じ `processed/YYYY/MM` へ移動します
 - ポーリング間隔は `DRIVE_POLL_INTERVAL_SECONDS` で決まります
 
 ## Google コマンド
@@ -160,3 +161,8 @@ uv run harina-v4 dataset smoke-test --dataset-dir ./dataset/v3-backfill --limit 
 - カテゴリはレシート単位ではなく商品ごとに付きます
 - 既存候補に合わない場合は Gemini が短い新カテゴリを提案できます
 - 新カテゴリは次回以降に使えるよう `Categories` シートへ追記されます
+
+## Drive watcher 保存先
+
+- Drive watcher で正常処理または重複スキップされたファイルは `GOOGLE_DRIVE_WATCH_PROCESSED_FOLDER_ID/YYYY/MM` に移動されます。
+- `purchaseDate` があればその年月、なければ Drive 側の作成日時で processed サブフォルダを選びます。

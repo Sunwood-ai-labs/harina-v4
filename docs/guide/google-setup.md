@@ -84,6 +84,7 @@ The command writes these keys when `--env-file` is used:
 - `DRIVE_POLL_INTERVAL_SECONDS`
 
 If `GOOGLE_DRIVE_FOLDER_ID` is already set, HARINA uses it as the default parent folder for the watcher folders.
+The watcher creates `YYYY/MM` subfolders inside `GOOGLE_DRIVE_WATCH_PROCESSED_FOLDER_ID` lazily during processing.
 
 ## 5. Important notes
 

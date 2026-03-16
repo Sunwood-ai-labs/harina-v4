@@ -14,7 +14,7 @@ Discord 起点と Google Drive 起点の両方に対応します。
 
 - Discord チャンネルの画像添付を監視
 - 各レシート画像に対して抽出とカテゴリ付与を実行
-- 元画像を Google Drive に保存
+- 元画像を Google Drive の `YYYY/MM` に保存
 - Google Sheets に商品ごとの 1 行を追記
 - Discord にカテゴリ要約、商品ごとのカテゴリ、金額つき明細を返信
 
@@ -24,7 +24,7 @@ Discord 起点と Google Drive 起点の両方に対応します。
 - 新着画像を Drive から直接ダウンロード
 - Gemini で抽出し、各商品にカテゴリを付与して Google Sheets に追記
 - 画像と要約を Discord 通知チャンネルへ投稿
-- 成功後に Drive ファイルを processed フォルダへ移動
+- 成功後に Drive ファイルを processed `YYYY/MM` フォルダへ移動
 
 ## CLI 中心の構成
 
@@ -50,7 +50,7 @@ HARINA V4 は Python パッケージ CLI を中心に整理されています。
 2. bot が Discord から画像 bytes を取得
 3. Gemini が正規化済みレシート JSON を返す
 4. Gemini が抽出結果と `Categories` シートを使って商品ごとのカテゴリを返す
-5. 元画像を Google Drive に保存
+5. 元画像を Google Drive の `YYYY/MM` に保存
 6. `Receipts` に商品ごとの 1 行を書き込み、必要なら `Categories` に新カテゴリも追記する
 7. Discord に `カテゴリ`、`商品カテゴリ`、`明細` を含む返信を返す
 
@@ -62,7 +62,7 @@ HARINA V4 は Python パッケージ CLI を中心に整理されています。
 4. HARINA が `Receipts` に商品ごとの 1 行を追記
 5. HARINA が必要に応じて `Categories` に新カテゴリを追加
 6. watcher が `DISCORD_NOTIFY_CHANNEL_ID` に画像つき通知を投稿
-7. Drive ファイルを processed フォルダへ移動
+7. Drive ファイルを processed `YYYY/MM` フォルダへ移動
 
 ### Downloader フロー
 
@@ -70,6 +70,12 @@ HARINA V4 は Python パッケージ CLI を中心に整理されています。
 2. downloader が bot token でメッセージ履歴を走査
 3. 画像添付を dataset フォルダ構成で保存
 4. 再処理や監査用に `metadata.jsonl` を生成
+
+## Drive 保存先
+
+- Discord と CLI の取り込み画像は、メインの Drive アーカイブに `YYYY/MM` で保存されます。
+- Drive watcher の元ファイルは、処理成功時も重複スキップ時も `processed/YYYY/MM` へ移動します。
+- `purchaseDate` があればその年月、なければ Drive 側の作成日時を使って保存先を決めます。
 
 ## 実行スタック
 

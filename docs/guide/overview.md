@@ -26,7 +26,7 @@ Every receipt uses a staged Gemini workflow:
 - Download the image directly from Drive
 - Extract fields, categorize the line items, and append them into Google Sheets
 - Post the image and summary into a Discord notification channel
-- Move the file into a processed Drive folder after success
+- Move the file into a processed `YYYY/MM` Drive folder after success
 
 ## CLI-first packaging
 
@@ -61,7 +61,7 @@ HARINA V4 is organized around a Python package CLI surface:
 
 1. A user uploads a receipt image into the Drive inbox folder.
 2. The watcher polls Drive and downloads new image files.
-3. If the filename is already present in Google Sheets, HARINA skips Discord notification and row writes, then moves the duplicate file into the processed folder.
+3. If the filename is already present in Google Sheets, HARINA skips Discord notification and row writes, then moves the duplicate file into the matching `processed/YYYY/MM` folder.
 4. Gemini extracts normalized receipt fields and then categorizes each line item.
 5. HARINA appends one row per line item into `Receipts`.
 6. HARINA can append newly proposed categories into `Categories`.
@@ -80,13 +80,13 @@ HARINA V4 is organized around a Python package CLI surface:
 
 - HARINA uses `attachmentName` as the receipt-image primary key across the year-based receipt tabs in Google Sheets.
 - `receipt process` and Discord intake skip duplicates by default and only replay them when `--rescan` is enabled.
-- `drive watch` skips duplicates before Discord notification so operators do not get duplicate Drive intake posts.
+- `drive watch` skips duplicates before Discord notification, avoids duplicate row writes, and still routes the file into the matching `processed/YYYY/MM` folder.
 - The duplicate guard is intentionally filename-based, so keep source filenames stable when you want idempotent re-runs.
 
 ## Drive archive layout
 
 - Discord and CLI uploads are copied into the main Drive archive folder as `GOOGLE_DRIVE_FOLDER_ID/YYYY/MM`.
-- Drive watcher intake keeps the original Drive file and moves it into `processed_folder/YYYY/MM` after success.
+- Drive watcher intake keeps the original Drive file and moves it into `processed_folder/YYYY/MM` after success or duplicate-skip.
 - HARINA chooses the folder year and month from `purchaseDate` when Gemini extracts one.
 - If `purchaseDate` is missing, HARINA falls back to the source file timestamp or current processing month.
 

@@ -37,20 +37,20 @@ Each receipt goes through a two-stage Gemini pipeline:
 - Skip duplicate receipts when the same `attachmentName` is already recorded in Google Sheets, with `--rescan` available for intentional reprocessing
 - Forward new Google Drive images into a Discord notification channel
 - Reply in Discord with category summary, per-item categories, and priced line items
-- Move processed Google Drive files into a separate folder after success
+- Move processed Google Drive files into `processed/YYYY/MM` after success
 - Run locally with `uv` or continuously with Docker Compose
 
 ## Typical workflows
 
 1. Discord intake: users upload receipt images to a watched Discord channel and the bot replies with a summary, category totals, and per-item categories.
-2. Drive intake: users upload images to a Google Drive inbox folder and the watcher posts them into Discord, writes Sheets line-item rows, and moves them into a processed folder.
+2. Drive intake: users upload images to a Google Drive inbox folder and the watcher posts them into Discord, writes Sheets line-item rows, and moves the original Drive file into a `processed/YYYY/MM` path.
 3. Backfill and replay: operators download historical Discord images into a local dataset and rerun Gemini checks after prompt or model changes.
 
 ## Duplicate attachment protection
 
 - HARINA treats `attachmentName` as the primary key for receipt images across the receipt tabs in Google Sheets.
 - Discord intake replies with `Receipt Skipped` instead of writing duplicate rows when the same filename is already recorded.
-- `drive watch` skips duplicate filenames before Discord notification, avoids writing duplicate rows, and moves the duplicate file into the processed folder.
+- `drive watch` skips duplicate filenames before Discord notification, avoids writing duplicate rows, and moves the duplicate file into the matching `processed/YYYY/MM` folder.
 - `receipt process --rescan` and `drive watch --rescan` bypass the duplicate guard when you intentionally want a replay or backfill.
 - If a Drive watcher run fails before processing completes, the file stays in the source folder so it can be retried safely.
 
@@ -128,6 +128,8 @@ uv run harina-v4 google init-drive-watch --env-file .env
 - a Drive processed folder for files already handled
 - optional `.env` entries for folder IDs, URLs, and poll interval
 
+During live watcher runs, HARINA creates `YYYY/MM` subfolders under the processed folder on demand.
+
 Useful flags:
 
 - `--source-folder-name "Harina V4 Drive Inbox"`
@@ -159,7 +161,8 @@ If Gemini returns a category that is not already in `Categories`, HARINA can app
 2. Run `uv run harina-v4 drive watch --once` for a one-shot check, or keep the watcher running continuously.
 3. HARINA downloads the Drive image, runs extraction plus categorization, writes line-item rows into Sheets, posts the image into `DISCORD_NOTIFY_CHANNEL_ID`, and moves the original Drive file into `GOOGLE_DRIVE_WATCH_PROCESSED_FOLDER_ID/YYYY/MM`.
 4. If the same filename is already recorded in Sheets, HARINA skips Discord notification and row writes, then moves the duplicate directly into the matching `YYYY/MM` processed folder.
-5. If processing fails before completion, HARINA leaves the source file in place for a later retry.
+5. HARINA chooses the processed subfolder from `purchaseDate` when available and otherwise falls back to the Drive file timestamp.
+6. If processing fails before completion, HARINA leaves the source file in place for a later retry.
 
 ## Docker Compose
 

@@ -31,7 +31,7 @@ Harina Receipt Bot は、レシート処理を自前で回したい人向けの 
 - 毎回 `Categories` シートを読んで承認済みカテゴリ一覧を Gemini に渡す
 - `野菜`、`惣菜`、`飲料` のような短い一語カテゴリに正規化する
 - 既存カテゴリに合わない場合は Gemini が新カテゴリを提案し、`Categories` に追記する
-- 元画像を Google Drive に保存
+- Discord や CLI からの元画像を Google Drive の `YYYY/MM` に保存
 - Google Sheets に商品ごとの 1 行を書き込み、`itemCategory` も保存する
 - Google Drive の新着画像を Discord 通知チャンネルへ転送
 - Discord 返信でカテゴリ要約、商品ごとのカテゴリ、金額つき明細を表示
@@ -41,7 +41,7 @@ Harina Receipt Bot は、レシート処理を自前で回したい人向けの 
 ## 主な使い方
 
 1. Discord 受付: 指定チャンネルへ画像を投稿すると、bot が処理してカテゴリ付きで返信します。
-2. Drive 受付: 監視元フォルダへ画像を置くと、watcher が Discord 通知、Sheets の商品行記録、processed フォルダ移動まで実行します。
+2. Drive 受付: 監視元フォルダへ画像を置くと、watcher が Discord 通知、Sheets の商品行記録、`processed/YYYY/MM` への移動まで実行します。
 3. バックフィル: 過去の Discord 画像を dataset として落として、Gemini の再評価や移行検証に使えます。
 
 ## アーキテクチャ
@@ -117,6 +117,7 @@ uv run harina-v4 google init-drive-watch --env-file .env
 - 新着画像用の Drive inbox フォルダを作成または再利用
 - 処理済みファイル用の Drive processed フォルダを作成または再利用
 - フォルダ ID、URL、ポーリング秒数を `.env` に保存
+- watcher 実行時に必要なら processed フォルダ配下へ `YYYY/MM` サブフォルダを自動作成
 
 便利なオプション:
 
@@ -147,21 +148,22 @@ uv run harina-v4 google init-drive-watch --env-file .env
 
 1. `GOOGLE_DRIVE_WATCH_SOURCE_FOLDER_ID` に画像をアップロード
 2. `uv run harina-v4 drive watch --once` で単発確認、または watcher を常駐起動
-3. HARINA が Drive 画像を取得し、抽出とカテゴリ付与を行い、Sheets に商品行を追記し、`DISCORD_NOTIFY_CHANNEL_ID` へ画像つき通知を送り、最後に `GOOGLE_DRIVE_WATCH_PROCESSED_FOLDER_ID` へ移動
+3. HARINA が Drive 画像を取得し、抽出とカテゴリ付与を行い、Sheets に商品行を追記し、`DISCORD_NOTIFY_CHANNEL_ID` へ画像つき通知を送り、最後に `GOOGLE_DRIVE_WATCH_PROCESSED_FOLDER_ID/YYYY/MM` へ移動
 
 ## 重複ファイル名の保護
 
 - HARINA は Google Sheets のレシートタブ全体で `attachmentName` をレシート画像の主キーとして扱います。
 - Discord 取り込みでは同じファイル名が既に記録されていると `Receipt Skipped` を返し、重複行を書きません。
-- `drive watch` は重複ファイル名を Discord 通知前にスキップし、重複行を書かずに processed フォルダへ移動します。
+- `drive watch` は重複ファイル名を Discord 通知前にスキップし、重複行を書かずに対応する `processed/YYYY/MM` フォルダへ移動します。
 - `receipt process --rescan` と `drive watch --rescan` を使うと、明示的な再スキャンやバックフィルを実行できます。
 - Drive watcher が完了前に失敗したときは source フォルダに残るため、そのまま再試行できます。
 
 ## Drive 保存先
 
 - 保存したレシート画像は Google Drive の `YYYY/MM` フォルダに自動整理されます。
-
 - Drive watcher で取り込んだファイルは各 processed フォルダ配下の `YYYY/MM` へ移動します。
+- Drive watcher の重複スキップ時も、移動先は processed フォルダ直下ではなく `YYYY/MM` サブフォルダです。
+- `purchaseDate` があればその年月、なければ Drive 側の作成日時を使って移動先を決めます。
 
 ## Docker Compose
 

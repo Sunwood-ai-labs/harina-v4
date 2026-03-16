@@ -16,6 +16,7 @@ async def run_local_receipt_process(
     image_path: Path,
     mime_type: str | None = None,
     skip_google_write: bool = False,
+    rescan: bool = False,
     source_name: str = "cli",
     author_tag: str = "harina-v4",
 ) -> dict[str, object]:
@@ -55,6 +56,7 @@ async def run_local_receipt_process(
         mime_type=resolved_mime_type,
         image_bytes=image_path.read_bytes(),
         write_to_google=not skip_google_write,
+        rescan_existing=rescan,
     )
 
     return {

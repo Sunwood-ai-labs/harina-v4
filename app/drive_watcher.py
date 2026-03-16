@@ -28,6 +28,7 @@ logger = logging.getLogger(__name__)
 class DriveWatchScanSummary:
     scanned: int = 0
     processed: int = 0
+    skipped: int = 0
     failed: int = 0
     moved: int = 0
     notified: int = 0
@@ -44,17 +45,22 @@ class DriveReceiptWatcher:
         google_workspace: GoogleWorkspaceClient,
         notifier,
         routes: list[DriveWatchRoute],
+        rescan_existing: bool = False,
     ) -> None:
         self.gemini = gemini
         self.google_workspace = google_workspace
         self.notifier = notifier
         self.routes = routes
+        self.rescan_existing = rescan_existing
 
     async def ensure_receipt_sheet(self) -> None:
         await self.google_workspace.ensure_receipt_sheet()
 
     async def scan_once(self) -> DriveWatchScanSummary:
         summary = DriveWatchScanSummary()
+        recorded_attachment_names = set()
+        if not self.rescan_existing:
+            recorded_attachment_names = await self.google_workspace.list_receipt_attachment_names()
 
         for route in self.routes:
             files = await self.google_workspace.list_image_files(folder_id=route.source_folder_id)
@@ -62,12 +68,34 @@ class DriveReceiptWatcher:
 
             for drive_file in files:
                 try:
+                    normalized_attachment_name = _normalize_attachment_name(drive_file.name)
+                    if (
+                        not self.rescan_existing
+                        and normalized_attachment_name
+                        and normalized_attachment_name in recorded_attachment_names
+                    ):
+                        logger.info(
+                            "Skipping Drive file %s on route %s because attachment name '%s' is already recorded.",
+                            drive_file.file_id,
+                            route.key,
+                            drive_file.name,
+                        )
+                        await self.google_workspace.move_file(
+                            file_id=drive_file.file_id,
+                            destination_folder_id=route.processed_folder_id,
+                        )
+                        summary.skipped += 1
+                        summary.moved += 1
+                        continue
+
                     await self._process_file(route, drive_file)
                 except Exception:  # noqa: BLE001
                     summary.failed += 1
                     logger.exception("Drive watcher failed for file %s on route %s", drive_file.file_id, route.key)
                     continue
 
+                if normalized_attachment_name:
+                    recorded_attachment_names.add(normalized_attachment_name)
                 summary.processed += 1
                 summary.notified += 1
                 summary.moved += 1
@@ -100,7 +128,6 @@ class DriveReceiptWatcher:
             drive_file_id=drive_file.file_id,
             drive_file_url=drive_file.web_view_link,
         )
-        await self.google_workspace.append_receipt_rows(rows)
 
         await self.notifier.send_receipt_notification(
             route=route,
@@ -109,6 +136,7 @@ class DriveReceiptWatcher:
             extraction=extraction,
             drive_file_url=drive_file.web_view_link,
         )
+        await self.google_workspace.append_receipt_rows(rows)
         await self.google_workspace.move_file(
             file_id=drive_file.file_id,
             destination_folder_id=route.processed_folder_id,
@@ -116,7 +144,7 @@ class DriveReceiptWatcher:
 
 
 class DriveWatcherClient(discord.Client):
-    def __init__(self, *, settings: Settings, run_once: bool) -> None:
+    def __init__(self, *, settings: Settings, run_once: bool, rescan_existing: bool) -> None:
         intents = discord.Intents.default()
         intents.guilds = True
 
@@ -125,6 +153,7 @@ class DriveWatcherClient(discord.Client):
         settings.require_drive_watch()
         self.settings = settings
         self.run_once = run_once
+        self.rescan_existing = rescan_existing
         self.run_error: Exception | None = None
         self.last_summary: DriveWatchScanSummary | None = None
         self._watch_task: asyncio.Task[None] | None = None
@@ -157,6 +186,7 @@ class DriveWatcherClient(discord.Client):
             google_workspace=workspace,
             notifier=self,
             routes=self._routes,
+            rescan_existing=rescan_existing,
         )
 
     async def setup_hook(self) -> None:
@@ -228,8 +258,8 @@ class DriveWatcherClient(discord.Client):
             await self.close()
 
 
-async def run_drive_watch(*, settings: Settings, run_once: bool) -> dict[str, int]:
-    client = DriveWatcherClient(settings=settings, run_once=run_once)
+async def run_drive_watch(*, settings: Settings, run_once: bool, rescan_existing: bool = False) -> dict[str, int]:
+    client = DriveWatcherClient(settings=settings, run_once=run_once, rescan_existing=rescan_existing)
     await client.start(settings.require_discord_token())
 
     if client.run_error is not None:
@@ -238,3 +268,7 @@ async def run_drive_watch(*, settings: Settings, run_once: bool) -> dict[str, in
         raise RuntimeError("Drive watcher did not produce a scan summary.")
 
     return client.last_summary.as_dict()
+
+
+def _normalize_attachment_name(value: str) -> str:
+    return value.strip().casefold()

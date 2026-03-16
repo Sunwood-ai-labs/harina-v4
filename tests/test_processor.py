@@ -32,12 +32,16 @@ class _FakeGoogleWorkspace:
         self.categories = ["野菜", "飲料"]
         self.added_categories: list[tuple[list[str], str]] = []
         self.spreadsheet_url = "https://docs.google.com/spreadsheets/d/sheet-id/edit"
+        self.existing_attachment_names: set[str] = set()
 
     async def ensure_receipt_sheet(self) -> None:
         return None
 
     async def list_receipt_categories(self) -> list[str]:
         return self.categories
+
+    async def receipt_attachment_exists(self, *, attachment_name: str) -> bool:
+        return attachment_name.casefold() in self.existing_attachment_names
 
     async def append_receipt_categories(self, categories: list[str], *, source: str = "gemini") -> list[str]:
         self.added_categories.append((categories, source))

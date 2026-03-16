@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 from datetime import UTC, datetime
 from dataclasses import dataclass
+import re
 from typing import Any
 
 from googleapiclient.discovery import build
@@ -17,6 +18,12 @@ from app.category_catalog import (
     normalize_category_name,
 )
 from app.formatters import RECEIPT_SHEET_HEADERS
+
+
+RECEIPT_PROCESSED_AT_INDEX = RECEIPT_SHEET_HEADERS.index("processedAt")
+RECEIPT_PURCHASE_DATE_INDEX = RECEIPT_SHEET_HEADERS.index("purchaseDate")
+RECEIPT_ATTACHMENT_NAME_COLUMN = chr(ord("A") + RECEIPT_SHEET_HEADERS.index("attachmentName"))
+YEAR_PATTERN = re.compile(r"(?<!\d)((?:19|20|21)\d{2})(?!\d)")
 
 
 @dataclass(slots=True)
@@ -69,6 +76,12 @@ class GoogleWorkspaceClient:
 
     async def append_receipt_rows(self, rows: list[list[str]]) -> None:
         await asyncio.to_thread(self._append_receipt_rows_sync, rows)
+
+    async def list_receipt_attachment_names(self) -> set[str]:
+        return await asyncio.to_thread(self._list_receipt_attachment_names_sync)
+
+    async def receipt_attachment_exists(self, *, attachment_name: str) -> bool:
+        return await asyncio.to_thread(self._receipt_attachment_exists_sync, attachment_name)
 
     async def list_image_files(self, *, folder_id: str) -> list[DriveImageFile]:
         return await asyncio.to_thread(self._list_image_files_sync, folder_id)
@@ -283,18 +296,77 @@ class GoogleWorkspaceClient:
     def _append_receipt_rows_sync(self, rows: list[list[str]]) -> None:
         if not rows:
             return
-        (
-            self._sheets.spreadsheets()
-            .values()
-            .append(
-                spreadsheetId=self._spreadsheet_id,
-                range=f"'{self._sheet_name}'!A1",
-                valueInputOption="USER_ENTERED",
-                insertDataOption="INSERT_ROWS",
-                body={"values": rows},
-            )
+        for sheet_name, grouped_rows in self._group_receipt_rows_by_sheet_name(rows).items():
+            self._ensure_sheet_with_header_sync(sheet_name=sheet_name, headers=RECEIPT_SHEET_HEADERS)
+            (
+                self._sheets.spreadsheets()
+                .values()
+                .append(
+                    spreadsheetId=self._spreadsheet_id,
+                    range=f"'{sheet_name}'!A1",
+                    valueInputOption="USER_ENTERED",
+                    insertDataOption="INSERT_ROWS",
+                    body={"values": grouped_rows},
+                )
                 .execute()
+            )
+
+    def _group_receipt_rows_by_sheet_name(self, rows: list[list[str]]) -> dict[str, list[list[str]]]:
+        grouped_rows: dict[str, list[list[str]]] = {}
+        for row in rows:
+            sheet_name = self._resolve_receipt_sheet_name(row)
+            grouped_rows.setdefault(sheet_name, []).append(row)
+        return grouped_rows
+
+    def _list_receipt_attachment_names_sync(self) -> set[str]:
+        attachment_names: set[str] = set()
+        for sheet_name in self._list_receipt_sheet_names_sync():
+            response = (
+                self._sheets.spreadsheets()
+                .values()
+                .get(
+                    spreadsheetId=self._spreadsheet_id,
+                    range=f"'{sheet_name}'!{RECEIPT_ATTACHMENT_NAME_COLUMN}2:{RECEIPT_ATTACHMENT_NAME_COLUMN}",
+                )
+                .execute()
+            )
+            for row in response.get("values", []):
+                normalized_attachment_name = _normalize_attachment_name(row[0] if row else "")
+                if normalized_attachment_name:
+                    attachment_names.add(normalized_attachment_name)
+        return attachment_names
+
+    def _receipt_attachment_exists_sync(self, attachment_name: str) -> bool:
+        normalized_attachment_name = _normalize_attachment_name(attachment_name)
+        if not normalized_attachment_name:
+            return False
+        return normalized_attachment_name in self._list_receipt_attachment_names_sync()
+
+    def _list_receipt_sheet_names_sync(self) -> list[str]:
+        spreadsheet = (
+            self._sheets.spreadsheets()
+            .get(spreadsheetId=self._spreadsheet_id, fields="sheets.properties.title")
+            .execute()
         )
+        return [
+            title
+            for title in (
+                sheet.get("properties", {}).get("title", "")
+                for sheet in spreadsheet.get("sheets", [])
+            )
+            if title and title != self._category_sheet_name
+        ]
+
+    def _resolve_receipt_sheet_name(self, row: list[str]) -> str:
+        for column_index in (RECEIPT_PURCHASE_DATE_INDEX, RECEIPT_PROCESSED_AT_INDEX):
+            year = _extract_year_from_cell(_get_row_value(row, column_index))
+            if year is not None:
+                return year
+
+        configured_year = _extract_year_from_cell(self._sheet_name)
+        if configured_year is not None:
+            return configured_year
+        return str(datetime.now(UTC).year)
 
     def _list_image_files_sync(self, folder_id: str) -> list[DriveImageFile]:
         page_token = None
@@ -367,3 +439,20 @@ def _parse_drive_image_files(items: list[dict[str, Any]]) -> list[DriveImageFile
 
 def _timestamp_now() -> str:
     return datetime.now(UTC).isoformat()
+
+
+def _get_row_value(row: list[str], index: int) -> str:
+    if index >= len(row):
+        return ""
+    return row[index] or ""
+
+
+def _extract_year_from_cell(value: str) -> str | None:
+    match = YEAR_PATTERN.search(value)
+    if match is None:
+        return None
+    return match.group(1)
+
+
+def _normalize_attachment_name(value: str) -> str:
+    return value.strip().casefold()

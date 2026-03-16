@@ -48,6 +48,9 @@ class _FakeWorkspace:
     async def list_receipt_categories(self) -> list[str]:
         return self.categories
 
+    async def list_receipt_attachment_names(self) -> set[str]:
+        return set()
+
     async def append_receipt_categories(self, categories: list[str], *, source: str = "gemini") -> list[str]:
         self.added_categories.append((categories, source))
         return ["新カテゴリ"]
@@ -123,6 +126,7 @@ def test_drive_watcher_processes_files_and_moves_them() -> None:
 
     assert summary.scanned == 1
     assert summary.processed == 1
+    assert summary.skipped == 0
     assert summary.failed == 0
     assert summary.notified == 1
     assert summary.moved == 1
@@ -205,8 +209,9 @@ def test_drive_watcher_does_not_move_file_when_notification_fails_midway() -> No
 
     assert summary.scanned == 1
     assert summary.processed == 0
+    assert summary.skipped == 0
     assert summary.failed == 1
     assert summary.notified == 0
     assert summary.moved == 0
-    assert len(workspace.rows) == 2
+    assert workspace.rows == []
     assert workspace.moves == []

@@ -18,16 +18,20 @@ from app.models import ReceiptExtraction
 
 @dataclass(slots=True)
 class ProcessedReceipt:
-    extraction: ReceiptExtraction
+    extraction: ReceiptExtraction | None
     summary: str
     drive_file_id: str | None
     drive_file_url: str | None
     spreadsheet_url: str | None
     rows: list[list[str]]
     google_write_performed: bool
+    skipped_existing: bool = False
+    skipped_attachment_name: str | None = None
 
     @property
     def row(self) -> list[str]:
+        if not self.rows:
+            raise RuntimeError("No receipt rows are available for this result.")
         return self.rows[0]
 
     def as_dict(self) -> dict[str, object]:
@@ -37,10 +41,12 @@ class ProcessedReceipt:
             "drive_file_url": self.drive_file_url,
             "spreadsheet_url": self.spreadsheet_url,
             "row_count": len(self.rows),
-            "row": self.row,
+            "row": self.rows[0] if self.rows else None,
             "rows": self.rows,
             "google_write_performed": self.google_write_performed,
-            "extraction": self.extraction.model_dump(mode="json"),
+            "skipped_existing": self.skipped_existing,
+            "skipped_attachment_name": self.skipped_attachment_name,
+            "extraction": self.extraction.model_dump(mode="json") if self.extraction is not None else None,
         }
 
 
@@ -80,8 +86,29 @@ class ReceiptProcessor:
         mime_type: str,
         image_bytes: bytes,
         write_to_google: bool = True,
+        rescan_existing: bool = False,
     ) -> ProcessedReceipt:
         use_google_category_catalog = self.google_workspace is not None and write_to_google
+        spreadsheet_url: str | None = None
+        if write_to_google:
+            if self.google_workspace is None:
+                raise RuntimeError("Google Workspace is not configured for receipt uploads.")
+            spreadsheet_url = self.google_workspace.spreadsheet_url
+            if not rescan_existing and context.attachment_name:
+                if await self.google_workspace.receipt_attachment_exists(attachment_name=context.attachment_name):
+                    attachment_name = context.attachment_name
+                    return ProcessedReceipt(
+                        extraction=None,
+                        summary=f"Skipped because {attachment_name} is already recorded in Google Sheets.",
+                        drive_file_id=None,
+                        drive_file_url=None,
+                        spreadsheet_url=spreadsheet_url,
+                        rows=[],
+                        google_write_performed=False,
+                        skipped_existing=True,
+                        skipped_attachment_name=attachment_name,
+                    )
+
         category_options: list[str] = []
         if use_google_category_catalog:
             category_options = await self.google_workspace.list_receipt_categories()
@@ -104,10 +131,7 @@ class ReceiptProcessor:
 
         drive_file_id: str | None = None
         drive_file_url: str | None = None
-        spreadsheet_url: str | None = None
         if write_to_google:
-            if self.google_workspace is None:
-                raise RuntimeError("Google Workspace is not configured for receipt uploads.")
             drive_file = await self.google_workspace.upload_receipt_image(
                 file_name=build_drive_file_name(filename, extraction),
                 mime_type=mime_type,

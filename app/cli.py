@@ -106,6 +106,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Run Gemini extraction only without uploading to Drive or appending to Sheets.",
     )
     receipt_process_parser.add_argument(
+        "--rescan",
+        action="store_true",
+        help="Reprocess even when the same attachmentName already exists in Google Sheets.",
+    )
+    receipt_process_parser.add_argument(
         "--source-name",
         default="cli",
         help="Label stored in the sheet channelName column for local runs. Default: cli",
@@ -249,6 +254,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Run one scan and exit instead of polling forever.",
     )
+    drive_watch_parser.add_argument(
+        "--rescan",
+        action="store_true",
+        help="Reprocess files even when the same attachmentName already exists in Google Sheets.",
+    )
     drive_watch_parser.set_defaults(handler=handle_drive_watch)
 
     google_parser = subparsers.add_parser("google", help="Google Drive and Sheets bootstrap helpers.")
@@ -296,7 +306,7 @@ def build_parser() -> argparse.ArgumentParser:
     google_init_parser.add_argument(
         "--sheet-name",
         default="Receipts",
-        help="Sheet tab name for appended rows. Default: Receipts",
+        help="Fallback sheet tab name stored in .env. HARINA auto-creates year tabs such as 2025 when appending rows. Default: Receipts",
     )
     google_init_parser.add_argument(
         "--share-with-email",
@@ -509,6 +519,7 @@ def handle_receipt_process(args: Namespace, settings: Settings | None) -> None:
             image_path=Path(args.image),
             mime_type=args.mime_type,
             skip_google_write=args.skip_google_write,
+            rescan=args.rescan,
             source_name=args.source_name,
             author_tag=args.author_tag,
         )
@@ -601,7 +612,7 @@ def handle_drive_watch(args: Namespace, settings: Settings | None) -> None:
     if settings is None:
         raise RuntimeError("Drive watcher settings were not loaded.")
     settings.require_drive_watch()
-    summary = asyncio.run(run_drive_watch(settings=settings, run_once=args.once))
+    summary = asyncio.run(run_drive_watch(settings=settings, run_once=args.once, rescan_existing=args.rescan))
     print(json.dumps(summary, ensure_ascii=True, indent=2))
 
 

@@ -20,6 +20,7 @@ ERROR_EMBED_TITLE = "Receipt Processing Failed"
 ERROR_MESSAGE = (
     "Receipt processing failed. Check the Gemini, Google Drive, and Google Sheets settings and image contents."
 )
+SKIPPED_EXISTING_EMBED_TITLE_SUFFIX = "Skipped"
 THREAD_NAME_PREFIX = "receipt"
 BOT_EXHAUSTED_KEYS_RETRY_DELAY_SECONDS = 60 * 60
 BOT_EXHAUSTED_KEYS_RETRY_COUNT = 1
@@ -312,6 +313,31 @@ class ReceiptBot(discord.Client):
             message.id,
             attachment.filename,
         )
+        if processed.skipped_existing:
+            self.debug_session.write_event(
+                "attachment_skipped_existing",
+                message_id=message.id,
+                attachment_id=attachment.id,
+                filename=attachment.filename,
+                index=index,
+                total_attachments=total_attachments,
+            )
+            return AttachmentProcessingOutcome(
+                attachment=attachment,
+                embed=discord.Embed(
+                    title=f"{title} {SKIPPED_EXISTING_EMBED_TITLE_SUFFIX}",
+                    description=(
+                        f"Skipped because `{processed.skipped_attachment_name or attachment.filename}` is already "
+                        "recorded in Google Sheets."
+                    ),
+                    color=discord.Color.orange(),
+                ),
+                view=build_receipt_links_view(
+                    spreadsheet_url=processed.spreadsheet_url,
+                ),
+                ok=True,
+            )
+
         self.debug_session.write_event(
             "attachment_processed",
             message_id=message.id,

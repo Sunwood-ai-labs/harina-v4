@@ -333,6 +333,7 @@ class ReceiptBot(discord.Client):
                     color=discord.Color.orange(),
                 ),
                 view=build_receipt_links_view(
+                    drive_file_url=None,
                     spreadsheet_url=processed.spreadsheet_url,
                 ),
                 ok=True,

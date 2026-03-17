@@ -5,6 +5,7 @@ import pytest
 from app.gemini_client import (
     GeminiReceiptExtractor,
     apply_line_item_categories,
+    is_daily_quota_exhausted_error,
     is_quota_exhausted_error,
     is_retryable_gemini_error,
     parse_receipt_category_payload,
@@ -103,6 +104,16 @@ def test_is_quota_exhausted_error_detects_resource_exhausted() -> None:
     assert is_quota_exhausted_error(RuntimeError("something else")) is False
 
 
+def test_is_daily_quota_exhausted_error_detects_per_day_limit() -> None:
+    assert (
+        is_daily_quota_exhausted_error(
+            _QuotaError("429 RESOURCE_EXHAUSTED quotaId GenerateRequestsPerDayPerProjectPerModel-FreeTier")
+        )
+        is True
+    )
+    assert is_daily_quota_exhausted_error(_QuotaError("429 RESOURCE_EXHAUSTED retry in 48 seconds")) is False
+
+
 def test_is_retryable_gemini_error_detects_transient_errors() -> None:
     assert is_retryable_gemini_error(_QuotaError()) is True
     assert is_retryable_gemini_error(_ServerError()) is True
@@ -142,6 +153,39 @@ def test_extractor_retries_and_rotates_keys_on_quota_errors() -> None:
     assert sleeps == [60, 60, 60, 60, 60]
 
 
+def test_extractor_rotates_immediately_on_daily_quota_errors() -> None:
+    client_map = {
+        "primary": _FakeClient(
+            [_QuotaError("429 RESOURCE_EXHAUSTED quotaId GenerateRequestsPerDayPerProjectPerModel-FreeTier")]
+        ),
+        "secondary": _FakeClient([_FakeResponse('{"merchant_name":"Cafe Harina","total":1100}')]),
+    }
+    sleeps: list[float] = []
+
+    async def fake_sleep(seconds: float) -> None:
+        sleeps.append(seconds)
+
+    extractor = GeminiReceiptExtractor(
+        api_keys=["primary", "secondary"],
+        model="gemini-test",
+        retry_delay_seconds=60,
+        retry_count=5,
+        client_factory=lambda key: client_map[key],
+        sleep_func=fake_sleep,
+    )
+
+    result = asyncio.run(
+        extractor.extract(
+            image_bytes=b"receipt",
+            mime_type="image/jpeg",
+            filename="receipt.jpg",
+        )
+    )
+
+    assert result.merchant_name == "Cafe Harina"
+    assert sleeps == []
+
+
 def test_extractor_raises_after_all_rotating_keys_are_exhausted() -> None:
     client_map = {
         "primary": _FakeClient([_QuotaError() for _ in range(6)]),
@@ -171,6 +215,63 @@ def test_extractor_raises_after_all_rotating_keys_are_exhausted() -> None:
         )
 
     assert sleeps == [60] * 10
+
+
+def test_extractor_waits_after_all_keys_are_daily_exhausted_when_configured() -> None:
+    client_map = {
+        "primary": _FakeClient(
+            [
+                _QuotaError("429 RESOURCE_EXHAUSTED quotaId GenerateRequestsPerDayPerProjectPerModel-FreeTier"),
+                _FakeResponse('{"merchant_name":"Cafe Harina","total":1100}'),
+            ]
+        ),
+        "secondary": _FakeClient(
+            [_QuotaError("429 RESOURCE_EXHAUSTED quotaId GenerateRequestsPerDayPerProjectPerModel-FreeTier")]
+        ),
+    }
+    sleeps: list[float] = []
+    wait_events: list[dict[str, object]] = []
+
+    async def fake_sleep(seconds: float) -> None:
+        sleeps.append(seconds)
+
+    async def fake_wait_callback(event: dict[str, object]) -> None:
+        wait_events.append(event)
+
+    extractor = GeminiReceiptExtractor(
+        api_keys=["primary", "secondary"],
+        model="gemini-test",
+        retry_delay_seconds=60,
+        retry_count=5,
+        exhausted_keys_retry_delay_seconds=3600,
+        exhausted_keys_retry_count=1,
+        client_factory=lambda key: client_map[key],
+        sleep_func=fake_sleep,
+        exhausted_keys_wait_callback=fake_wait_callback,
+    )
+
+    result = asyncio.run(
+        extractor.extract(
+            image_bytes=b"receipt",
+            mime_type="image/jpeg",
+            filename="receipt.jpg",
+        )
+    )
+
+    assert result.merchant_name == "Cafe Harina"
+    assert sleeps == [3600]
+    assert wait_events == [
+        {
+            "request_name": "receipt extraction",
+            "filename": "receipt.jpg",
+            "error_kind": "quota",
+            "key_count": 2,
+            "retry_delay_seconds": 3600,
+            "retry_cycle_attempt": 1,
+            "retry_cycle_count": 1,
+            "daily_quota_exhausted": True,
+        }
+    ]
 
 
 def test_extractor_waits_and_retries_again_after_all_keys_are_exhausted_when_configured() -> None:

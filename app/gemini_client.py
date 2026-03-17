@@ -31,6 +31,22 @@ def is_quota_exhausted_error(exc: Exception) -> bool:
     return "RESOURCE_EXHAUSTED" in message or "QUOTA EXCEEDED" in message
 
 
+def is_daily_quota_exhausted_error(exc: Exception) -> bool:
+    if not is_quota_exhausted_error(exc):
+        return False
+
+    message = str(exc).upper()
+    daily_quota_markers = (
+        "GENERATEREQUESTSPERDAYPERPROJECTPERMODEL-FREETIER",
+        "PERDAY",
+        "PER DAY",
+        "REQUESTS PER DAY",
+        "DAILY",
+        "RPD",
+    )
+    return any(marker in message for marker in daily_quota_markers)
+
+
 def is_retryable_gemini_error(exc: Exception) -> bool:
     if is_quota_exhausted_error(exc):
         return True
@@ -68,6 +84,7 @@ class GeminiReceiptExtractor:
         exhausted_keys_retry_count: int = EXHAUSTED_KEYS_RETRY_COUNT,
         client_factory: Callable[[str], Any] | None = None,
         sleep_func: Callable[[float], Awaitable[None]] | None = None,
+        exhausted_keys_wait_callback: Callable[[dict[str, object]], Awaitable[None]] | None = None,
     ) -> None:
         normalized_keys = [value.strip() for value in (api_keys or []) if value.strip()]
         if api_key and api_key.strip():
@@ -90,6 +107,7 @@ class GeminiReceiptExtractor:
         self._exhausted_keys_retry_delay_seconds = exhausted_keys_retry_delay_seconds
         self._exhausted_keys_retry_count = exhausted_keys_retry_count
         self._sleep = sleep_func or asyncio.sleep
+        self._exhausted_keys_wait_callback = exhausted_keys_wait_callback
 
     async def extract(
         self,
@@ -108,6 +126,7 @@ class GeminiReceiptExtractor:
                 parse_func=parse_receipt_payload,
                 request_name="receipt extraction",
                 temperature=0.1,
+                filename=filename,
             )
         )
 
@@ -127,6 +146,7 @@ class GeminiReceiptExtractor:
                 parse_func=parse_receipt_category_payload,
                 request_name="receipt categorization",
                 temperature=0.0,
+                filename=filename,
             )
         )
         return apply_line_item_categories(extraction, category_inference)
@@ -138,6 +158,7 @@ class GeminiReceiptExtractor:
         parse_func: Callable[[str], dict[str, object]],
         request_name: str,
         temperature: float,
+        filename: str,
     ) -> dict[str, object]:
         last_retryable_error: Exception | None = None
         exhausted_keys_retry_attempts = 0
@@ -168,6 +189,44 @@ class GeminiReceiptExtractor:
 
                         last_retryable_error = exc
                         error_kind = "quota" if is_quota_exhausted_error(exc) else "transient"
+                        daily_quota_exhausted = is_daily_quota_exhausted_error(exc)
+
+                        if daily_quota_exhausted:
+                            if client_index < len(self._clients):
+                                logger.warning(
+                                    "Gemini daily quota exhausted during %s on key %s/%s. Rotating to the next key without local retries.",
+                                    request_name,
+                                    client_index,
+                                    len(self._clients),
+                                )
+                                break
+
+                            if exhausted_keys_retry_attempts >= self._exhausted_keys_retry_count:
+                                raise
+
+                            exhausted_keys_retry_attempts += 1
+                            logger.warning(
+                                "Gemini daily quota exhausted after exhausting all %s key(s) during %s. Waiting %s seconds before retry cycle %s/%s from the first key.",
+                                len(self._clients),
+                                request_name,
+                                self._exhausted_keys_retry_delay_seconds,
+                                exhausted_keys_retry_attempts,
+                                self._exhausted_keys_retry_count,
+                            )
+                            await self._notify_exhausted_keys_wait(
+                                request_name=request_name,
+                                filename=filename,
+                                error_kind=error_kind,
+                                key_count=len(self._clients),
+                                retry_delay_seconds=self._exhausted_keys_retry_delay_seconds,
+                                retry_cycle_attempt=exhausted_keys_retry_attempts,
+                                retry_cycle_count=self._exhausted_keys_retry_count,
+                                daily_quota_exhausted=True,
+                            )
+                            await self._sleep(self._exhausted_keys_retry_delay_seconds)
+                            should_restart_from_first_key = True
+                            break
+
                         if retry_failures >= self._retry_count:
                             if client_index < len(self._clients):
                                 logger.warning(
@@ -192,6 +251,16 @@ class GeminiReceiptExtractor:
                                 self._exhausted_keys_retry_delay_seconds,
                                 exhausted_keys_retry_attempts,
                                 self._exhausted_keys_retry_count,
+                            )
+                            await self._notify_exhausted_keys_wait(
+                                request_name=request_name,
+                                filename=filename,
+                                error_kind=error_kind,
+                                key_count=len(self._clients),
+                                retry_delay_seconds=self._exhausted_keys_retry_delay_seconds,
+                                retry_cycle_attempt=exhausted_keys_retry_attempts,
+                                retry_cycle_count=self._exhausted_keys_retry_count,
+                                daily_quota_exhausted=False,
                             )
                             await self._sleep(self._exhausted_keys_retry_delay_seconds)
                             should_restart_from_first_key = True
@@ -220,6 +289,37 @@ class GeminiReceiptExtractor:
         if last_retryable_error is not None:
             raise last_retryable_error
         raise RuntimeError("Gemini extraction failed without returning a response.")
+
+    async def _notify_exhausted_keys_wait(
+        self,
+        *,
+        request_name: str,
+        filename: str,
+        error_kind: str,
+        key_count: int,
+        retry_delay_seconds: int,
+        retry_cycle_attempt: int,
+        retry_cycle_count: int,
+        daily_quota_exhausted: bool,
+    ) -> None:
+        if self._exhausted_keys_wait_callback is None:
+            return
+
+        try:
+            await self._exhausted_keys_wait_callback(
+                {
+                    "request_name": request_name,
+                    "filename": filename,
+                    "error_kind": error_kind,
+                    "key_count": key_count,
+                    "retry_delay_seconds": retry_delay_seconds,
+                    "retry_cycle_attempt": retry_cycle_attempt,
+                    "retry_cycle_count": retry_cycle_count,
+                    "daily_quota_exhausted": daily_quota_exhausted,
+                }
+            )
+        except Exception:  # noqa: BLE001
+            logger.exception("Gemini wait callback failed during %s for %s", request_name, filename)
 
 
 def parse_receipt_payload(response_text: str) -> dict[str, object]:

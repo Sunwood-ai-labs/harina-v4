@@ -72,6 +72,28 @@ def test_settings_can_use_rotation_key_list_without_primary_key() -> None:
     assert settings.require_gemini_api_key() == "gemini-key-2"
 
 
+def test_settings_split_production_and_test_models() -> None:
+    settings = Settings.model_validate(
+        {
+            "GEMINI_API_KEY": "gemini-key",
+        }
+    )
+
+    assert settings.production_gemini_model == "gemini-3-flash-preview"
+    assert settings.test_gemini_model_name == "gemini-2.5-flash"
+
+    customized = Settings.model_validate(
+        {
+            "GEMINI_API_KEY": "gemini-key",
+            "GEMINI_MODEL": "gemini-3-flash-preview",
+            "GEMINI_TEST_MODEL": "gemini-2.5-flash-lite",
+        }
+    )
+
+    assert customized.production_gemini_model == "gemini-3-flash-preview"
+    assert customized.test_gemini_model_name == "gemini-2.5-flash-lite"
+
+
 def test_require_google_workspace_rejects_missing_drive_targets() -> None:
     settings = Settings.model_validate(
         {

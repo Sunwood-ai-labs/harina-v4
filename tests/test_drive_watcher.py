@@ -87,6 +87,7 @@ class _FakeWorkspace:
 class _FakeNotifier:
     def __init__(self) -> None:
         self.calls: list[dict[str, object]] = []
+        self.progress_calls: list[dict[str, object]] = []
 
     async def send_receipt_notification(
         self,
@@ -104,6 +105,27 @@ class _FakeNotifier:
                 "image_bytes": image_bytes,
                 "extraction": extraction,
                 "drive_file_url": drive_file_url,
+            }
+        )
+
+    async def send_system_progress(
+        self,
+        *,
+        route: DriveWatchRoute,
+        status: str,
+        file_name: str,
+        summary,
+        remaining_in_route: int,
+        error_message: str | None = None,
+    ) -> None:
+        self.progress_calls.append(
+            {
+                "route": route,
+                "status": status,
+                "file_name": file_name,
+                "summary": summary.as_dict(),
+                "remaining_in_route": remaining_in_route,
+                "error_message": error_message,
             }
         )
 
@@ -151,6 +173,29 @@ def test_drive_watcher_processes_files_and_moves_them() -> None:
     assert notifier.calls[0]["file_name"] == "receipt.jpg"
     assert notifier.calls[0]["image_bytes"] == b"drive-image"
     assert notifier.calls[0]["extraction"].merchant_name == "Cafe Harina"
+    assert notifier.progress_calls == [
+        {
+            "route": DriveWatchRoute(
+                key="alice",
+                label="Alice",
+                discord_channel_id=123,
+                source_folder_id="source-folder",
+                processed_folder_id="processed-folder",
+            ),
+            "status": "processed",
+            "file_name": "receipt.jpg",
+            "summary": {
+                "scanned": 1,
+                "processed": 1,
+                "skipped": 0,
+                "failed": 0,
+                "moved": 1,
+                "notified": 1,
+            },
+            "remaining_in_route": 0,
+            "error_message": None,
+        }
+    ]
 
 
 def test_drive_watcher_continues_after_file_failure() -> None:
@@ -158,10 +203,11 @@ def test_drive_watcher_continues_after_file_failure() -> None:
         async def download_file(self, *, file_id: str) -> bytes:
             raise RuntimeError("download failed")
 
+    notifier = _FakeNotifier()
     watcher = DriveReceiptWatcher(
         gemini=_FakeGemini(),
         google_workspace=_BrokenWorkspace(),
-        notifier=_FakeNotifier(),
+        notifier=notifier,
         routes=[
             DriveWatchRoute(
                 key="alice",
@@ -180,6 +226,10 @@ def test_drive_watcher_continues_after_file_failure() -> None:
     assert summary.failed == 1
     assert summary.notified == 0
     assert summary.moved == 0
+    assert notifier.progress_calls[0]["status"] == "failed"
+    assert notifier.progress_calls[0]["file_name"] == "receipt.jpg"
+    assert notifier.progress_calls[0]["remaining_in_route"] == 0
+    assert notifier.progress_calls[0]["error_message"] == "download failed"
 
 
 def test_drive_watcher_does_not_move_file_when_notification_fails_midway() -> None:
@@ -221,3 +271,35 @@ def test_drive_watcher_does_not_move_file_when_notification_fails_midway() -> No
     assert summary.moved == 0
     assert workspace.rows == []
     assert workspace.moves == []
+
+
+def test_drive_watcher_sends_progress_for_skipped_duplicates() -> None:
+    notifier = _FakeNotifier()
+    watcher = DriveReceiptWatcher(
+        gemini=_FakeGemini(),
+        google_workspace=_FakeWorkspace(),
+        notifier=notifier,
+        routes=[
+            DriveWatchRoute(
+                key="alice",
+                label="Alice",
+                discord_channel_id=123,
+                source_folder_id="source-folder",
+                processed_folder_id="processed-folder",
+            )
+        ],
+        rescan_existing=False,
+    )
+
+    async def fake_names() -> set[str]:
+        return {"receipt.jpg"}
+
+    watcher.google_workspace.list_receipt_attachment_names = fake_names  # type: ignore[method-assign]
+
+    summary = asyncio.run(watcher.scan_once())
+
+    assert summary.processed == 0
+    assert summary.skipped == 1
+    assert summary.moved == 1
+    assert notifier.progress_calls[0]["status"] == "skipped"
+    assert notifier.progress_calls[0]["file_name"] == "receipt.jpg"

@@ -20,10 +20,12 @@ class Settings(BaseModel):
     discord_test_channel_id: int | None = Field(default=None, alias="DISCORD_TEST_CHANNEL_ID")
     discord_test_message_prefix: str = Field(default="[HARINA-TEST]", alias="DISCORD_TEST_MESSAGE_PREFIX")
     discord_notify_channel_id: int | None = Field(default=None, alias="DISCORD_NOTIFY_CHANNEL_ID")
+    discord_system_log_channel_id: int | None = Field(default=None, alias="DISCORD_SYSTEM_LOG_CHANNEL_ID")
     discord_debug_log_dir: str = Field(default="logs/discord", alias="DISCORD_DEBUG_LOG_DIR")
     gemini_api_key: str | None = Field(default=None, alias="GEMINI_API_KEY")
     gemini_api_key_rotation_list: str | None = Field(default=None, alias="GEMINI_API_KEY_ROTATION_LIST")
     gemini_model: str = Field(default="gemini-3-flash-preview", alias="GEMINI_MODEL")
+    gemini_test_model: str = Field(default="gemini-2.5-flash", alias="GEMINI_TEST_MODEL")
     google_service_account_json: str | None = Field(default=None, alias="GOOGLE_SERVICE_ACCOUNT_JSON")
     google_service_account_key_file: str | None = Field(default=None, alias="GOOGLE_SERVICE_ACCOUNT_KEY_FILE")
     google_oauth_client_json: str | None = Field(default=None, alias="GOOGLE_OAUTH_CLIENT_JSON")
@@ -115,6 +117,8 @@ class Settings(BaseModel):
     @field_validator(
         "discord_test_message_prefix",
         "discord_debug_log_dir",
+        "gemini_model",
+        "gemini_test_model",
     )
     @classmethod
     def validate_not_blank(cls, value: str) -> str:
@@ -128,6 +132,7 @@ class Settings(BaseModel):
         "discord_channel_ids",
         "discord_test_channel_id",
         "discord_notify_channel_id",
+        "discord_system_log_channel_id",
         "gemini_api_key",
         "gemini_api_key_rotation_list",
         "google_service_account_json",
@@ -174,6 +179,14 @@ class Settings(BaseModel):
                 "Set GEMINI_API_KEY or GEMINI_API_KEY_ROTATION_LIST in your environment or .env before running receipt commands."
             )
         return self.gemini_api_keys
+
+    @property
+    def production_gemini_model(self) -> str:
+        return self.gemini_model
+
+    @property
+    def test_gemini_model_name(self) -> str:
+        return self.gemini_test_model
 
     def require_google_workspace(self) -> None:
         if not self.has_google_auth():

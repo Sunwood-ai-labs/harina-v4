@@ -104,7 +104,10 @@ async def run_smoke_test(args: argparse.Namespace) -> dict[str, object]:
     if not selected:
         raise RuntimeError(f"No supported dataset images found under: {dataset_dir}")
 
-    extractor = GeminiReceiptExtractor(api_keys=settings.require_gemini_api_keys(), model=settings.gemini_model)
+    extractor = GeminiReceiptExtractor(
+        api_keys=settings.require_gemini_api_keys(),
+        model=settings.test_gemini_model_name,
+    )
 
     results: list[dict[str, object]] = []
     for path in selected:
@@ -125,7 +128,7 @@ async def run_smoke_test(args: argparse.Namespace) -> dict[str, object]:
         )
 
     summary: dict[str, object] = {
-        "model": settings.gemini_model,
+        "model": settings.test_gemini_model_name,
         "dataset_dir": str(dataset_dir.resolve()),
         "candidate_count": len(candidates),
         "requested_limit": args.limit,

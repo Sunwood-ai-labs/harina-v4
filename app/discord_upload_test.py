@@ -25,7 +25,7 @@ class DiscordUploadTestBot(ReceiptBot):
         caption: str | None,
         timeout_seconds: float,
     ) -> None:
-        super().__init__(settings=settings)
+        super().__init__(settings=settings, gemini_model=settings.test_gemini_model_name)
         self.debug_session = DiscordDebugSession.create(
             base_dir=settings.discord_debug_log_dir_path,
             purpose="upload-test",

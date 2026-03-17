@@ -63,7 +63,7 @@ def should_process_message(
 
 
 class ReceiptBot(discord.Client):
-    def __init__(self, *, settings: Settings) -> None:
+    def __init__(self, *, settings: Settings, gemini_model: str | None = None) -> None:
         intents = discord.Intents.default()
         intents.guilds = True
         intents.messages = True
@@ -80,7 +80,7 @@ class ReceiptBot(discord.Client):
         self.processor = ReceiptProcessor(
             gemini=GeminiReceiptExtractor(
                 api_keys=settings.require_gemini_api_keys(),
-                model=settings.gemini_model,
+                model=gemini_model or settings.production_gemini_model,
                 exhausted_keys_retry_delay_seconds=BOT_EXHAUSTED_KEYS_RETRY_DELAY_SECONDS,
                 exhausted_keys_retry_count=BOT_EXHAUSTED_KEYS_RETRY_COUNT,
             ),

@@ -22,6 +22,8 @@ from app.team_intake import DriveWatchRoute
 
 
 logger = logging.getLogger(__name__)
+WATCHER_EXHAUSTED_KEYS_RETRY_DELAY_SECONDS = 60 * 60 * 12
+WATCHER_EXHAUSTED_KEYS_RETRY_COUNT = 1
 
 
 @dataclass(slots=True)
@@ -66,7 +68,8 @@ class DriveReceiptWatcher:
             files = await self.google_workspace.list_image_files(folder_id=route.source_folder_id)
             summary.scanned += len(files)
 
-            for drive_file in files:
+            for file_index, drive_file in enumerate(files, start=1):
+                remaining_in_route = max(len(files) - file_index, 0)
                 try:
                     normalized_attachment_name = _normalize_attachment_name(drive_file.name)
                     if (
@@ -90,12 +93,27 @@ class DriveReceiptWatcher:
                         )
                         summary.skipped += 1
                         summary.moved += 1
+                        await self._emit_progress(
+                            route=route,
+                            status="skipped",
+                            file_name=drive_file.name,
+                            summary=summary,
+                            remaining_in_route=remaining_in_route,
+                        )
                         continue
 
                     await self._process_file(route, drive_file)
-                except Exception:  # noqa: BLE001
+                except Exception as exc:  # noqa: BLE001
                     summary.failed += 1
                     logger.exception("Drive watcher failed for file %s on route %s", drive_file.file_id, route.key)
+                    await self._emit_progress(
+                        route=route,
+                        status="failed",
+                        file_name=drive_file.name,
+                        summary=summary,
+                        remaining_in_route=remaining_in_route,
+                        error_message=str(exc),
+                    )
                     continue
 
                 if normalized_attachment_name:
@@ -103,6 +121,13 @@ class DriveReceiptWatcher:
                 summary.processed += 1
                 summary.notified += 1
                 summary.moved += 1
+                await self._emit_progress(
+                    route=route,
+                    status="processed",
+                    file_name=drive_file.name,
+                    summary=summary,
+                    remaining_in_route=remaining_in_route,
+                )
 
         return summary
 
@@ -150,6 +175,36 @@ class DriveReceiptWatcher:
             destination_folder_id=destination_folder_id,
         )
 
+    async def _emit_progress(
+        self,
+        *,
+        route: DriveWatchRoute,
+        status: str,
+        file_name: str,
+        summary: DriveWatchScanSummary,
+        remaining_in_route: int,
+        error_message: str | None = None,
+    ) -> None:
+        send_progress = getattr(self.notifier, "send_system_progress", None)
+        if send_progress is None:
+            return
+
+        try:
+            await send_progress(
+                route=route,
+                status=status,
+                file_name=file_name,
+                summary=summary,
+                remaining_in_route=remaining_in_route,
+                error_message=error_message,
+            )
+        except Exception:  # noqa: BLE001
+            logger.exception(
+                "Drive watcher could not send a system progress update for %s on route %s",
+                file_name,
+                route.key,
+            )
+
 
 class DriveWatcherClient(discord.Client):
     def __init__(self, *, settings: Settings, run_once: bool, rescan_existing: bool) -> None:
@@ -189,7 +244,10 @@ class DriveWatcherClient(discord.Client):
         self.watcher = DriveReceiptWatcher(
             gemini=GeminiReceiptExtractor(
                 api_keys=settings.require_gemini_api_keys(),
-                model=settings.gemini_model,
+                model=settings.production_gemini_model,
+                exhausted_keys_retry_delay_seconds=WATCHER_EXHAUSTED_KEYS_RETRY_DELAY_SECONDS,
+                exhausted_keys_retry_count=WATCHER_EXHAUSTED_KEYS_RETRY_COUNT,
+                exhausted_keys_wait_callback=self.send_system_wait,
             ),
             google_workspace=workspace,
             notifier=self,
@@ -202,6 +260,7 @@ class DriveWatcherClient(discord.Client):
 
     async def on_ready(self) -> None:
         if self._watch_task is None:
+            await self.send_system_startup()
             self._watch_task = asyncio.create_task(self._run_watch_loop())
 
     async def send_receipt_notification(
@@ -213,11 +272,7 @@ class DriveWatcherClient(discord.Client):
         extraction: ReceiptExtraction,
         drive_file_url: str | None,
     ) -> None:
-        channel = self.get_channel(route.discord_channel_id)
-        if channel is None:
-            channel = await self.fetch_channel(route.discord_channel_id)
-        if not hasattr(channel, "send"):
-            raise RuntimeError(f"Channel {route.discord_channel_id} is not messageable.")
+        channel = await self._resolve_messageable_channel(route.discord_channel_id)
 
         intake_file = discord.File(BytesIO(image_bytes), filename=file_name)
         intake_message = await channel.send(
@@ -253,15 +308,171 @@ class DriveWatcherClient(discord.Client):
 
         await response_target.send(embed=result_embed, view=view)
 
+    async def send_system_startup(self) -> None:
+        if self.settings.discord_system_log_channel_id is None:
+            return
+
+        backlog_total, backlog_lines = await self._build_backlog_snapshot()
+        embed = discord.Embed(
+            title="HARINA Drive Watch Restarted",
+            description="Drive watcher を起動し、system log 配信を開始しました。",
+            color=discord.Color.from_rgb(52, 152, 219),
+        )
+        embed.add_field(name="Poll Interval", value=f"{self.settings.drive_poll_interval_seconds} sec", inline=True)
+        embed.add_field(name="Routes", value=str(len(self._routes)), inline=True)
+        embed.add_field(name="Remaining Total", value=str(backlog_total), inline=True)
+        if backlog_lines:
+            embed.add_field(name="Current Backlog", value="\n".join(backlog_lines), inline=False)
+        await self._send_system_log_embed(embed)
+
+    async def send_system_progress(
+        self,
+        *,
+        route: DriveWatchRoute,
+        status: str,
+        file_name: str,
+        summary: DriveWatchScanSummary,
+        remaining_in_route: int,
+        error_message: str | None = None,
+    ) -> None:
+        if self.settings.discord_system_log_channel_id is None:
+            return
+
+        color_by_status = {
+            "processed": discord.Color.green(),
+            "skipped": discord.Color.gold(),
+            "failed": discord.Color.red(),
+        }
+        description_by_status = {
+            "processed": "画像を処理して Discord / Sheets / Drive へ反映しました。",
+            "skipped": "attachmentName 重複のためスキップしました。",
+            "failed": "画像の処理中にエラーが発生しました。",
+        }
+        embed = discord.Embed(
+            title=f"HARINA Progress // {route.label}",
+            description=description_by_status.get(status, "Drive watcher の進捗を更新しました。"),
+            color=color_by_status.get(status, discord.Color.blurple()),
+        )
+        embed.add_field(name="Status", value=status, inline=True)
+        embed.add_field(name="File", value=file_name, inline=True)
+        embed.add_field(name="Route Remaining", value=str(remaining_in_route), inline=True)
+        embed.add_field(
+            name="Totals",
+            value=f"processed={summary.processed} skipped={summary.skipped} failed={summary.failed} moved={summary.moved}",
+            inline=False,
+        )
+        if error_message:
+            embed.add_field(name="Error", value=error_message[:1024], inline=False)
+        await self._send_system_log_embed(embed)
+
+    async def send_system_cycle_summary(self, summary: DriveWatchScanSummary) -> None:
+        if self.settings.discord_system_log_channel_id is None:
+            return
+
+        backlog_total, backlog_lines = await self._build_backlog_snapshot()
+        embed = discord.Embed(
+            title="HARINA Scan Summary",
+            description="Drive watcher の scan cycle が完了しました。",
+            color=discord.Color.from_rgb(155, 89, 182),
+        )
+        embed.add_field(name="Scanned", value=str(summary.scanned), inline=True)
+        embed.add_field(name="Processed", value=str(summary.processed), inline=True)
+        embed.add_field(name="Skipped", value=str(summary.skipped), inline=True)
+        embed.add_field(name="Failed", value=str(summary.failed), inline=True)
+        embed.add_field(name="Moved", value=str(summary.moved), inline=True)
+        embed.add_field(name="Notified", value=str(summary.notified), inline=True)
+        embed.add_field(name="Remaining Total", value=str(backlog_total), inline=True)
+        if backlog_lines:
+            embed.add_field(name="Current Backlog", value="\n".join(backlog_lines), inline=False)
+        await self._send_system_log_embed(embed)
+
+    async def send_system_error(self, error: Exception) -> None:
+        if self.settings.discord_system_log_channel_id is None:
+            return
+
+        embed = discord.Embed(
+            title="HARINA Watcher Error",
+            description="Drive watcher が停止しました。",
+            color=discord.Color.red(),
+        )
+        embed.add_field(name="Error", value=str(error)[:1024], inline=False)
+        await self._send_system_log_embed(embed)
+
+    async def send_system_wait(self, event: dict[str, object]) -> None:
+        if self.settings.discord_system_log_channel_id is None:
+            return
+
+        retry_delay_seconds = int(event.get("retry_delay_seconds", 0) or 0)
+        retry_hours = retry_delay_seconds // 3600 if retry_delay_seconds else 0
+        request_name = str(event.get("request_name") or "Gemini request")
+        filename = str(event.get("filename") or "")
+        key_count = int(event.get("key_count", 0) or 0)
+
+        embed = discord.Embed(
+            title="HARINA Watch Status",
+            description="Gemini の全ローテーションキーが上限に達したため、watcher は待機中です。",
+            color=discord.Color.red(),
+        )
+        embed.add_field(name="Request", value=request_name, inline=True)
+        embed.add_field(name="File", value=filename or "unknown", inline=True)
+        embed.add_field(name="Keys Exhausted", value=str(key_count), inline=True)
+        embed.add_field(
+            name="Wait Window",
+            value=f"{retry_hours} hours" if retry_hours else f"{retry_delay_seconds} sec",
+            inline=True,
+        )
+        embed.add_field(
+            name="Reason",
+            value="daily quota exhausted" if event.get("daily_quota_exhausted") else "retryable Gemini error",
+            inline=True,
+        )
+        embed.add_field(
+            name="Retry Cycle",
+            value=f"{event.get('retry_cycle_attempt', 0)}/{event.get('retry_cycle_count', 0)}",
+            inline=True,
+        )
+        backlog_total, backlog_lines = await self._build_backlog_snapshot()
+        if backlog_lines:
+            embed.add_field(name="Remaining Total", value=str(backlog_total), inline=True)
+            embed.add_field(name="Current Backlog", value="\n".join(backlog_lines), inline=False)
+        await self._send_system_log_embed(embed)
+
+    async def _build_backlog_snapshot(self) -> tuple[int, list[str]]:
+        backlog_lines: list[str] = []
+        backlog_total = 0
+        for route in self._routes:
+            files = await self.watcher.google_workspace.list_image_files(folder_id=route.source_folder_id)
+            route_count = len(files)
+            backlog_total += route_count
+            backlog_lines.append(f"{route.label}: {route_count}")
+        return backlog_total, backlog_lines
+
+    async def _send_system_log_embed(self, embed: discord.Embed) -> None:
+        if self.settings.discord_system_log_channel_id is None:
+            return
+
+        channel = await self._resolve_messageable_channel(self.settings.discord_system_log_channel_id)
+        await channel.send(embed=embed)
+
+    async def _resolve_messageable_channel(self, channel_id: int):
+        channel = self.get_channel(channel_id)
+        if channel is None:
+            channel = await self.fetch_channel(channel_id)
+        if not hasattr(channel, "send"):
+            raise RuntimeError(f"Channel {channel_id} is not messageable.")
+        return channel
+
     async def _run_watch_loop(self) -> None:
         try:
             while True:
                 self.last_summary = await self.watcher.scan_once()
+                await self.send_system_cycle_summary(self.last_summary)
                 if self.run_once:
                     return
                 await asyncio.sleep(self.settings.drive_poll_interval_seconds)
         except Exception as exc:  # noqa: BLE001
             self.run_error = exc
+            await self.send_system_error(exc)
         finally:
             await self.close()
 

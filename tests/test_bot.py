@@ -1,6 +1,9 @@
 import asyncio
+from pathlib import Path
 
 from app.bot import ReceiptBot, build_receipt_thread_name, should_process_message
+from app.config import Settings
+from app.discord_upload_test import DiscordUploadTestBot
 from app.processor import ProcessedReceipt
 
 
@@ -125,3 +128,67 @@ def test_process_attachment_outcome_returns_skip_embed_with_sheet_link_only() ->
             },
         )
     ]
+
+
+def test_receipt_bot_uses_production_model(monkeypatch) -> None:
+    captured: dict[str, object] = {}
+
+    class _DummyExtractor:
+        def __init__(self, *, api_keys, model, exhausted_keys_retry_delay_seconds, exhausted_keys_retry_count):
+            del api_keys, exhausted_keys_retry_delay_seconds, exhausted_keys_retry_count
+            captured["model"] = model
+
+    class _DummyProcessor:
+        def __init__(self, *, gemini, google_workspace) -> None:
+            del gemini, google_workspace
+
+    monkeypatch.setattr("app.bot.DiscordDebugSession.create", lambda **kwargs: _FakeDebugSession())
+    monkeypatch.setattr("app.bot.GeminiReceiptExtractor", _DummyExtractor)
+    monkeypatch.setattr("app.bot.GoogleWorkspaceClient", lambda **kwargs: object())
+    monkeypatch.setattr("app.bot.ReceiptProcessor", _DummyProcessor)
+
+    settings = Settings.model_validate(
+        {
+            "GEMINI_API_KEY": "gemini-key",
+            "GOOGLE_OAUTH_CLIENT_JSON": (
+                '{"installed":{"client_id":"client-id","client_secret":"client-secret",'
+                '"token_uri":"https://oauth2.googleapis.com/token"}}'
+            ),
+            "GOOGLE_OAUTH_REFRESH_TOKEN": "refresh-token",
+            "GOOGLE_DRIVE_FOLDER_ID": "folder-id",
+            "GOOGLE_SHEETS_SPREADSHEET_ID": "sheet-id",
+        }
+    )
+
+    ReceiptBot(settings=settings)
+
+    assert captured["model"] == settings.production_gemini_model
+
+
+def test_discord_upload_test_bot_uses_test_model(monkeypatch, tmp_path: Path) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_receipt_bot_init(self, *, settings, gemini_model=None) -> None:
+        self.settings = settings
+        captured["model"] = gemini_model
+
+    monkeypatch.setattr("app.discord_upload_test.ReceiptBot.__init__", fake_receipt_bot_init)
+    monkeypatch.setattr("app.discord_upload_test.DiscordDebugSession.create", lambda **kwargs: _FakeDebugSession())
+
+    settings = Settings.model_validate(
+        {
+            "GEMINI_API_KEY": "gemini-key",
+        }
+    )
+    image_path = tmp_path / "receipt.jpg"
+    image_path.write_bytes(b"jpg")
+
+    DiscordUploadTestBot(
+        settings=settings,
+        channel_id=123,
+        image_paths=[image_path],
+        caption="test",
+        timeout_seconds=30.0,
+    )
+
+    assert captured["model"] == settings.test_gemini_model_name

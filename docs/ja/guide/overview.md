@@ -63,6 +63,7 @@ HARINA V4 は Python パッケージ CLI を中心に整理されています。
 5. HARINA が必要に応じて `Categories` に新カテゴリを追加
 6. watcher が `DISCORD_NOTIFY_CHANNEL_ID` に画像つき通知を投稿
 7. Drive ファイルを processed `YYYY/MM` フォルダへ移動
+8. `DISCORD_SYSTEM_LOG_CHANNEL_ID` を設定している場合でも、無変化の idle scan cycle は新しい `HARINA Scan Summary` を送らず、活動や backlog 変化がある cycle だけ system log に出ます
 
 ### Downloader フロー
 

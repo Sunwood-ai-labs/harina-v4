@@ -82,6 +82,9 @@ Drive watcher 側:
 - bot は対象シートのヘッダー行を自動で作成
 - watcher は `DISCORD_NOTIFY_CHANNEL_ID` に画像つき通知を投稿
 - 成功した Drive ファイルは processed フォルダへ移動
+- 毎 poll ごとに heartbeat 的な `HARINA Scan Summary` が出るわけではなく、無変化の idle poll は Discord ノイズ削減のため抑制されます
+- 稼働確認が必要なときは startup / progress の system log やコンテナログを確認してください
+- watcher が動いているはずなのに system log がまったく出ない場合は、`DISCORD_SYSTEM_LOG_CHANNEL_ID` と Discord 接続をコンテナログで確認してください
 - 必須設定が足りない場合は起動時に即失敗
 - `DISCORD_DATASET_OUTPUT_DIR` は downloader の既定出力先
 - 本番に近いスモークテストとして、`Bob` の source folder に重複しない画像を 1 枚入れ、`HARINA V4 Intake // Bob`、`HARINA Progress // Bob`、`Bob/_processed/YYYY/MM` への移動を確認すると安全です

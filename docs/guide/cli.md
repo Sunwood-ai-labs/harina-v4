@@ -105,6 +105,8 @@ Notes:
 - Use `--rescan` when you intentionally want to reprocess duplicate filenames
 - Files that fail before processing completes stay in the source folder for a later retry
 - `DRIVE_POLL_INTERVAL_SECONDS` controls the polling interval
+- When `DISCORD_SYSTEM_LOG_CHANNEL_ID` is set, repeated unchanged `HARINA Scan Summary` embeds are suppressed for idle polls
+- Active scan cycles and backlog changes still produce system-log updates
 
 ## Google commands
 

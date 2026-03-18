@@ -161,6 +161,8 @@ Codex から運用する場合は、[logged-in-google-chrome-skill](https://gith
 2. `uv run harina-v4 drive watch --once` で単発確認、または watcher を常駐起動
 3. HARINA が Drive 画像を取得し、抽出とカテゴリ付与を行い、Sheets に商品行を追記し、`DISCORD_NOTIFY_CHANNEL_ID` へ画像つき通知を送り、最後に `GOOGLE_DRIVE_WATCH_PROCESSED_FOLDER_ID/YYYY/MM` へ移動
 
+`DISCORD_SYSTEM_LOG_CHANNEL_ID` を設定していても、scan 結果と backlog が前回通知から変わらない idle cycle では `HARINA Scan Summary` は送信されません。ファイルの処理、重複スキップ、失敗、backlog の変化がある cycle は従来どおり通知されます。
+
 ## 重複ファイル名の保護
 
 - HARINA は Google Sheets のレシートタブ全体で `attachmentName` をレシート画像の主キーとして扱います。
@@ -203,6 +205,7 @@ Compose では 2 サービスが動きます。
 
 ファイルベースの Google 認証情報を使う場合は `./secrets` に置き、`GOOGLE_OAUTH_CLIENT_SECRET_FILE` または `GOOGLE_SERVICE_ACCOUNT_KEY_FILE` を `/app/secrets/...` に向けてください。
 本番に近い確認をしたいときは、`Bob` などの route の source folder に重複しない画像を 1 枚入れ、`HARINA V4 Intake // Bob`、`HARINA Progress // Bob`、`Bob/_processed/YYYY/MM` への移動をまとめて確認すると確実です。
+常駐 watcher では毎回 heartbeat 的な `HARINA Scan Summary` が出るわけではありません。変化のない idle cycle は静かなので、稼働確認は startup / progress メッセージや `docker compose logs` で行ってください。
 
 ## ドキュメント
 

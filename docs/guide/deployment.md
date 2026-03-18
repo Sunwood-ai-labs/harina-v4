@@ -82,6 +82,9 @@ For the Drive watcher:
 - The bot creates the target sheet header row automatically
 - The watcher posts image notifications into `DISCORD_NOTIFY_CHANNEL_ID`
 - Successfully handled Drive files move into the processed folder
+- Do not expect a heartbeat-style `HARINA Scan Summary` on every poll; unchanged idle polls are intentionally suppressed to reduce Discord noise
+- Use startup/progress system-log messages or container logs when you need a liveness check between active scans
+- If the watcher should be active but no system-log messages appear at all, verify `DISCORD_SYSTEM_LOG_CHANNEL_ID` and Discord connectivity in the container logs
 - Startup fails fast when required configuration is missing
 - `DISCORD_DATASET_OUTPUT_DIR` sets the default output root for downloader runs
 - A production-like smoke test is to upload one unique image into the `Bob` source folder and confirm a new `HARINA V4 Intake // Bob` post, a matching `HARINA Progress // Bob` system-log entry, and a move into `Bob/_processed/YYYY/MM`

@@ -175,6 +175,8 @@ If Gemini returns a category that is not already in `Categories`, HARINA can app
 5. HARINA chooses the processed subfolder from `purchaseDate` when available and otherwise falls back to the Drive file timestamp.
 6. If processing fails before completion, HARINA leaves the source file in place for a later retry.
 
+When `DISCORD_SYSTEM_LOG_CHANNEL_ID` is configured, repeated `HARINA Scan Summary` posts are suppressed for idle scan cycles when both the scan counters and backlog snapshot are unchanged. Summaries still post when files are processed, skipped, or failed, or when the backlog changes.
+
 ## Docker Compose
 
 ```bash
@@ -202,6 +204,7 @@ The Compose stack runs two services:
 
 If you use file-based Google credentials, place them under `./secrets` and point `GOOGLE_OAUTH_CLIENT_SECRET_FILE` or `GOOGLE_SERVICE_ACCOUNT_KEY_FILE` at the mounted `/app/secrets/...` path.
 For a production-like smoke test, upload one unique image into a route such as `Bob`, then confirm a new `HARINA V4 Intake // Bob` post, a matching `HARINA Progress // Bob` system-log entry, and a move into `Bob/_processed/YYYY/MM`.
+For long-running watcher deployments, do not expect a heartbeat-style `HARINA Scan Summary` on every poll. Idle polls with no observable change stay quiet, so use startup/progress messages or `docker compose logs` when you need to confirm the service is alive.
 
 ## Documentation
 

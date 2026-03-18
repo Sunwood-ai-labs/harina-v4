@@ -96,6 +96,8 @@ uv run harina-v4 drive watch
 - 通知先は `DISCORD_NOTIFY_CHANNEL_ID` です
 - 成功したファイルは `GOOGLE_DRIVE_WATCH_PROCESSED_FOLDER_ID/YYYY/MM` へ移動します
 - 重複ファイル名をスキップした場合も、同じ `processed/YYYY/MM` へ移動します
+- `DISCORD_SYSTEM_LOG_CHANNEL_ID` を設定している場合でも、無変化の idle poll では `HARINA Scan Summary` は連投しません
+- ファイルの処理、重複スキップ、失敗、backlog 変化がある cycle は system log に出ます
 - ポーリング間隔は `DRIVE_POLL_INTERVAL_SECONDS` で決まります
 
 ## Google コマンド

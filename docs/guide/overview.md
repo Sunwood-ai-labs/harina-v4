@@ -68,6 +68,7 @@ HARINA V4 is organized around a Python package CLI surface:
 7. The watcher posts the image and summary into `DISCORD_NOTIFY_CHANNEL_ID`.
 8. The Drive file is moved into a `YYYY/MM` folder under the route's processed folder.
 9. If processing fails before completion, the file stays in the source folder for a later retry.
+10. When `DISCORD_SYSTEM_LOG_CHANNEL_ID` is configured, unchanged idle scan cycles do not post a fresh `HARINA Scan Summary`; activity and backlog changes still appear in the system log.
 
 ### Downloader flow
 

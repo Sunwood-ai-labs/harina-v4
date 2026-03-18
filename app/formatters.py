@@ -8,7 +8,7 @@ from pathlib import Path
 
 import discord
 
-from app.models import ReceiptExtraction, ReceiptLineItem
+from app.models import ReceiptExtraction, ReceiptGeminiUsage, ReceiptLineItem
 
 
 RECEIPT_SHEET_HEADERS = [
@@ -216,6 +216,7 @@ def build_receipt_embed(
     spreadsheet_url: str | None = None,
     source_label: str | None = None,
     image_url: str | None = None,
+    gemini_usage: ReceiptGeminiUsage | None = None,
 ) -> discord.Embed:
     merchant = extraction.merchant_name or "店舗不明"
     total = f"{extraction.total} {extraction.currency or ''}".strip() if extraction.total is not None else "不明"
@@ -235,6 +236,9 @@ def build_receipt_embed(
     embed.add_field(name="信頼度", value=confidence, inline=True)
     if source_label:
         embed.add_field(name="元画像", value=source_label, inline=True)
+    if gemini_usage is not None:
+        embed.add_field(name="Gemini Model", value=gemini_usage.model, inline=True)
+        embed.add_field(name="API Cost (est.)", value=format_gemini_cost_preview(gemini_usage), inline=True)
     if drive_file_url or spreadsheet_url:
         destinations: list[str] = []
         if drive_file_url:
@@ -444,6 +448,28 @@ def format_confidence(confidence: float | None) -> str:
     if confidence is None:
         return "unknown"
     return f"{confidence:.0%}"
+
+
+def format_gemini_cost_preview(usage: ReceiptGeminiUsage) -> str:
+    cost_label = "n/a"
+    if usage.estimated_total_cost_usd is not None:
+        cost_label = format_usd_amount(usage.estimated_total_cost_usd)
+
+    token_bits = [
+        f"in {usage.input_tokens}",
+        f"out {usage.output_tokens}",
+    ]
+    if usage.request_count > 1:
+        token_bits.append(f"req {usage.request_count}")
+    return f"{cost_label}\n" + " / ".join(token_bits)
+
+
+def format_usd_amount(value: float) -> str:
+    if value >= 0.01:
+        return f"${value:.4f}"
+    if value >= 0.0001:
+        return f"${value:.6f}"
+    return f"${value:.8f}"
 
 
 def truncate_field(value: str, *, limit: int = 1024) -> str:

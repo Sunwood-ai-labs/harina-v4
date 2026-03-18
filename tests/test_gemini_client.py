@@ -5,18 +5,41 @@ import pytest
 from app.gemini_client import (
     GeminiReceiptExtractor,
     apply_line_item_categories,
+    build_gemini_usage,
     is_daily_quota_exhausted_error,
     is_quota_exhausted_error,
     is_retryable_gemini_error,
+    merge_gemini_usage,
     parse_receipt_category_payload,
     parse_receipt_payload,
+    pricing_for_model,
 )
 from app.models import ReceiptCategoryInference, ReceiptExtraction, ReceiptLineItem
 
 
 class _FakeResponse:
-    def __init__(self, text: str) -> None:
+    def __init__(self, text: str, usage_metadata=None) -> None:
         self.text = text
+        self.usage_metadata = usage_metadata
+
+
+class _FakeUsageMetadata:
+    def __init__(
+        self,
+        *,
+        prompt_token_count: int,
+        candidates_token_count: int,
+        thoughts_token_count: int = 0,
+        total_token_count: int | None = None,
+    ) -> None:
+        self.prompt_token_count = prompt_token_count
+        self.candidates_token_count = candidates_token_count
+        self.thoughts_token_count = thoughts_token_count
+        self.total_token_count = (
+            total_token_count
+            if total_token_count is not None
+            else prompt_token_count + candidates_token_count + thoughts_token_count
+        )
 
 
 class _QuotaError(Exception):
@@ -97,6 +120,48 @@ def test_apply_line_item_categories_merges_by_item_index_and_normalizes_names() 
 
     assert categorized.line_items[0].category == "野菜"
     assert categorized.line_items[1].category == "飲料"
+
+def test_build_gemini_usage_calculates_estimated_cost() -> None:
+    usage = build_gemini_usage(
+        model="gemini-3-flash-preview",
+        usage_metadata=_FakeUsageMetadata(prompt_token_count=120, candidates_token_count=48, thoughts_token_count=30),
+    )
+
+    assert usage is not None
+    assert usage.model == "gemini-3-flash-preview"
+    assert usage.input_tokens == 120
+    assert usage.output_tokens == 78
+    assert usage.thinking_tokens == 30
+    assert usage.total_tokens == 198
+    assert usage.estimated_total_cost_usd == pytest.approx(0.000294)
+
+
+def test_merge_gemini_usage_sums_request_usage() -> None:
+    first = build_gemini_usage(
+        model="gemini-3-flash-preview",
+        usage_metadata=_FakeUsageMetadata(prompt_token_count=100, candidates_token_count=20, thoughts_token_count=10),
+    )
+    second = build_gemini_usage(
+        model="gemini-3-flash-preview",
+        usage_metadata=_FakeUsageMetadata(prompt_token_count=80, candidates_token_count=15, thoughts_token_count=5),
+    )
+
+    merged = merge_gemini_usage(first, second)
+
+    assert merged is not None
+    assert merged.request_count == 2
+    assert merged.input_tokens == 180
+    assert merged.output_tokens == 50
+    assert merged.thinking_tokens == 15
+    assert merged.total_tokens == 230
+    assert merged.estimated_total_cost_usd == pytest.approx(0.00024)
+
+
+def test_pricing_for_model_matches_known_prefixes() -> None:
+    assert pricing_for_model("gemini-3-flash-preview") == (0.50, 3.00)
+    assert pricing_for_model("gemini-2.5-flash") == (0.30, 2.50)
+    assert pricing_for_model("gemini-2.5-flash-lite-preview-09-2025") == (0.10, 0.40)
+    assert pricing_for_model("unknown-model") is None
 
 
 def test_is_quota_exhausted_error_detects_resource_exhausted() -> None:
@@ -184,6 +249,46 @@ def test_extractor_rotates_immediately_on_daily_quota_errors() -> None:
 
     assert result.merchant_name == "Cafe Harina"
     assert sleeps == []
+
+def test_extractor_attaches_combined_usage_to_extraction() -> None:
+    client_map = {
+        "primary": _FakeClient(
+            [
+                _FakeResponse(
+                    '{"merchant_name":"Cafe Harina","total":1100,"line_items":[{"name":"Tea","total_price":1100}]}',
+                    usage_metadata=_FakeUsageMetadata(prompt_token_count=120, candidates_token_count=40, thoughts_token_count=20),
+                ),
+                _FakeResponse(
+                    '{"line_items":[{"item_index":1,"category":"Food"}]}',
+                    usage_metadata=_FakeUsageMetadata(prompt_token_count=60, candidates_token_count=12, thoughts_token_count=8),
+                ),
+            ]
+        ),
+    }
+
+    extractor = GeminiReceiptExtractor(
+        api_keys=["primary"],
+        model="gemini-3-flash-preview",
+        client_factory=lambda key: client_map[key],
+    )
+
+    result = asyncio.run(
+        extractor.extract(
+            image_bytes=b"receipt",
+            mime_type="image/jpeg",
+            filename="receipt.jpg",
+            category_options=["Food"],
+        )
+    )
+
+    assert result.gemini_usage is not None
+    assert result.gemini_usage.model == "gemini-3-flash-preview"
+    assert result.gemini_usage.request_count == 2
+    assert result.gemini_usage.input_tokens == 180
+    assert result.gemini_usage.output_tokens == 80
+    assert result.gemini_usage.thinking_tokens == 28
+    assert result.gemini_usage.total_tokens == 260
+    assert result.gemini_usage.estimated_total_cost_usd == pytest.approx(0.00033)
 
 
 def test_extractor_raises_after_all_rotating_keys_are_exhausted() -> None:

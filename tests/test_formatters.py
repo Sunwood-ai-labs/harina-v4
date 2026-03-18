@@ -11,7 +11,7 @@ from app.formatters import (
     build_receipt_rows,
     format_receipt_summary,
 )
-from app.models import ReceiptExtraction, ReceiptLineItem
+from app.models import ReceiptExtraction, ReceiptGeminiUsage, ReceiptLineItem
 
 
 def sample_extraction() -> ReceiptExtraction:
@@ -91,6 +91,32 @@ def test_build_receipt_embed_includes_line_items_and_saved_destinations() -> Non
     assert any(field.name == "カテゴリ" and "野菜: 1件" in field.value and "飲料: 1件" in field.value for field in embed.fields)
     assert any(field.name == "商品カテゴリ" and "1. Cabbage: 野菜" in field.value and "2. Juice: 飲料" in field.value for field in embed.fields)
     assert any(field.name == "明細" and "Cabbage [野菜]" in field.value for field in embed.fields)
+
+def test_build_receipt_embed_can_include_gemini_model_and_cost() -> None:
+    embed = build_receipt_embed(
+        title="Drive Receipt // Alice",
+        extraction=sample_extraction(),
+        drive_file_url="https://drive.example/file",
+        spreadsheet_url="https://docs.google.com/spreadsheets/d/sheet-id/edit",
+        source_label="Alice / receipt.jpg",
+        gemini_usage=ReceiptGeminiUsage(
+            model="gemini-3-flash-preview",
+            request_count=2,
+            input_tokens=120,
+            output_tokens=48,
+            thinking_tokens=30,
+            total_tokens=198,
+            estimated_input_cost_usd=0.00006,
+            estimated_output_cost_usd=0.000144,
+            estimated_total_cost_usd=0.000204,
+        ),
+    )
+
+    assert any(field.name == "Gemini Model" and field.value == "gemini-3-flash-preview" for field in embed.fields)
+    assert any(
+        field.name == "API Cost (est.)" and "$0.000204" in field.value and "req 2" in field.value
+        for field in embed.fields
+    )
 
 
 def test_build_receipt_links_view_creates_drive_and_sheet_buttons() -> None:

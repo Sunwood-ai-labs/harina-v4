@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+from dataclasses import dataclass
 from collections.abc import Awaitable, Callable
 from typing import Any
 
@@ -10,7 +11,7 @@ from google import genai
 from google.genai import types
 
 from app.category_catalog import normalize_category_name
-from app.models import ReceiptCategoryInference, ReceiptExtraction, ReceiptLineItem
+from app.models import ReceiptCategoryInference, ReceiptExtraction, ReceiptGeminiUsage, ReceiptLineItem
 from app.prompting import render_receipt_categorization_prompt, render_receipt_extraction_prompt
 
 
@@ -20,6 +21,18 @@ RETRY_DELAY_SECONDS = 60
 RETRY_COUNT = 5
 EXHAUSTED_KEYS_RETRY_DELAY_SECONDS = 0
 EXHAUSTED_KEYS_RETRY_COUNT = 0
+MODEL_INPUT_OUTPUT_PRICING_USD_PER_1M_TOKENS = {
+    "gemini-3-flash": (0.50, 3.00),
+    "gemini-3-flash-preview": (0.50, 3.00),
+    "gemini-2.5-flash": (0.30, 2.50),
+    "gemini-2.5-flash-lite": (0.10, 0.40),
+}
+
+
+@dataclass(slots=True)
+class _JsonPayloadResult:
+    payload: dict[str, object]
+    usage: ReceiptGeminiUsage | None
 
 
 def is_quota_exhausted_error(exc: Exception) -> bool:
@@ -117,39 +130,40 @@ class GeminiReceiptExtractor:
         filename: str,
         category_options: list[str] | None = None,
     ) -> ReceiptExtraction:
-        extraction = ReceiptExtraction.model_validate(
-            await self._generate_json_payload(
-                contents=[
-                    types.Part.from_bytes(data=image_bytes, mime_type=mime_type),
-                    render_receipt_extraction_prompt(filename=filename),
-                ],
-                parse_func=parse_receipt_payload,
-                request_name="receipt extraction",
-                temperature=0.1,
-                filename=filename,
-            )
+        extraction_result = await self._generate_json_payload(
+            contents=[
+                types.Part.from_bytes(data=image_bytes, mime_type=mime_type),
+                render_receipt_extraction_prompt(filename=filename),
+            ],
+            parse_func=parse_receipt_payload,
+            request_name="receipt extraction",
+            temperature=0.1,
+            filename=filename,
         )
+        extraction = ReceiptExtraction.model_validate(extraction_result.payload)
+        extraction.gemini_usage = extraction_result.usage
 
         if not any(item.has_meaningful_data() for item in extraction.line_items):
             return extraction
 
-        category_inference = ReceiptCategoryInference.model_validate(
-            await self._generate_json_payload(
-                contents=[
-                    types.Part.from_bytes(data=image_bytes, mime_type=mime_type),
-                    render_receipt_categorization_prompt(
-                        filename=filename,
-                        extraction=extraction,
-                        category_options=category_options,
-                    ),
-                ],
-                parse_func=parse_receipt_category_payload,
-                request_name="receipt categorization",
-                temperature=0.0,
-                filename=filename,
-            )
+        category_result = await self._generate_json_payload(
+            contents=[
+                types.Part.from_bytes(data=image_bytes, mime_type=mime_type),
+                render_receipt_categorization_prompt(
+                    filename=filename,
+                    extraction=extraction,
+                    category_options=category_options,
+                ),
+            ],
+            parse_func=parse_receipt_category_payload,
+            request_name="receipt categorization",
+            temperature=0.0,
+            filename=filename,
         )
-        return apply_line_item_categories(extraction, category_inference)
+        category_inference = ReceiptCategoryInference.model_validate(category_result.payload)
+        combined_extraction = apply_line_item_categories(extraction, category_inference)
+        combined_extraction.gemini_usage = merge_gemini_usage(extraction_result.usage, category_result.usage)
+        return combined_extraction
 
     async def _generate_json_payload(
         self,
@@ -159,7 +173,7 @@ class GeminiReceiptExtractor:
         request_name: str,
         temperature: float,
         filename: str,
-    ) -> dict[str, object]:
+    ) -> _JsonPayloadResult:
         last_retryable_error: Exception | None = None
         exhausted_keys_retry_attempts = 0
 
@@ -182,7 +196,13 @@ class GeminiReceiptExtractor:
                         if not response.text:
                             raise RuntimeError("Gemini returned an empty response.")
 
-                        return parse_func(response.text)
+                        return _JsonPayloadResult(
+                            payload=parse_func(response.text),
+                            usage=build_gemini_usage(
+                                model=self._model,
+                                usage_metadata=getattr(response, "usage_metadata", None),
+                            ),
+                        )
                     except Exception as exc:  # noqa: BLE001
                         if not is_retryable_gemini_error(exc):
                             raise
@@ -370,3 +390,79 @@ def apply_line_item_categories(
 
 def _apply_category_to_line_item(item: ReceiptLineItem, category: str | None) -> ReceiptLineItem:
     return item.model_copy(update={"category": category})
+
+
+def build_gemini_usage(*, model: str, usage_metadata: object | None) -> ReceiptGeminiUsage | None:
+    if usage_metadata is None:
+        return None
+
+    input_tokens = int(getattr(usage_metadata, "prompt_token_count", 0) or 0)
+    candidate_tokens = int(getattr(usage_metadata, "candidates_token_count", 0) or 0)
+    thinking_tokens = int(getattr(usage_metadata, "thoughts_token_count", 0) or 0)
+    total_tokens = int(getattr(usage_metadata, "total_token_count", 0) or 0)
+    output_tokens = candidate_tokens + thinking_tokens
+
+    input_cost_usd: float | None = None
+    output_cost_usd: float | None = None
+    total_cost_usd: float | None = None
+    pricing = pricing_for_model(model)
+    if pricing is not None:
+        input_rate_usd_per_1m, output_rate_usd_per_1m = pricing
+        input_cost_usd = (input_tokens / 1_000_000) * input_rate_usd_per_1m
+        output_cost_usd = (output_tokens / 1_000_000) * output_rate_usd_per_1m
+        total_cost_usd = input_cost_usd + output_cost_usd
+
+    return ReceiptGeminiUsage(
+        model=model,
+        request_count=1,
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        thinking_tokens=thinking_tokens,
+        total_tokens=total_tokens,
+        estimated_input_cost_usd=input_cost_usd,
+        estimated_output_cost_usd=output_cost_usd,
+        estimated_total_cost_usd=total_cost_usd,
+    )
+
+
+def merge_gemini_usage(*usages: ReceiptGeminiUsage | None) -> ReceiptGeminiUsage | None:
+    present_usages = [usage for usage in usages if usage is not None]
+    if not present_usages:
+        return None
+
+    model = present_usages[0].model
+    total_input_cost_usd: float | None = 0.0
+    total_output_cost_usd: float | None = 0.0
+    total_cost_usd: float | None = 0.0
+    if any(usage.estimated_total_cost_usd is None for usage in present_usages):
+        total_input_cost_usd = None
+        total_output_cost_usd = None
+        total_cost_usd = None
+    else:
+        total_input_cost_usd = sum(usage.estimated_input_cost_usd or 0.0 for usage in present_usages)
+        total_output_cost_usd = sum(usage.estimated_output_cost_usd or 0.0 for usage in present_usages)
+        total_cost_usd = sum(usage.estimated_total_cost_usd or 0.0 for usage in present_usages)
+
+    return ReceiptGeminiUsage(
+        model=model,
+        request_count=sum(usage.request_count for usage in present_usages),
+        input_tokens=sum(usage.input_tokens for usage in present_usages),
+        output_tokens=sum(usage.output_tokens for usage in present_usages),
+        thinking_tokens=sum(usage.thinking_tokens for usage in present_usages),
+        total_tokens=sum(usage.total_tokens for usage in present_usages),
+        estimated_input_cost_usd=total_input_cost_usd,
+        estimated_output_cost_usd=total_output_cost_usd,
+        estimated_total_cost_usd=total_cost_usd,
+    )
+
+
+def pricing_for_model(model: str) -> tuple[float, float] | None:
+    normalized_model = model.strip().lower()
+    for prefix, pricing in sorted(
+        MODEL_INPUT_OUTPUT_PRICING_USD_PER_1M_TOKENS.items(),
+        key=lambda item: len(item[0]),
+        reverse=True,
+    ):
+        if normalized_model == prefix or normalized_model.startswith(f"{prefix}-"):
+            return pricing
+    return None

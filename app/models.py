@@ -17,6 +17,18 @@ class ReceiptLineItem(BaseModel):
         )
 
 
+class ReceiptGeminiUsage(BaseModel):
+    model: str
+    request_count: int = 0
+    input_tokens: int = 0
+    output_tokens: int = 0
+    thinking_tokens: int = 0
+    total_tokens: int = 0
+    estimated_input_cost_usd: float | None = None
+    estimated_output_cost_usd: float | None = None
+    estimated_total_cost_usd: float | None = None
+
+
 class ReceiptExtraction(BaseModel):
     merchant_name: str | None = None
     merchant_phone: str | None = None
@@ -33,6 +45,7 @@ class ReceiptExtraction(BaseModel):
     confidence: float | None = None
     raw_text: str | None = None
     line_items: list[ReceiptLineItem] = Field(default_factory=list)
+    gemini_usage: ReceiptGeminiUsage | None = None
 
 
 class ReceiptLineItemCategoryAssignment(BaseModel):

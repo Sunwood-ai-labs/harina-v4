@@ -294,6 +294,7 @@ class DriveWatcherClient(discord.Client):
             drive_file_url=drive_file_url,
             spreadsheet_url=self.watcher.google_workspace.spreadsheet_url,
             source_label=f"{route.label} / {file_name}",
+            gemini_usage=extraction.gemini_usage,
         )
         view = build_receipt_links_view(
             drive_file_url=drive_file_url,

@@ -63,6 +63,7 @@ Drive path embeds now surface model identifiers and estimated cost metadata in t
 
 ## See also
 
+- [What's New In Harina v4.3.0](/guide/whats-new-v4.3.0)
 - [Overview](/guide/overview)
 - [CLI](/guide/cli)
 - [Google Setup](/guide/google-setup)

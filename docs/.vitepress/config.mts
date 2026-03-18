@@ -45,7 +45,8 @@ export default defineConfig({
               { text: "Gemini Smoke Test", link: "/guide/gemini-smoke-test" },
               { text: "Google Setup", link: "/guide/google-setup" },
               { text: "Deployment", link: "/guide/deployment" },
-              { text: "Release Notes v4.3.0", link: "/guide/release-notes-v4.3.0" }
+              { text: "Release Notes v4.3.0", link: "/guide/release-notes-v4.3.0" },
+              { text: "What's New v4.3.0", link: "/guide/whats-new-v4.3.0" }
             ]
           }
         ],
@@ -79,7 +80,8 @@ export default defineConfig({
               { text: "Gemini スモークテスト", link: "/ja/guide/gemini-smoke-test" },
               { text: "Google 設定", link: "/ja/guide/google-setup" },
               { text: "デプロイ", link: "/ja/guide/deployment" },
-              { text: "リリースノート v4.3.0", link: "/ja/guide/release-notes-v4.3.0" }
+              { text: "リリースノート v4.3.0", link: "/ja/guide/release-notes-v4.3.0" },
+              { text: "v4.3.0 解説", link: "/ja/guide/whats-new-v4.3.0" }
             ]
           }
         ],

@@ -112,6 +112,17 @@ uv run harina-v4 google init-resources --env-file .env
 uv run harina-v4 google init-drive-watch --env-file .env
 ```
 
+専用の Google エージェントアカウントで長期運用するなら、OAuth consent screen は `In production` にしてください。`External + Testing` のままだと refresh token が短期間で失効し、HARINA では `invalid_grant: Token has been expired or revoked.` として見えることがあります。
+
+refresh token の再取得は通常の `google oauth-login` でもできますが、既存のログイン済みブラウザを使いたいときは `google oauth-start` / `google oauth-finish` を分けて使えます。
+
+```bash
+uv run harina-v4 google oauth-start --oauth-client-secret-file ./secrets/harina-oauth-client.json --session-file .harina-google-oauth-session.json
+uv run harina-v4 google oauth-finish --session-file .harina-google-oauth-session.json --redirect-url "http://127.0.0.1:8765/?state=...&code=..."
+```
+
+Codex から運用する場合は、[logged-in-google-chrome-skill](https://github.com/Sunwood-ai-labs/logged-in-google-chrome-skill) を使うと、専用 Chrome プロファイルの起動と consent 画面の操作を自動化しやすくなります。
+
 `google init-drive-watch` で行うこと:
 
 - 新着画像用の Drive inbox フォルダを作成または再利用
@@ -173,12 +184,25 @@ docker compose logs -f receipt-bot
 docker compose logs -f drive-watcher
 ```
 
+`.env` を更新したあとは `docker compose restart` ではなく再作成を使ってください。既存コンテナは起動時の環境変数を保持するため、`GOOGLE_OAUTH_REFRESH_TOKEN` を更新しただけでは反映されません。
+
+```bash
+docker compose up -d --force-recreate receipt-bot drive-watcher
+```
+
+コード変更も一緒に反映したいときは `--build` も付けます。
+
+```bash
+docker compose up -d --build --force-recreate receipt-bot drive-watcher
+```
+
 Compose では 2 サービスが動きます。
 
 - `receipt-bot`: Discord 直接投稿の受付
 - `drive-watcher`: Google Drive inbox フォルダの監視
 
 ファイルベースの Google 認証情報を使う場合は `./secrets` に置き、`GOOGLE_OAUTH_CLIENT_SECRET_FILE` または `GOOGLE_SERVICE_ACCOUNT_KEY_FILE` を `/app/secrets/...` に向けてください。
+本番に近い確認をしたいときは、`Bob` などの route の source folder に重複しない画像を 1 枚入れ、`HARINA V4 Intake // Bob`、`HARINA Progress // Bob`、`Bob/_processed/YYYY/MM` への移動をまとめて確認すると確実です。
 
 ## ドキュメント
 

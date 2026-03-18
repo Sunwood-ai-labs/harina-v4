@@ -106,6 +106,18 @@ uv run harina-v4 drive watch
 uv run harina-v4 google oauth-login --oauth-client-secret-file ./secrets/harina-oauth-client.json --env-file .env
 ```
 
+ログイン済みブラウザを使いたいときは、先に認可 URL を発行:
+
+```bash
+uv run harina-v4 google oauth-start --oauth-client-secret-file ./secrets/harina-oauth-client.json --session-file .harina-google-oauth-session.json
+```
+
+最後に redirect URL を渡して token を保存:
+
+```bash
+uv run harina-v4 google oauth-finish --session-file .harina-google-oauth-session.json --redirect-url "http://127.0.0.1:8765/?state=...&code=..."
+```
+
 メインの Drive フォルダと Spreadsheet を作成または再利用:
 
 ```bash
@@ -130,6 +142,12 @@ watcher セットアップで便利なオプション:
 - `--processed-folder-name "Harina V4 Drive Processed"`
 - `--parent-folder-id <folder_id>`
 - `--poll-interval-seconds 60`
+
+Google 認証まわりの補足:
+
+- 既存のログイン済み Chrome を使いたいときは `google oauth-start` と `google oauth-finish` を組み合わせます
+- Codex では [logged-in-google-chrome-skill](https://github.com/Sunwood-ai-labs/logged-in-google-chrome-skill) がこの復旧フローに向いています
+- `.env` の `GOOGLE_OAUTH_REFRESH_TOKEN` を更新したあとは Docker Compose サービスを再作成してください
 
 ## dataset コマンド
 

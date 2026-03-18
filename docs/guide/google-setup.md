@@ -31,6 +31,21 @@ uv run harina-v4 google oauth-login --oauth-client-secret-file ./secrets/harina-
 
 After the refresh token is saved, HARINA can refresh access automatically.
 
+### Long-lived agent accounts
+
+If HARINA uses a dedicated Google agent account, move the OAuth consent screen to `In production` before relying on the refresh token for always-on services. Google documents that external apps kept in `Testing` can issue refresh tokens that expire after 7 days, which surfaces in HARINA as `invalid_grant: Token has been expired or revoked.` See the [Google OAuth 2.0 guide](https://developers.google.com/identity/protocols/oauth2).
+
+### Browser-assisted token recovery
+
+`google oauth-login` is the simplest way to mint a new refresh token, but HARINA also supports splitting the flow into `oauth-start` and `oauth-finish` when you want to reuse an already logged-in browser:
+
+```bash
+uv run harina-v4 google oauth-start --oauth-client-secret-file ./secrets/harina-oauth-client.json --session-file .harina-google-oauth-session.json
+uv run harina-v4 google oauth-finish --session-file .harina-google-oauth-session.json --redirect-url "http://127.0.0.1:8765/?state=...&code=..."
+```
+
+This split flow works well with the [logged-in-google-chrome-skill](https://github.com/Sunwood-ai-labs/logged-in-google-chrome-skill) helper when you operate HARINA from Codex or another browser automation environment. The helper launches a dedicated Chrome profile and attaches over CDP so you can approve the Google consent flow without typing credentials into a Playwright-launched browser.
+
 ## 3. Bootstrap Drive and Sheets from the CLI
 
 Create or reuse the main receipt Drive folder and spreadsheet:
@@ -93,4 +108,5 @@ The watcher creates `YYYY/MM` subfolders inside `GOOGLE_DRIVE_WATCH_PROCESSED_FO
 - Gemini reads `Categories` before categorization and can append a short new category when no approved option fits
 - Personal Google Drive accounts often reject service-account-owned uploads because service accounts do not have Drive storage quota there
 - For personal Gmail environments, prefer OAuth refresh tokens instead of pure service-account uploads
+- After rotating `GOOGLE_OAUTH_REFRESH_TOKEN` in `.env`, recreate Docker Compose services so the new environment value reaches the running containers
 - If you configure resources manually, make sure both the main Drive folder and the watcher folders are writable by the chosen credential

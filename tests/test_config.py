@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import pytest
@@ -37,6 +38,44 @@ def test_settings_accepts_oauth_refresh_token_credentials() -> None:
     assert credentials.client_id == "client-id"
     assert credentials.client_secret == "client-secret"
     assert credentials.refresh_token == "refresh-token"
+
+
+def test_settings_accepts_file_based_oauth_credentials_like_docker_compose(tmp_path: Path) -> None:
+    secret_file = tmp_path / "harina-oauth-client.json"
+    secret_file.write_text(
+        json.dumps(
+            {
+                "installed": {
+                    "client_id": "client-id",
+                    "client_secret": "client-secret",
+                    "token_uri": "https://oauth2.googleapis.com/token",
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    settings = Settings.model_validate(
+        {
+            "DISCORD_TOKEN": "discord-token",
+            "GEMINI_API_KEY": "gemini-key",
+            "GOOGLE_OAUTH_CLIENT_SECRET_FILE": str(secret_file),
+            "GOOGLE_OAUTH_REFRESH_TOKEN": "refresh-token",
+            "GOOGLE_SHEETS_SPREADSHEET_ID": "sheet-id",
+            "DRIVE_WATCH_ROUTES_JSON": (
+                '[{"key":"bob","label":"Bob","discord_channel_id":222,'
+                '"source_folder_id":"source-2","processed_folder_id":"processed-2"}]'
+            ),
+        }
+    )
+
+    settings.require_drive_watch()
+    credentials = settings.google_credentials
+
+    assert credentials.client_id == "client-id"
+    assert credentials.client_secret == "client-secret"
+    assert credentials.refresh_token == "refresh-token"
+    assert settings.drive_watch_routes[0].key == "bob"
 
 
 def test_settings_can_power_receipt_cli_without_discord_token() -> None:

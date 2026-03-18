@@ -47,6 +47,18 @@ docker compose logs -f receipt-bot
 docker compose logs -f drive-watcher
 ```
 
+If you update `.env`, especially `GOOGLE_OAUTH_REFRESH_TOKEN`, recreate the services instead of using `docker compose restart`:
+
+```bash
+docker compose up -d --force-recreate receipt-bot drive-watcher
+```
+
+If code changed too, rebuild and recreate in one step:
+
+```bash
+docker compose up -d --build --force-recreate receipt-bot drive-watcher
+```
+
 ## Required environment variables
 
 For the receipt bot:
@@ -72,3 +84,4 @@ For the Drive watcher:
 - Successfully handled Drive files move into the processed folder
 - Startup fails fast when required configuration is missing
 - `DISCORD_DATASET_OUTPUT_DIR` sets the default output root for downloader runs
+- A production-like smoke test is to upload one unique image into the `Bob` source folder and confirm a new `HARINA V4 Intake // Bob` post, a matching `HARINA Progress // Bob` system-log entry, and a move into `Bob/_processed/YYYY/MM`

@@ -114,6 +114,18 @@ Run the one-time OAuth login flow and save a refresh token:
 uv run harina-v4 google oauth-login --oauth-client-secret-file ./secrets/harina-oauth-client.json --env-file .env
 ```
 
+Generate an authorization URL first when you want to complete the consent flow in an already logged-in browser session:
+
+```bash
+uv run harina-v4 google oauth-start --oauth-client-secret-file ./secrets/harina-oauth-client.json --session-file .harina-google-oauth-session.json
+```
+
+Finish the split flow with the final redirect URL that contains the authorization code:
+
+```bash
+uv run harina-v4 google oauth-finish --session-file .harina-google-oauth-session.json --redirect-url "http://127.0.0.1:8765/?state=...&code=..."
+```
+
 Create or reuse the main Drive folder and spreadsheet:
 
 ```bash
@@ -138,6 +150,12 @@ Useful flags for watcher setup:
 - `--processed-folder-name "Harina V4 Drive Processed"`
 - `--parent-folder-id <folder_id>`
 - `--poll-interval-seconds 60`
+
+Google auth notes:
+
+- Use `google oauth-start` plus `google oauth-finish` when you want to pair HARINA with an existing logged-in Chrome session instead of opening a fresh browser
+- The [logged-in-google-chrome-skill](https://github.com/Sunwood-ai-labs/logged-in-google-chrome-skill) helper is a good fit for that recovery flow in Codex
+- After rotating `GOOGLE_OAUTH_REFRESH_TOKEN` in `.env`, recreate Docker Compose services so the new token reaches the running containers
 
 ## Dataset commands
 

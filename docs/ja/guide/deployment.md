@@ -47,6 +47,18 @@ docker compose logs -f receipt-bot
 docker compose logs -f drive-watcher
 ```
 
+`.env` を更新したとき、特に `GOOGLE_OAUTH_REFRESH_TOKEN` を差し替えたときは `docker compose restart` ではなく再作成を使ってください。
+
+```bash
+docker compose up -d --force-recreate receipt-bot drive-watcher
+```
+
+コード変更も含めて反映したい場合は `--build` も付けます。
+
+```bash
+docker compose up -d --build --force-recreate receipt-bot drive-watcher
+```
+
 ## 必須環境変数
 
 receipt bot 側:
@@ -72,3 +84,4 @@ Drive watcher 側:
 - 成功した Drive ファイルは processed フォルダへ移動
 - 必須設定が足りない場合は起動時に即失敗
 - `DISCORD_DATASET_OUTPUT_DIR` は downloader の既定出力先
+- 本番に近いスモークテストとして、`Bob` の source folder に重複しない画像を 1 枚入れ、`HARINA V4 Intake // Bob`、`HARINA Progress // Bob`、`Bob/_processed/YYYY/MM` への移動を確認すると安全です

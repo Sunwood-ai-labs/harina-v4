@@ -122,6 +122,17 @@ uv run harina-v4 google init-resources --env-file .env
 uv run harina-v4 google init-drive-watch --env-file .env
 ```
 
+For a dedicated Google agent account, move the OAuth consent screen to `In production` before long-lived operations. Google documents that external apps left in `Testing` can issue refresh tokens that expire after 7 days, which shows up in HARINA as `invalid_grant: Token has been expired or revoked.` See the [Google OAuth 2.0 guide](https://developers.google.com/identity/protocols/oauth2).
+
+If you need to recover an expired or revoked refresh token, you can still use `google oauth-login`, or you can split the flow into `oauth-start` and `oauth-finish` when you want to drive an already logged-in browser session:
+
+```bash
+uv run harina-v4 google oauth-start --oauth-client-secret-file ./secrets/harina-oauth-client.json --session-file .harina-google-oauth-session.json
+uv run harina-v4 google oauth-finish --session-file .harina-google-oauth-session.json --redirect-url "http://127.0.0.1:8765/?state=...&code=..."
+```
+
+When you operate HARINA from Codex, the [`logged-in-google-chrome` helper](https://github.com/Sunwood-ai-labs/logged-in-google-chrome-skill) can automate the dedicated Chrome launch and consent-screen steps for this recovery flow.
+
 `google init-drive-watch` creates or reuses:
 
 - a Drive inbox folder for new uploads
@@ -172,12 +183,25 @@ docker compose logs -f receipt-bot
 docker compose logs -f drive-watcher
 ```
 
+When `.env` changes, especially `GOOGLE_OAUTH_REFRESH_TOKEN`, recreate the services instead of using `docker compose restart`, because existing containers keep their original environment snapshot:
+
+```bash
+docker compose up -d --force-recreate receipt-bot drive-watcher
+```
+
+If you changed code as well as `.env`, rebuild and recreate together:
+
+```bash
+docker compose up -d --build --force-recreate receipt-bot drive-watcher
+```
+
 The Compose stack runs two services:
 
 - `receipt-bot` for direct Discord intake
 - `drive-watcher` for polling the Google Drive inbox folder
 
 If you use file-based Google credentials, place them under `./secrets` and point `GOOGLE_OAUTH_CLIENT_SECRET_FILE` or `GOOGLE_SERVICE_ACCOUNT_KEY_FILE` at the mounted `/app/secrets/...` path.
+For a production-like smoke test, upload one unique image into a route such as `Bob`, then confirm a new `HARINA V4 Intake // Bob` post, a matching `HARINA Progress // Bob` system-log entry, and a move into `Bob/_processed/YYYY/MM`.
 
 ## Documentation
 

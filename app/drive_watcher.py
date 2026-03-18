@@ -38,6 +38,60 @@ class DriveWatchScanSummary:
     def as_dict(self) -> dict[str, int]:
         return asdict(self)
 
+    def has_activity(self) -> bool:
+        return any(value > 0 for value in self.as_dict().values())
+
+
+@dataclass(slots=True)
+class DriveWatchCycleSummaryState:
+    last_signature: tuple[int, int, int, int, int, int, int, tuple[str, ...]] | None = None
+
+    def should_notify(
+        self,
+        *,
+        summary: DriveWatchScanSummary,
+        backlog_total: int,
+        backlog_lines: list[str],
+    ) -> bool:
+        if summary.has_activity():
+            return True
+        return self.last_signature != self.build_signature(
+            summary=summary,
+            backlog_total=backlog_total,
+            backlog_lines=backlog_lines,
+        )
+
+    def remember(
+        self,
+        *,
+        summary: DriveWatchScanSummary,
+        backlog_total: int,
+        backlog_lines: list[str],
+    ) -> None:
+        self.last_signature = self.build_signature(
+            summary=summary,
+            backlog_total=backlog_total,
+            backlog_lines=backlog_lines,
+        )
+
+    @staticmethod
+    def build_signature(
+        *,
+        summary: DriveWatchScanSummary,
+        backlog_total: int,
+        backlog_lines: list[str],
+    ) -> tuple[int, int, int, int, int, int, int, tuple[str, ...]]:
+        return (
+            summary.scanned,
+            summary.processed,
+            summary.skipped,
+            summary.failed,
+            summary.moved,
+            summary.notified,
+            backlog_total,
+            tuple(backlog_lines),
+        )
+
 
 class DriveReceiptWatcher:
     def __init__(
@@ -220,6 +274,7 @@ class DriveWatcherClient(discord.Client):
         self.run_error: Exception | None = None
         self.last_summary: DriveWatchScanSummary | None = None
         self._watch_task: asyncio.Task[None] | None = None
+        self._cycle_summary_state = DriveWatchCycleSummaryState()
         self._routes = settings.drive_watch_routes or [
             DriveWatchRoute(
                 key="default",
@@ -325,6 +380,11 @@ class DriveWatcherClient(discord.Client):
         if backlog_lines:
             embed.add_field(name="Current Backlog", value="\n".join(backlog_lines), inline=False)
         await self._send_system_log_embed(embed)
+        self._cycle_summary_state.remember(
+            summary=DriveWatchScanSummary(),
+            backlog_total=backlog_total,
+            backlog_lines=backlog_lines,
+        )
 
     async def send_system_progress(
         self,
@@ -369,8 +429,14 @@ class DriveWatcherClient(discord.Client):
     async def send_system_cycle_summary(self, summary: DriveWatchScanSummary) -> None:
         if self.settings.discord_system_log_channel_id is None:
             return
-
         backlog_total, backlog_lines = await self._build_backlog_snapshot()
+        if not self._cycle_summary_state.should_notify(
+            summary=summary,
+            backlog_total=backlog_total,
+            backlog_lines=backlog_lines,
+        ):
+            logger.debug("Skipping Drive watcher cycle summary because there was no observable change.")
+            return
         embed = discord.Embed(
             title="HARINA Scan Summary",
             description="Drive watcher の scan cycle が完了しました。",
@@ -386,6 +452,11 @@ class DriveWatcherClient(discord.Client):
         if backlog_lines:
             embed.add_field(name="Current Backlog", value="\n".join(backlog_lines), inline=False)
         await self._send_system_log_embed(embed)
+        self._cycle_summary_state.remember(
+            summary=summary,
+            backlog_total=backlog_total,
+            backlog_lines=backlog_lines,
+        )
 
     async def send_system_error(self, error: Exception) -> None:
         if self.settings.discord_system_log_channel_id is None:

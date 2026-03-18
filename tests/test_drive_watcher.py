@@ -1,6 +1,7 @@
 import asyncio
+from types import SimpleNamespace
 
-from app.drive_watcher import DriveReceiptWatcher
+from app.drive_watcher import DriveReceiptWatcher, DriveWatchCycleSummaryState, DriveWatchScanSummary, DriveWatcherClient
 from app.google_workspace import DriveImageFile
 from app.models import ReceiptExtraction, ReceiptLineItem
 from app.team_intake import DriveWatchRoute
@@ -303,3 +304,81 @@ def test_drive_watcher_sends_progress_for_skipped_duplicates() -> None:
     assert summary.moved == 1
     assert notifier.progress_calls[0]["status"] == "skipped"
     assert notifier.progress_calls[0]["file_name"] == "receipt.jpg"
+
+
+def test_drive_watcher_skips_noop_cycle_summary_notifications() -> None:
+    sent_embeds = []
+    client = DriveWatcherClient.__new__(DriveWatcherClient)
+    client.settings = SimpleNamespace(discord_system_log_channel_id=999)
+    client._cycle_summary_state = DriveWatchCycleSummaryState()
+
+    async def fake_build_backlog_snapshot() -> tuple[int, list[str]]:
+        return 0, ["Alice: 0"]
+
+    async def fake_send_system_log_embed(embed) -> None:
+        sent_embeds.append(embed)
+
+    client._build_backlog_snapshot = fake_build_backlog_snapshot  # type: ignore[method-assign]
+    client._send_system_log_embed = fake_send_system_log_embed  # type: ignore[method-assign]
+    client._cycle_summary_state.remember(
+        summary=DriveWatchScanSummary(),
+        backlog_total=0,
+        backlog_lines=["Alice: 0"],
+    )
+
+    asyncio.run(DriveWatcherClient.send_system_cycle_summary(client, DriveWatchScanSummary()))
+
+    assert sent_embeds == []
+
+
+def test_drive_watcher_sends_cycle_summary_when_activity_exists() -> None:
+    sent_embeds = []
+    client = DriveWatcherClient.__new__(DriveWatcherClient)
+    client.settings = SimpleNamespace(discord_system_log_channel_id=999)
+    client._cycle_summary_state = DriveWatchCycleSummaryState()
+
+    async def fake_build_backlog_snapshot() -> tuple[int, list[str]]:
+        return 0, ["Alice: 0"]
+
+    async def fake_send_system_log_embed(embed) -> None:
+        sent_embeds.append(embed)
+
+    client._build_backlog_snapshot = fake_build_backlog_snapshot  # type: ignore[method-assign]
+    client._send_system_log_embed = fake_send_system_log_embed  # type: ignore[method-assign]
+
+    asyncio.run(
+        DriveWatcherClient.send_system_cycle_summary(
+            client,
+            DriveWatchScanSummary(processed=1, notified=1, moved=1),
+        )
+    )
+
+    assert len(sent_embeds) == 1
+    assert sent_embeds[0].title == "HARINA Scan Summary"
+
+
+def test_drive_watcher_sends_cycle_summary_when_backlog_changes() -> None:
+    sent_embeds = []
+    client = DriveWatcherClient.__new__(DriveWatcherClient)
+    client.settings = SimpleNamespace(discord_system_log_channel_id=999)
+    client._cycle_summary_state = DriveWatchCycleSummaryState()
+
+    async def fake_send_system_log_embed(embed) -> None:
+        sent_embeds.append(embed)
+
+    client._send_system_log_embed = fake_send_system_log_embed  # type: ignore[method-assign]
+    client._cycle_summary_state.remember(
+        summary=DriveWatchScanSummary(),
+        backlog_total=0,
+        backlog_lines=["Alice: 0"],
+    )
+
+    async def fake_build_backlog_snapshot() -> tuple[int, list[str]]:
+        return 1, ["Alice: 1"]
+
+    client._build_backlog_snapshot = fake_build_backlog_snapshot  # type: ignore[method-assign]
+
+    asyncio.run(DriveWatcherClient.send_system_cycle_summary(client, DriveWatchScanSummary()))
+
+    assert len(sent_embeds) == 1
+    assert sent_embeds[0].title == "HARINA Scan Summary"

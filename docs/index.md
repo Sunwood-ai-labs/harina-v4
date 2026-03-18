@@ -14,7 +14,7 @@ hero:
       link: /guide/overview
     - theme: alt
       text: Release Notes
-      link: /guide/release-notes-v4.2.0
+      link: /guide/release-notes-v4.3.0
     - theme: alt
       text: CLI
       link: /guide/cli
@@ -23,7 +23,7 @@ hero:
       link: /guide/dataset-downloader
     - theme: alt
       text: Upload Test
-      link: /guide/cli#discord-upload-test
+      link: /guide/cli#bot-commands
 
 features:
   - title: Discord-native intake

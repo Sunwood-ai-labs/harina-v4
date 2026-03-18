@@ -42,7 +42,7 @@ uv run harina-v4 test docs-public
 - `--skip-google-write` 中は Sheets のカテゴリ一覧を読めないため、Gemini が短い自由カテゴリを付けます
 - 外すと Drive 保存、Sheets 追記、`Categories` シートを使ったカテゴリ付与まで実行します
 
-## bot コマンド
+## bot コマンド {#bot-commands}
 
 常時稼働の Discord bot を起動します。
 

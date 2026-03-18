@@ -44,7 +44,7 @@ Notes:
 - when `--skip-google-write` is enabled, HARINA cannot read the Sheets-backed category catalog and Gemini will create short freeform category names
 - omit `--skip-google-write` when you want the CLI to upload to Drive, append to Sheets, and categorize against the live `Categories` sheet
 
-## Bot commands
+## Bot commands {#bot-commands}
 
 Run the always-on Discord bot:
 

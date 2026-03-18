@@ -14,7 +14,7 @@ hero:
       link: /ja/guide/overview
     - theme: alt
       text: リリースノート
-      link: /ja/guide/release-notes-v4.2.0
+      link: /ja/guide/release-notes-v4.3.0
     - theme: alt
       text: CLI
       link: /ja/guide/cli
@@ -23,7 +23,7 @@ hero:
       link: /ja/guide/dataset-downloader
     - theme: alt
       text: Upload Test
-      link: /ja/guide/cli#discord-upload-test
+      link: /ja/guide/cli#bot-commands
 
 features:
   - title: Discord ネイティブ運用

@@ -31,7 +31,7 @@ features:
   - title: 2 段階 Gemini パイプライン
     details: まずレシート情報を抽出し、その後に Sheets のカテゴリ一覧を使って商品ごとに分類します。
   - title: Google Workspace 連携
-    details: 元画像を Drive に保存し、`Receipts` に商品行を追記しながら `Categories` も管理します。
+    details: 元画像を Drive に保存し、`2025` のような年別レシートタブへ商品行を追記しながら `Categories` も管理します。
   - title: 移行と再スキャンに対応
     details: V1、V2、V3 の履歴取得、回帰検証用データセット作成、モデルやプロンプト更新後の再評価に使えます。
   - title: Discord でカテゴリが見える

@@ -31,7 +31,7 @@ features:
   - title: Two-stage Gemini pipeline
     details: Extract receipt structure first, then assign one category per line item against the live Sheets catalog.
   - title: Google Workspace handoff
-    details: Archive direct uploads under `YYYY/MM`, move watched Drive files into processed `YYYY/MM` folders, write one row per line item to `Receipts`, and maintain a reusable `Categories` sheet.
+    details: Archive direct uploads under `YYYY/MM`, move watched Drive files into processed `YYYY/MM` folders, write one row per line item into year-based receipt tabs such as `2025`, and maintain a reusable `Categories` sheet.
   - title: Duplicate-safe intake
     details: Treat `attachmentName` as the primary key, skip duplicates by default, and use `--rescan` only when you intentionally want to replay a receipt.
   - title: Migration and replay ready

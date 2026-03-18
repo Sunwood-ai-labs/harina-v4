@@ -16,7 +16,7 @@
 
 Sheets 関連の主な設定:
 
-- `GOOGLE_SHEETS_SHEET_NAME` の既定値は `Receipts`
+- `GOOGLE_SHEETS_SHEET_NAME` の既定値は `Receipts` で、`.env` に残す bootstrap/fallback 用の受け皿シート名として使われます
 - `GOOGLE_SHEETS_CATEGORY_SHEET_NAME` の既定値は `Categories`
 
 Docker Compose では、ファイルベース secret を `./secrets` に置いて `/app/secrets` へマウントする前提です。
@@ -66,7 +66,8 @@ uv run harina-v4 google init-resources --env-file .env
 
 - メインの Drive フォルダを作成または再利用
 - Spreadsheet を作成または再利用
-- `Receipts` と `Categories` のシートタブとヘッダー行を保証
+- bootstrap 用の `Receipts` と `Categories` のシートタブとヘッダー行を保証
+- 後続の row 追記時には `2025` のような年タブを自動作成
 - `Categories` が空なら一語カテゴリを初期投入
 - 必要に応じて ID と URL を `.env` へ保存
 
@@ -103,9 +104,10 @@ watcher の実行時には、`GOOGLE_DRIVE_WATCH_PROCESSED_FOLDER_ID` 配下に 
 
 ## 5. 注意点
 
-- `Receipts` は 1 レシート 1 行ではなく、商品ごとに 1 行です
+- `Receipts` は bootstrap/fallback 名で、実際の商品行は `2025` のような年別レシートタブに入ります
 - 各商品行には `itemCategory` も保存されます
 - カテゴリ付与の前に Gemini は `Categories` を読み、合う候補がなければ短い新カテゴリを提案できます
+- `attachmentName` の重複判定は `Categories` を除く全レシートタブを横断します
 - 個人 Google Drive では service account に Drive 容量がなく、アップロードが拒否されることがあります
 - 個人 Gmail 環境では OAuth refresh token を優先してください
 - `.env` の `GOOGLE_OAUTH_REFRESH_TOKEN` を更新したあとは、Docker Compose サービスを再作成して新しい値を反映してください

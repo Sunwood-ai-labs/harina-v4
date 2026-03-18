@@ -18,10 +18,11 @@ uv run harina dataset smoke-test --limit 2
 読み込む環境変数:
 
 - `GEMINI_API_KEY`
-- `GEMINI_MODEL`
+- `GEMINI_TEST_MODEL`
 - `DISCORD_DATASET_OUTPUT_DIR` を既定のデータセットルートとして使用
 
-このリポジトリの既定モデルは `gemini-3-flash-preview` です。`GEMINI_MODEL` を変えれば別モデルの確認にも使えます。
+このリポジトリでは、smoke-test 系の既定モデルは `gemini-2.5-flash` です。`GEMINI_TEST_MODEL` を変えれば別モデルの確認にも使えます。
+常時稼働の `bot run` と `drive watch` は引き続き `GEMINI_MODEL` を使います。
 
 ## よく使う例
 

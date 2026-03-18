@@ -78,6 +78,12 @@ Drive watcher 側で必要な環境変数:
 - `GOOGLE_DRIVE_WATCH_PROCESSED_FOLDER_ID`
 - `DRIVE_POLL_INTERVAL_SECONDS`
 
+Gemini モデル設定の使い分け:
+
+- `GEMINI_MODEL`: 常時稼働の `bot run` と `drive watch`
+- `GEMINI_TEST_MODEL`: `bot upload-test`、`receipt process`、`dataset smoke-test`、`test docs-public` の検証系フロー
+- `GEMINI_API_KEY_ROTATION_LIST`: quota 枯渇時の rotation と delayed retry に使う追加 key 群
+
 ## CLI
 
 ```bash
@@ -139,10 +145,12 @@ Codex から運用する場合は、[logged-in-google-chrome-skill](https://gith
 - `--share-with-email you@example.com`
 - `--env-file .env`
 
-`google init-resources` では、Spreadsheet に次の 2 シートも保証します。
+`google init-resources` では、Spreadsheet に次の 2 つの bootstrap シートも保証します。
 
-- `Receipts`: 商品ごとに 1 行ずつ保存する台帳
+- `Receipts`: `.env` に保存する fallback/bootstrap 用の受け皿シート名
 - `Categories`: Gemini に毎回渡すカテゴリ一覧
+
+実際に商品行を追記するときは、HARINA が `2025` や `2026` のような年タブを自動作成してそこへ振り分けます。年は `purchaseDate` を優先し、無ければ処理時刻で決めます。重複判定の `attachmentName` も `Categories` を除く全レシートタブを横断して確認します。
 
 初期カテゴリは `野菜`、`肉`、`惣菜`、`飲料`、`手数料` などの一語ラベルです。  
 既存カテゴリに当てはまらない場合は、Gemini が短い新カテゴリ名を提案し、HARINA が `Categories` に追加できます。
@@ -152,16 +160,27 @@ Codex から運用する場合は、[logged-in-google-chrome-skill](https://gith
 1. Stage 1 で画像から正規化済みレシート情報と明細を抽出
 2. Stage 2 で `Categories` シートを読んで、各商品にカテゴリを付与
 3. 既存カテゴリに合わない場合は短い新カテゴリを提案
-4. HARINA が新カテゴリを `Categories` に追記し、`Receipts` の `itemCategory` にも保存
+4. HARINA が新カテゴリを `Categories` に追記し、`2025` のような年別レシートタブの `itemCategory` にも保存
 5. Discord 返信ではカテゴリ要約に加えて `商品カテゴリ` 欄も出し、商品ごとの対応が分かるようにする
+
+## Gemini モデルのレーン分け
+
+- `bot run` と `drive watch` は本番用の `GEMINI_MODEL` を使います。
+- `bot upload-test`、`receipt process`、`dataset smoke-test`、`test docs-public` は検証用の `GEMINI_TEST_MODEL` を使います。
+- `GEMINI_API_KEY_ROTATION_LIST` を入れると、主 key の後ろに追加 key 群をつないで retry / rotate できます。
+- Gemini の一時的な失敗は key ごとに 60 秒間隔で最大 5 回まで再試行します。
+- daily quota 枯渇はローカル再試行せず、次の key へ即 rotate します。
+- すべての key を使い切った場合は `receipt-bot` が 1 時間、`drive-watcher` が 12 時間待ってから 1 回だけ最初の key 群に戻って再試行します。
 
 ## Drive watcher の流れ
 
 1. `GOOGLE_DRIVE_WATCH_SOURCE_FOLDER_ID` に画像をアップロード
 2. `uv run harina-v4 drive watch --once` で単発確認、または watcher を常駐起動
-3. HARINA が Drive 画像を取得し、抽出とカテゴリ付与を行い、Sheets に商品行を追記し、`DISCORD_NOTIFY_CHANNEL_ID` へ画像つき通知を送り、最後に `GOOGLE_DRIVE_WATCH_PROCESSED_FOLDER_ID/YYYY/MM` へ移動
+3. HARINA が Drive 画像を取得し、抽出とカテゴリ付与を行い、年別レシートタブへ商品行を追記し、`DISCORD_NOTIFY_CHANNEL_ID` へ画像つき通知を送り、最後に `GOOGLE_DRIVE_WATCH_PROCESSED_FOLDER_ID/YYYY/MM` へ移動
+4. 正常処理時の移動先は `purchaseDate` を優先し、無ければ Drive 側の作成日時を使います。重複スキップ時は抽出を行わないため、Drive 側の作成日時ベースで移動します。
 
 `DISCORD_SYSTEM_LOG_CHANNEL_ID` を設定していても、scan 結果と backlog が前回通知から変わらない idle cycle では `HARINA Scan Summary` は送信されません。ファイルの処理、重複スキップ、失敗、backlog の変化がある cycle は従来どおり通知されます。
+Gemini usage metadata が返る場合、Drive watcher の `Drive Receipt // ...` embed には `Gemini Model` と `API Cost (est.)` も表示されます。全 rotation key が尽きた場合は、watcher が待機前に `HARINA Watch Status` を system log に出します。
 
 ## 重複ファイル名の保護
 
@@ -216,6 +235,8 @@ Compose では 2 サービスが動きます。
 - [デプロイ](./docs/ja/guide/deployment.md)
 - [データセットダウンローダー](./docs/ja/guide/dataset-downloader.md)
 - [Gemini スモークテスト](./docs/ja/guide/gemini-smoke-test.md)
+- [リリースノート v4.3.0](./docs/ja/guide/release-notes-v4.3.0.md)
+- [Harina v4.3.0 解説](./docs/ja/guide/whats-new-v4.3.0.md)
 
 ## 開発
 

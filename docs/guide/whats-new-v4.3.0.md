@@ -34,7 +34,7 @@ That combination makes month-by-month audits and year-based bookkeeping much eas
 
 `v4.3.0` separates production and test Gemini model selection. The bot and watcher stay on the production path, while smoke-style flows can use a separate test model configuration.
 
-The release also improves resiliency around Gemini key rotation and surfaces more operator-facing telemetry. Drive Receipt embeds now show the model used for the run plus estimated API cost metadata, so output quality and cost can be reviewed together instead of by guesswork.
+The release also improves resiliency around Gemini key rotation for the always-on bot and watcher flows and surfaces more operator-facing telemetry. Drive watcher receipt embeds now show the model used for the run plus estimated API cost metadata, so output quality and cost can be reviewed together instead of by guesswork.
 
 ## 4. Quieter watcher loops for long-running deployments
 
@@ -47,7 +47,7 @@ This is a small change on paper, but it has a big effect on operational signal q
 - Expect duplicate receipts to skip earlier unless you explicitly use `--rescan`.
 - Expect Drive watcher processed folders and archived uploads to look more chronological.
 - Expect test and smoke flows to be easier to isolate from production Gemini settings.
-- Expect Discord embeds and watcher logs to be more useful for debugging and cost review.
+- Expect Drive watcher receipt embeds and watcher logs to be more useful for debugging and cost review.
 
 ## Validation
 

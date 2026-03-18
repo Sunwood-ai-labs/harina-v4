@@ -18,10 +18,11 @@ uv run harina dataset smoke-test --limit 2
 The smoke test reads:
 
 - `GEMINI_API_KEY`
-- `GEMINI_MODEL`
+- `GEMINI_TEST_MODEL`
 - `DISCORD_DATASET_OUTPUT_DIR` as the default dataset root
 
-This repository defaults to `gemini-3-flash-preview` unless you override `GEMINI_MODEL`.
+This repository defaults to `gemini-2.5-flash` for smoke-test runs unless you override `GEMINI_TEST_MODEL`.
+The always-on `bot run` and `drive watch` services continue to use `GEMINI_MODEL`.
 
 ## Common examples
 

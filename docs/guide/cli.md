@@ -37,7 +37,7 @@ uv run harina-v4 test docs-public
 
 Notes:
 
-- `receipt process` uses the same two-stage Gemini pipeline as the Discord bot
+- `receipt process` uses the same two-stage Gemini pipeline as the Discord bot, but it resolves `GEMINI_TEST_MODEL`
 - when Google writes are enabled, `receipt process` skips duplicate filenames already present in Sheets
 - use `--rescan` when you intentionally want to replay a receipt with the same filename
 - `--skip-google-write` is the easiest way to debug locally with only `GEMINI_API_KEY`
@@ -70,6 +70,7 @@ Notes:
 - When `docs/public/test` contains subdirectories such as `one/` and `two/`, each folder is treated as a separate test case
 - The default `--mode both` runs the local CLI pipeline and the live Discord upload check in one pass
 - Use `--mode cli` or `--mode discord` when you want to isolate one path
+- `bot run` resolves `GEMINI_MODEL`, while `bot upload-test` resolves `GEMINI_TEST_MODEL`
 - Discord-side checks default to `DISCORD_TEST_CHANNEL_ID` unless `--channel-id` is provided
 - successful Discord replies now include `カテゴリ`, `商品カテゴリ`, and `明細`
 
@@ -101,11 +102,14 @@ Notes:
 - Notifications go to `DISCORD_NOTIFY_CHANNEL_ID`
 - Successfully handled files move into `GOOGLE_DRIVE_WATCH_PROCESSED_FOLDER_ID/YYYY/MM`
 - Duplicate filenames already present in Sheets are skipped before Discord notification and then moved into the matching processed `YYYY/MM` folder
-- The watcher chooses the processed subfolder from `purchaseDate` when available and falls back to the Drive file timestamp
+- Successful watcher moves choose the processed subfolder from `purchaseDate` when available and otherwise fall back to the Drive file timestamp
+- Duplicate-skip watcher moves use the Drive file timestamp because extraction is skipped
 - Use `--rescan` when you intentionally want to reprocess duplicate filenames
 - Files that fail before processing completes stay in the source folder for a later retry
 - `DRIVE_POLL_INTERVAL_SECONDS` controls the polling interval
 - When `DISCORD_SYSTEM_LOG_CHANNEL_ID` is set, repeated unchanged `HARINA Scan Summary` embeds are suppressed for idle polls
+- The Drive result embed can include `Gemini Model` and `API Cost (est.)` when Gemini usage metadata is available
+- If every rotation key is exhausted, the watcher posts `HARINA Watch Status` and waits 12 hours once before retrying from the first key again
 - Active scan cycles and backlog changes still produce system-log updates
 
 ## Google commands
@@ -136,7 +140,8 @@ uv run harina-v4 google init-resources --env-file .env
 
 Notes:
 
-- `google init-resources` ensures both `Receipts` and `Categories`
+- `google init-resources` ensures both fallback/bootstrap tabs `Receipts` and `Categories`
+- Receipt appends auto-create year tabs such as `2025` and `2026`
 - `GOOGLE_SHEETS_CATEGORY_SHEET_NAME` defaults to `Categories`
 - `Categories` is seeded with short single-word labels such as `野菜`, `惣菜`, and `飲料`
 
@@ -172,6 +177,11 @@ Run a Gemini smoke test on local dataset images:
 ```bash
 uv run harina-v4 dataset smoke-test --dataset-dir ./dataset/v3-backfill --limit 2
 ```
+
+Notes:
+
+- `dataset smoke-test` resolves `GEMINI_TEST_MODEL`
+- `test docs-public --mode both` uses the same verification lane for both the CLI replay path and the Discord upload-test path
 
 ## Recommended operator flow
 

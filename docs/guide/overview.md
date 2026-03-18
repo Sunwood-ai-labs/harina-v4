@@ -54,7 +54,7 @@ HARINA V4 is organized around a Python package CLI surface:
 4. Gemini returns normalized JSON using a strict prompt.
 5. Gemini receives the extracted JSON plus the current `Categories` sheet and assigns one category per line item.
 6. The image is copied into Google Drive for source retention under a `YYYY/MM` folder path.
-7. One row per line item is written into `Receipts`, and any new category can be appended into `Categories`.
+7. One row per line item is written into a year-based receipt tab such as `2025`, and any new category can be appended into `Categories`.
 8. The bot posts a summary reply back into Discord with `カテゴリ`, `商品カテゴリ`, and `明細`.
 
 ### Drive watcher flow
@@ -63,9 +63,9 @@ HARINA V4 is organized around a Python package CLI surface:
 2. The watcher polls Drive and downloads new image files.
 3. If the filename is already present in Google Sheets, HARINA skips Discord notification and row writes, then moves the duplicate file into the matching `processed/YYYY/MM` folder.
 4. Gemini extracts normalized receipt fields and then categorizes each line item.
-5. HARINA appends one row per line item into `Receipts`.
+5. HARINA appends one row per line item into a year-based receipt tab such as `2025`.
 6. HARINA can append newly proposed categories into `Categories`.
-7. The watcher posts the image and summary into `DISCORD_NOTIFY_CHANNEL_ID`.
+7. The watcher posts the image and summary into `DISCORD_NOTIFY_CHANNEL_ID`, and the Drive result embed can include `Gemini Model` plus `API Cost (est.)` when Gemini usage metadata is available.
 8. The Drive file is moved into a `YYYY/MM` folder under the route's processed folder.
 9. If processing fails before completion, the file stays in the source folder for a later retry.
 10. When `DISCORD_SYSTEM_LOG_CHANNEL_ID` is configured, unchanged idle scan cycles do not post a fresh `HARINA Scan Summary`; activity and backlog changes still appear in the system log.
@@ -82,14 +82,25 @@ HARINA V4 is organized around a Python package CLI surface:
 - HARINA uses `attachmentName` as the receipt-image primary key across the year-based receipt tabs in Google Sheets.
 - `receipt process` and Discord intake skip duplicates by default and only replay them when `--rescan` is enabled.
 - `drive watch` skips duplicates before Discord notification, avoids duplicate row writes, and still routes the file into the matching `processed/YYYY/MM` folder.
+- Duplicate lookup scans every non-`Categories` receipt tab, not just the fallback `Receipts` tab.
 - The duplicate guard is intentionally filename-based, so keep source filenames stable when you want idempotent re-runs.
 
 ## Drive archive layout
 
 - Discord and CLI uploads are copied into the main Drive archive folder as `GOOGLE_DRIVE_FOLDER_ID/YYYY/MM`.
+- Discord and CLI uploads choose `YYYY/MM` from `purchaseDate` when available and otherwise fall back to the current processing month.
 - Drive watcher intake keeps the original Drive file and moves it into `processed_folder/YYYY/MM` after success or duplicate-skip.
-- HARINA chooses the folder year and month from `purchaseDate` when Gemini extracts one.
-- If `purchaseDate` is missing, HARINA falls back to the source file timestamp or current processing month.
+- Successful Drive watcher moves use `purchaseDate` when Gemini extracts one and otherwise fall back to the Drive file timestamp.
+- Duplicate-skip Drive moves use the Drive file timestamp because extraction is skipped.
+
+## Gemini model lanes
+
+- `bot run` and `drive watch` use `GEMINI_MODEL`.
+- `receipt process`, `bot upload-test`, `dataset smoke-test`, and the CLI/Discord verification paths under `test docs-public` use `GEMINI_TEST_MODEL`.
+- `GEMINI_API_KEY_ROTATION_LIST` adds additional fallback keys after the primary `GEMINI_API_KEY`.
+- HARINA retries transient Gemini errors up to 5 times per key with a 60-second local backoff.
+- Daily quota exhaustion rotates to the next key immediately.
+- After all configured keys are exhausted, `receipt-bot` waits 1 hour once and `drive-watcher` waits 12 hours once before restarting from the first key; the watcher reports that pause through `HARINA Watch Status`.
 
 ## Runtime stack
 
@@ -106,7 +117,7 @@ HARINA V4 is organized around a Python package CLI surface:
 - Gemini handles OCR plus structured extraction
 - Google Sheets provides the live approved category catalog
 - Drive keeps original evidence and supports inbox-style uploads
-- Sheets stays easy to audit and export, with `Receipts` and `Categories` separated
+- Sheets stays easy to audit and export, with year-based receipt tabs plus a separate `Categories` catalog
 - The dataset downloader gives you a safe migration and regression path
 
 ## Next steps
@@ -114,6 +125,7 @@ HARINA V4 is organized around a Python package CLI surface:
 - Read [CLI](./cli.md) for the operator commands
 - Read [Google Setup](./google-setup.md) before the live bot or Drive watcher flow
 - Read [Deployment](./deployment.md) when you are ready to run continuously
-- Read [Release Notes v4.2.0](./release-notes-v4.2.0.md) for the latest shipped changes
+- Read [Release Notes v4.3.0](./release-notes-v4.3.0.md) for the latest shipped changes
+- Read [What's New In Harina v4.3.0](./whats-new-v4.3.0.md) for the operator-facing walkthrough
 - Read [Dataset Downloader](./dataset-downloader.md) if you are migrating from V1, V2, or V3
 - Read [Gemini Smoke Test](./gemini-smoke-test.md) for quick dataset verification

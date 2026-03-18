@@ -12,7 +12,7 @@ Published on March 19, 2026 (JST). This release covers the shipped changes betwe
 - Added explicit receipt dedup + year-based sheet tab routing to protect replay safety for both Discord and Drive paths
 - Moved archived receipt images and processed Drive files into year/month-style folders
 - Split Gemini model selection between production and test flows to reduce operational coupling between live intake and smoke/test paths
-- Added a delayed retry flow for Gemini key rotation exhaustion, plus safer backoff behavior in the bot path
+- Added a delayed retry flow for Gemini key rotation exhaustion, plus safer backoff behavior for the long-running bot and watcher paths
 - Improved Drive watcher status reporting by suppressing unchanged idle summaries and keeping only actionable scan updates
 - Added richer Drive Receipt embed metadata, including model and estimated cost details
 - Updated operational docs for Drive routing, OAuth recovery, and deployment lifecycle guidance
@@ -29,7 +29,7 @@ Receipt image archives and processed Drive files now land in `YYYY/MM`-style fol
 
 ### Model split and resiliency
 
-Production receipt intake and lightweight test paths now resolve different Gemini model settings, so routine dry-runs and smoke scenarios can use dedicated test model flow without changing operators' core production settings. The bot retry flow now also includes a delayed retry pass for key rotation exhaustion and improved fallback behavior when Gemini transient failures appear.
+Production receipt intake and lightweight test paths now resolve different Gemini model settings, so routine dry-runs and smoke scenarios can use dedicated test model flow without changing operators' core production settings. The always-on bot and watcher flows now also include a delayed retry pass for key rotation exhaustion and improved fallback behavior when Gemini transient failures appear.
 
 ### Less-noisy scan summaries
 
@@ -37,7 +37,7 @@ Drive watcher summaries now suppress idle cycles that report no meaningful progr
 
 ### Better processing transparency
 
-Drive path embeds now surface model identifiers and estimated cost metadata in the same run where receipt rows are produced, helping teams correlate output behavior with API usage cost and model choice.
+Drive watcher receipt embeds now surface model identifiers and estimated cost metadata in the same run where receipt rows are produced, helping teams correlate output behavior with API usage cost and model choice.
 
 ## Included in v4.3.0
 

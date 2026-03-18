@@ -37,7 +37,7 @@ uv run harina-v4 test docs-public
 
 補足:
 
-- `receipt process` は Discord bot と同じ 2 段階 Gemini パイプラインを使います
+- `receipt process` は Discord bot と同じ 2 段階 Gemini パイプラインを使いますが、使うモデルは `GEMINI_TEST_MODEL` です
 - `--skip-google-write` は `GEMINI_API_KEY` だけでローカル確認したいときに便利です
 - `--skip-google-write` 中は Sheets のカテゴリ一覧を読めないため、Gemini が短い自由カテゴリを付けます
 - 外すと Drive 保存、Sheets 追記、`Categories` シートを使ったカテゴリ付与まで実行します
@@ -67,6 +67,7 @@ uv run harina-v4 bot upload-test --channel-id <channel_id> --image ./docs/public
 - `test docs-public` は `docs/public/test` 配下の対応画像をすべて走査します
 - 既定の `--mode both` で CLI 経路と Discord 経路をまとめて確認できます
 - 片側だけ確認したい場合は `--mode cli` または `--mode discord` を使います
+- `bot run` は `GEMINI_MODEL`、`bot upload-test` は `GEMINI_TEST_MODEL` を使います
 - Discord 側は `--channel-id` を省略すると `DISCORD_TEST_CHANNEL_ID` を使います
 - 成功した Discord 返信には `カテゴリ`、`商品カテゴリ`、`明細` が表示されます
 
@@ -96,9 +97,13 @@ uv run harina-v4 drive watch
 - 通知先は `DISCORD_NOTIFY_CHANNEL_ID` です
 - 成功したファイルは `GOOGLE_DRIVE_WATCH_PROCESSED_FOLDER_ID/YYYY/MM` へ移動します
 - 重複ファイル名をスキップした場合も、同じ `processed/YYYY/MM` へ移動します
+- 正常処理後の移動先は `purchaseDate` を優先し、無ければ Drive 側の作成日時を使います
+- 重複スキップ時は抽出を行わないため、Drive 側の作成日時ベースで移動先を決めます
 - `DISCORD_SYSTEM_LOG_CHANNEL_ID` を設定している場合でも、無変化の idle poll では `HARINA Scan Summary` は連投しません
 - ファイルの処理、重複スキップ、失敗、backlog 変化がある cycle は system log に出ます
 - ポーリング間隔は `DRIVE_POLL_INTERVAL_SECONDS` で決まります
+- Drive の結果 embed は、Gemini usage metadata がある場合に `Gemini Model` と `API Cost (est.)` を表示できます
+- 全 rotation key を使い切った場合、watcher は `HARINA Watch Status` を出してから 12 時間待機し、最初の key 群へ 1 回だけ戻ります
 
 ## Google コマンド
 
@@ -128,7 +133,8 @@ uv run harina-v4 google init-resources --env-file .env
 
 補足:
 
-- `google init-resources` は `Receipts` と `Categories` の両方を保証します
+- `google init-resources` は fallback/bootstrap 用の `Receipts` と `Categories` の両方を保証します
+- 商品行を append するときは `2025` や `2026` のような年タブを自動作成します
 - `GOOGLE_SHEETS_CATEGORY_SHEET_NAME` の既定値は `Categories` です
 - `Categories` には `野菜`、`惣菜`、`飲料` などの一語カテゴリが初期投入されます
 
@@ -164,6 +170,11 @@ uv run harina-v4 dataset download "https://discord.com/channels/<guild_id>/<chan
 ```bash
 uv run harina-v4 dataset smoke-test --dataset-dir ./dataset/v3-backfill --limit 2
 ```
+
+補足:
+
+- `dataset smoke-test` は `GEMINI_TEST_MODEL` を使います
+- `test docs-public --mode both` でも CLI 側と Discord 側の検証は同じ test レーンで動きます
 
 ## おすすめ運用フロー
 

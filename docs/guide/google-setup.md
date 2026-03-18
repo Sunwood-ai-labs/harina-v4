@@ -16,7 +16,7 @@ Use one of these approaches:
 
 Useful sheet-related settings:
 
-- `GOOGLE_SHEETS_SHEET_NAME` defaults to `Receipts`
+- `GOOGLE_SHEETS_SHEET_NAME` defaults to `Receipts` and acts as the bootstrap/fallback receipt tab name stored in `.env`
 - `GOOGLE_SHEETS_CATEGORY_SHEET_NAME` defaults to `Categories`
 
 For Docker Compose, file-based secrets are expected under `./secrets`, mounted to `/app/secrets`.
@@ -66,7 +66,8 @@ The command will:
 
 - create or reuse the main Drive folder
 - create or reuse the spreadsheet
-- ensure the `Receipts` and `Categories` sheet tabs and headers exist
+- ensure the bootstrap `Receipts` and `Categories` sheet tabs and headers exist
+- auto-create year-based receipt tabs such as `2025` when rows are appended later
 - seed `Categories` with short single-word labels when the sheet is empty
 - optionally write IDs and URLs into `.env`
 
@@ -103,9 +104,10 @@ The watcher creates `YYYY/MM` subfolders inside `GOOGLE_DRIVE_WATCH_PROCESSED_FO
 
 ## 5. Important notes
 
-- HARINA stores one row per line item in `Receipts`, not one row per receipt
-- `itemCategory` is written into `Receipts` for every categorized line item
+- HARINA stores one row per line item in year-based receipt tabs such as `2025`, not one row per receipt
+- `itemCategory` is written into those year-based receipt tabs for every categorized line item
 - Gemini reads `Categories` before categorization and can append a short new category when no approved option fits
+- Duplicate checks for `attachmentName` scan every receipt tab except `Categories`
 - Personal Google Drive accounts often reject service-account-owned uploads because service accounts do not have Drive storage quota there
 - For personal Gmail environments, prefer OAuth refresh tokens instead of pure service-account uploads
 - After rotating `GOOGLE_OAUTH_REFRESH_TOKEN` in `.env`, recreate Docker Compose services so the new environment value reaches the running containers

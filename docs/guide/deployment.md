@@ -65,6 +65,7 @@ For the receipt bot:
 
 - `DISCORD_TOKEN`
 - `GEMINI_API_KEY`
+- `GEMINI_MODEL` for the production bot lane
 - `GOOGLE_SHEETS_SPREADSHEET_ID`
 - Google credentials via service account or OAuth refresh token
 
@@ -75,14 +76,23 @@ For the Drive watcher:
 - `GOOGLE_DRIVE_WATCH_PROCESSED_FOLDER_ID`
 - `DRIVE_POLL_INTERVAL_SECONDS`
 
+Optional verification lane:
+
+- `GEMINI_TEST_MODEL` for `receipt process`, `bot upload-test`, `dataset smoke-test`, and the verification side of `test docs-public`
+- `GEMINI_API_KEY_ROTATION_LIST` for comma/newline-separated fallback keys during quota rotation
+
 ## Operational notes
 
 - Leave `DISCORD_CHANNEL_IDS` empty to watch all accessible Discord channels
 - Set `DISCORD_CHANNEL_IDS` to a comma-separated list to limit Discord intake
 - The bot creates the target sheet header row automatically
+- Receipt rows are appended into year-based sheet tabs such as `2025`
 - The watcher posts image notifications into `DISCORD_NOTIFY_CHANNEL_ID`
 - Successfully handled Drive files move into the processed folder
 - Do not expect a heartbeat-style `HARINA Scan Summary` on every poll; unchanged idle polls are intentionally suppressed to reduce Discord noise
+- The Drive result embed can include `Gemini Model` and `API Cost (est.)` when Gemini usage metadata is available
+- Gemini retries transient failures for up to 5 local attempts per key with a 60-second backoff, rotates immediately on daily quota exhaustion, and then performs one delayed retry cycle after every key is exhausted
+- In the delayed-retry case, `receipt-bot` waits 1 hour and `drive-watcher` waits 12 hours; the watcher also posts `HARINA Watch Status`
 - Use startup/progress system-log messages or container logs when you need a liveness check between active scans
 - If the watcher should be active but no system-log messages appear at all, verify `DISCORD_SYSTEM_LOG_CHANNEL_ID` and Discord connectivity in the container logs
 - Startup fails fast when required configuration is missing

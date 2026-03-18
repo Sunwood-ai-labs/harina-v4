@@ -88,6 +88,12 @@ Required environment variables for the Drive watcher:
 - `GOOGLE_DRIVE_WATCH_PROCESSED_FOLDER_ID`
 - `DRIVE_POLL_INTERVAL_SECONDS`
 
+Relevant Gemini model settings:
+
+- `GEMINI_MODEL` powers the always-on `bot run` and `drive watch` services
+- `GEMINI_TEST_MODEL` powers verification flows such as `bot upload-test`, `receipt process`, `dataset smoke-test`, and the CLI side of `test docs-public`
+- `GEMINI_API_KEY_ROTATION_LIST` adds comma/newline-separated fallback keys for quota rotation and delayed retry handling
+
 ## CLI
 
 ```bash
@@ -150,10 +156,12 @@ Useful flags:
 - `--share-with-email you@example.com`
 - `--env-file .env`
 
-`google init-resources` also ensures two spreadsheet tabs:
+`google init-resources` also ensures two bootstrap spreadsheet tabs:
 
-- `Receipts` for one row per line item
+- `Receipts` as the fallback/bootstrap receipt tab name stored in `.env`
 - `Categories` for the approved category catalog that Gemini reads on every write-enabled run
+
+When HARINA appends receipt rows, it auto-creates year-based tabs such as `2025` and `2026`. It chooses the purchase year when available, falls back to the processed timestamp when needed, and still uses `attachmentName` dedup checks across all receipt tabs except `Categories`.
 
 The default category seed uses short single-word labels such as `野菜`, `肉`, `惣菜`, `飲料`, and `手数料`.
 If Gemini returns a category that is not already in `Categories`, HARINA can append it automatically for future runs.
@@ -163,19 +171,29 @@ If Gemini returns a category that is not already in `Categories`, HARINA can app
 1. Stage 1 extracts normalized receipt fields and line items from the image.
 2. Stage 2 reads the current `Categories` sheet and asks Gemini to assign one category per line item.
 3. If no existing category fits, Gemini may propose one short new category name.
-4. HARINA appends any new category into `Categories` and writes `itemCategory` into the `Receipts` rows.
+4. HARINA appends any new category into `Categories` and writes `itemCategory` into year-based receipt tabs such as `2025`.
 5. Discord replies show both a category summary and a `商品カテゴリ` section so each product-category pair is visible.
+
+## Gemini model lanes
+
+- `bot run` and `drive watch` use `GEMINI_MODEL` as the production lane.
+- `bot upload-test`, `receipt process`, `dataset smoke-test`, and `test docs-public` use `GEMINI_TEST_MODEL` as the verification lane.
+- `GEMINI_API_KEY_ROTATION_LIST` extends the retry lane with additional keys after the primary `GEMINI_API_KEY`.
+- HARINA retries transient Gemini failures locally for up to 5 attempts per key with a 60-second backoff.
+- Daily quota exhaustion rotates to the next key immediately.
+- After every configured key is exhausted, `receipt-bot` waits 1 hour once and `drive-watcher` waits 12 hours once before retrying from the first key again.
 
 ## Drive watcher flow
 
 1. Upload an image into `GOOGLE_DRIVE_WATCH_SOURCE_FOLDER_ID`.
 2. Run `uv run harina-v4 drive watch --once` for a one-shot check, or keep the watcher running continuously.
-3. HARINA downloads the Drive image, runs extraction plus categorization, writes line-item rows into Sheets, posts the image into `DISCORD_NOTIFY_CHANNEL_ID`, and moves the original Drive file into `GOOGLE_DRIVE_WATCH_PROCESSED_FOLDER_ID/YYYY/MM`.
+3. HARINA downloads the Drive image, runs extraction plus categorization, writes line-item rows into year-based receipt tabs, posts the image into `DISCORD_NOTIFY_CHANNEL_ID`, and moves the original Drive file into `GOOGLE_DRIVE_WATCH_PROCESSED_FOLDER_ID/YYYY/MM`.
 4. If the same filename is already recorded in Sheets, HARINA skips Discord notification and row writes, then moves the duplicate directly into the matching `YYYY/MM` processed folder.
-5. HARINA chooses the processed subfolder from `purchaseDate` when available and otherwise falls back to the Drive file timestamp.
+5. On successful processing, HARINA chooses the processed subfolder from `purchaseDate` when available and otherwise falls back to the Drive file timestamp. Duplicate-skip moves use the Drive file timestamp because extraction is skipped.
 6. If processing fails before completion, HARINA leaves the source file in place for a later retry.
 
 When `DISCORD_SYSTEM_LOG_CHANNEL_ID` is configured, repeated `HARINA Scan Summary` posts are suppressed for idle scan cycles when both the scan counters and backlog snapshot are unchanged. Summaries still post when files are processed, skipped, or failed, or when the backlog changes.
+When Gemini usage metadata is available, the Drive watcher's `Drive Receipt // ...` embed also includes `Gemini Model` and `API Cost (est.)`. If every rotation key is exhausted, the watcher posts `HARINA Watch Status` before its delayed retry window.
 
 ## Docker Compose
 
@@ -215,6 +233,8 @@ For long-running watcher deployments, do not expect a heartbeat-style `HARINA Sc
 - [Deployment](./docs/guide/deployment.md)
 - [Dataset Downloader](./docs/guide/dataset-downloader.md)
 - [Gemini Smoke Test](./docs/guide/gemini-smoke-test.md)
+- [Release Notes v4.3.0](./docs/guide/release-notes-v4.3.0.md)
+- [What's New In Harina v4.3.0](./docs/guide/whats-new-v4.3.0.md)
 
 ## Development
 

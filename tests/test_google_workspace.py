@@ -2,6 +2,10 @@ from typing import cast
 
 from app.formatters import RECEIPT_SHEET_HEADERS, ReceiptRecordContext, build_receipt_rows
 from app.google_workspace import (
+    ANALYSIS_AUTHOR_CHART_ANCHOR_COLUMN_INDEX,
+    ANALYSIS_AUTHOR_CHART_TITLE,
+    ANALYSIS_AUTHOR_HEADER_LABEL,
+    ANALYSIS_AUTHOR_SECTION_COLUMN_INDEX,
     ANALYSIS_CATEGORY_SUMMARY_SECTION_COLUMN_INDEX,
     ANALYSIS_CATEGORY_STATUS_COLUMN_INDEX,
     ANALYSIS_CATEGORY_TOTAL_COLUMN_INDEX,
@@ -26,6 +30,8 @@ from app.google_workspace import (
     ANALYSIS_MONTHLY_CATEGORY_TIMELINE_START_ROW_NUMBER,
     ANALYSIS_MONTHLY_CATEGORY_TIMELINE_TITLE_ROW_NUMBER,
     ANALYSIS_MONTHLY_SECTION_COLUMN_INDEX,
+    ANALYSIS_NO_AUTHOR_DATA_LABEL,
+    ANALYSIS_UNKNOWN_AUTHOR_LABEL,
     ANALYSIS_VISIBLE_COLUMN_COUNT,
     GoogleWorkspaceClient,
     _analysis_compact_chart_anchor_row,
@@ -474,6 +480,8 @@ def test_build_analysis_sheet_rows_creates_empty_template_without_year_sources()
     assert _cell(analysis_rows, 10, 1) == ""
     assert _cell(analysis_rows, support_data_row, ANALYSIS_MERCHANT_SECTION_COLUMN_INDEX) == "(店舗データなし)"
     assert _cell(analysis_rows, support_data_row, ANALYSIS_MERCHANT_SECTION_COLUMN_INDEX + 1) == 0
+    assert _cell(analysis_rows, support_data_row, ANALYSIS_AUTHOR_SECTION_COLUMN_INDEX) == "(支払者データなし)"
+    assert _cell(analysis_rows, support_data_row, ANALYSIS_AUTHOR_SECTION_COLUMN_INDEX + 1) == 0
     assert _cell(analysis_rows, support_data_row, ANALYSIS_MONTHLY_SECTION_COLUMN_INDEX) == "(月次データなし)"
     assert _cell(analysis_rows, support_data_row, ANALYSIS_MONTHLY_SECTION_COLUMN_INDEX + 1) == 0
     assert _cell(analysis_rows, ANALYSIS_MONTHLY_CATEGORY_TIMELINE_START_ROW_NUMBER, 1) == "(月次データなし)"
@@ -484,10 +492,14 @@ def test_build_analysis_sheet_rows_includes_formula_paths_for_rescan_and_total_f
         scope_label="2025",
         source_sheet_names=["2025"],
     )
+    support_data_row = _analysis_support_section_data_row(
+        category_timeline_row_count=_estimated_category_timeline_row_count(source_sheet_names=["2025"])
+    )
 
     assert "SORTN(" in str(_cell(analysis_rows, 2, ANALYSIS_HELPER_LATEST_RECEIPTS_COLUMN_INDEX))
     assert "MATCH(" in str(_cell(analysis_rows, 2, ANALYSIS_HELPER_ACTIVE_LINE_ITEMS_COLUMN_INDEX))
     assert "VLOOKUP(" in str(_cell(analysis_rows, 2, ANALYSIS_HELPER_RECEIPT_TOTALS_COLUMN_INDEX))
+    assert f'"{ANALYSIS_UNKNOWN_AUTHOR_LABEL}"' in str(_cell(analysis_rows, 2, ANALYSIS_HELPER_RECEIPT_TOTALS_COLUMN_INDEX))
     assert "'Categories'!A2:A" in str(_cell(analysis_rows, 2, ANALYSIS_HELPER_CATEGORY_REFERENCE_COLUMN_INDEX))
     assert '"2025-01"' in str(_cell(analysis_rows, 2, ANALYSIS_HELPER_MONTH_REFERENCE_COLUMN_INDEX))
     assert "COUNTUNIQUE(" in str(_cell(analysis_rows, 2, ANALYSIS_HELPER_CATEGORY_ROLLUP_COLUMN_INDEX))
@@ -505,6 +517,11 @@ def test_build_analysis_sheet_rows_includes_formula_paths_for_rescan_and_total_f
     assert 'TEXT(IF(ISNUMBER(purchaseDate), purchaseDate, DATEVALUE(LEFT(TO_TEXT(purchaseDate), 10))), "yyyy-mm")' in str(
         _cell(analysis_rows, 2, ANALYSIS_HELPER_ITEM_MONTHS_COLUMN_INDEX)
     )
+    assert "ARRAY_CONSTRAIN(" in str(_cell(analysis_rows, support_data_row, ANALYSIS_AUTHOR_SECTION_COLUMN_INDEX))
+    assert "QUERY(FILTER({" in str(_cell(analysis_rows, support_data_row, ANALYSIS_AUTHOR_SECTION_COLUMN_INDEX))
+    assert "INDEX(" in str(_cell(analysis_rows, support_data_row, ANALYSIS_AUTHOR_SECTION_COLUMN_INDEX))
+    assert "sum(Col2)" in str(_cell(analysis_rows, support_data_row, ANALYSIS_AUTHOR_SECTION_COLUMN_INDEX))
+    assert "count(Col2)" in str(_cell(analysis_rows, support_data_row, ANALYSIS_AUTHOR_SECTION_COLUMN_INDEX))
     assert '$' in str(_cell(analysis_rows, ANALYSIS_MONTHLY_CATEGORY_TIMELINE_START_ROW_NUMBER, ANALYSIS_MONTHLY_CATEGORY_TIMELINE_COLUMN_INDEX))
     assert "MAKEARRAY(" in str(_cell(analysis_rows, ANALYSIS_MONTHLY_CATEGORY_TIMELINE_START_ROW_NUMBER, ANALYSIS_MONTHLY_CATEGORY_TIMELINE_COLUMN_INDEX))
     assert f'INDEX(${ANALYSIS_HELPER_CATEGORY_REFERENCE_START_COLUMN}$2:' in str(_cell(analysis_rows, ANALYSIS_MONTHLY_CATEGORY_TIMELINE_START_ROW_NUMBER, ANALYSIS_MONTHLY_CATEGORY_TIMELINE_COLUMN_INDEX))
@@ -526,6 +543,7 @@ def test_build_analysis_sheet_rows_places_category_timeline_formula_in_visible_t
     assert str(_cell(analysis_rows, ANALYSIS_MONTHLY_CATEGORY_TIMELINE_START_ROW_NUMBER, ANALYSIS_MONTHLY_CATEGORY_TIMELINE_COLUMN_INDEX)).startswith("=IFERROR(LET(")
     assert _cell(analysis_rows, ANALYSIS_MONTHLY_CATEGORY_TIMELINE_START_ROW_NUMBER, ANALYSIS_MONTHLY_CATEGORY_TIMELINE_COLUMN_INDEX + 1) == ""
     assert _cell(analysis_rows, ANALYSIS_MONTHLY_CATEGORY_TIMELINE_START_ROW_NUMBER + 1, ANALYSIS_MONTHLY_CATEGORY_TIMELINE_COLUMN_INDEX + 1) == ""
+    assert _cell(analysis_rows, support_header_row, ANALYSIS_AUTHOR_SECTION_COLUMN_INDEX) == ANALYSIS_AUTHOR_HEADER_LABEL
 
 
 def test_build_analysis_sheet_rows_zero_fills_blank_category_month_cells() -> None:
@@ -537,7 +555,7 @@ def test_build_analysis_sheet_rows_zero_fills_blank_category_month_cells() -> No
     timeline_formula = str(_cell(analysis_rows, ANALYSIS_MONTHLY_CATEGORY_TIMELINE_START_ROW_NUMBER, ANALYSIS_MONTHLY_CATEGORY_TIMELINE_COLUMN_INDEX))
     assert timeline_formula.startswith("=IFERROR(LET(")
     assert f'INDEX(${ANALYSIS_HELPER_CATEGORY_REFERENCE_START_COLUMN}$2:' in timeline_formula
-    assert 'FILTER($FH$2:$FH' in timeline_formula
+    assert f'FILTER(INDEX(${ANALYSIS_HELPER_CATEGORY_REFERENCE_START_COLUMN}$2:' in timeline_formula
     assert "MAKEARRAY(" in timeline_formula
     assert 'TRANSPOSE(categories)' in timeline_formula
     assert "SUMIFS(amounts" in timeline_formula
@@ -691,12 +709,13 @@ def test_apply_analysis_dashboard_charts_creates_category_merchant_monthly_and_s
     )
 
     chart_requests = fake_sheets.batch_update_calls[-1]["requests"]
-    assert len(chart_requests) == 4
+    assert len(chart_requests) == 5
 
     category_chart = chart_requests[0]["addChart"]["chart"]
     merchant_chart = chart_requests[1]["addChart"]["chart"]
-    monthly_chart = chart_requests[2]["addChart"]["chart"]
-    stacked_chart = chart_requests[3]["addChart"]["chart"]
+    author_chart = chart_requests[2]["addChart"]["chart"]
+    monthly_chart = chart_requests[3]["addChart"]["chart"]
+    stacked_chart = chart_requests[4]["addChart"]["chart"]
 
     assert category_chart["spec"]["title"] == "カテゴリ別支出"
     assert category_chart["spec"]["altText"] == "カテゴリ別支出"
@@ -715,6 +734,19 @@ def test_apply_analysis_dashboard_charts_creates_category_merchant_monthly_and_s
     assert merchant_chart["position"]["overlayPosition"]["anchorCell"] == {"sheetId": 321, "rowIndex": compact_chart_anchor_row, "columnIndex": 11}
     assert merchant_chart["spec"]["basicChart"]["domains"][0]["domain"]["sourceRange"]["sources"][0]["startColumnIndex"] == ANALYSIS_MERCHANT_SECTION_COLUMN_INDEX - 1
     assert merchant_chart["spec"]["basicChart"]["series"][0]["series"]["sourceRange"]["sources"][0]["startColumnIndex"] == ANALYSIS_MERCHANT_SECTION_COLUMN_INDEX
+
+    assert author_chart["spec"]["title"] == ANALYSIS_AUTHOR_CHART_TITLE
+    assert author_chart["spec"]["basicChart"]["chartType"] == "BAR"
+    assert author_chart["spec"]["basicChart"]["series"][0]["colorStyle"]["rgbColor"]["green"] > 0.3
+    assert author_chart["position"]["overlayPosition"]["anchorCell"] == {
+        "sheetId": 321,
+        "rowIndex": compact_chart_anchor_row,
+        "columnIndex": ANALYSIS_AUTHOR_CHART_ANCHOR_COLUMN_INDEX,
+    }
+    assert author_chart["spec"]["basicChart"]["domains"][0]["domain"]["sourceRange"]["sources"][0]["startColumnIndex"] == ANALYSIS_AUTHOR_SECTION_COLUMN_INDEX - 1
+    assert author_chart["spec"]["basicChart"]["series"][0]["series"]["sourceRange"]["sources"][0]["startColumnIndex"] == ANALYSIS_AUTHOR_SECTION_COLUMN_INDEX
+    assert author_chart["spec"]["basicChart"]["axis"][0]["title"] == "レシート合計"
+    assert author_chart["spec"]["basicChart"]["axis"][1]["title"] == ANALYSIS_AUTHOR_HEADER_LABEL
 
     assert monthly_chart["spec"]["title"] == "月次支出推移"
     assert monthly_chart["spec"]["basicChart"]["chartType"] == "COLUMN"
@@ -750,6 +782,7 @@ def test_replace_sheet_values_sync_recreates_chart_requests(monkeypatch) -> None
     assert [request["addChart"]["chart"]["spec"]["title"] for request in chart_requests] == [
         "カテゴリ別支出",
         "店舗別支出",
+        "支払者別支出",
         "月次支出推移",
         "月次カテゴリ別支出",
     ]

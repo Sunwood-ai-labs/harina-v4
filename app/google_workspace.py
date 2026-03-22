@@ -192,6 +192,7 @@ ANALYSIS_CATEGORY_STATUS_COLUMN_INDEX = 18  # R
 ANALYSIS_MONTHLY_SECTION_COLUMN_INDEX = 1  # A
 ANALYSIS_MERCHANT_SECTION_COLUMN_INDEX = 8  # H
 ANALYSIS_CATEGORY_SUMMARY_SECTION_COLUMN_INDEX = 13  # M
+ANALYSIS_AUTHOR_SECTION_COLUMN_INDEX = 16  # P
 ANALYSIS_MONTHLY_CATEGORY_TIMELINE_COLUMN_INDEX = 1  # A
 ANALYSIS_MONTHLY_CATEGORY_TIMELINE_TITLE_ROW_NUMBER = 8
 ANALYSIS_MONTHLY_CATEGORY_TIMELINE_START_ROW_NUMBER = 9
@@ -199,9 +200,9 @@ ANALYSIS_VISIBLE_COLUMN_COUNT = 29  # AC base visible width before the timeline 
 ANALYSIS_HELPER_SOURCE_COLUMN_INDEX = 100  # CV
 ANALYSIS_HELPER_SOURCE_END_COLUMN_INDEX = ANALYSIS_HELPER_SOURCE_COLUMN_INDEX + len(RECEIPT_SHEET_HEADERS) - 1  # BI
 ANALYSIS_HELPER_LATEST_RECEIPTS_COLUMN_INDEX = ANALYSIS_HELPER_SOURCE_END_COLUMN_INDEX + 2
-ANALYSIS_HELPER_ACTIVE_LINE_ITEMS_COLUMN_INDEX = ANALYSIS_HELPER_LATEST_RECEIPTS_COLUMN_INDEX + 7
+ANALYSIS_HELPER_ACTIVE_LINE_ITEMS_COLUMN_INDEX = ANALYSIS_HELPER_LATEST_RECEIPTS_COLUMN_INDEX + 8
 ANALYSIS_HELPER_RECEIPT_TOTALS_COLUMN_INDEX = ANALYSIS_HELPER_ACTIVE_LINE_ITEMS_COLUMN_INDEX + 5
-ANALYSIS_HELPER_CATEGORY_REFERENCE_COLUMN_INDEX = ANALYSIS_HELPER_RECEIPT_TOTALS_COLUMN_INDEX + 5
+ANALYSIS_HELPER_CATEGORY_REFERENCE_COLUMN_INDEX = ANALYSIS_HELPER_RECEIPT_TOTALS_COLUMN_INDEX + 6
 ANALYSIS_HELPER_CATEGORY_ROLLUP_COLUMN_INDEX = ANALYSIS_HELPER_CATEGORY_REFERENCE_COLUMN_INDEX + 3
 ANALYSIS_HELPER_MONTH_REFERENCE_COLUMN_INDEX = ANALYSIS_HELPER_CATEGORY_ROLLUP_COLUMN_INDEX + 5
 ANALYSIS_HELPER_MONTH_ROLLUP_COLUMN_INDEX = ANALYSIS_HELPER_MONTH_REFERENCE_COLUMN_INDEX + 2
@@ -216,11 +217,11 @@ ANALYSIS_HIDDEN_START_COLUMN_INDEX = ANALYSIS_HELPER_SOURCE_COLUMN_INDEX - 1  # 
 ANALYSIS_HELPER_SOURCE_START_COLUMN = _column_letter(ANALYSIS_HELPER_SOURCE_COLUMN_INDEX)
 ANALYSIS_HELPER_SOURCE_END_COLUMN = _column_letter(ANALYSIS_HELPER_SOURCE_END_COLUMN_INDEX)
 ANALYSIS_HELPER_LATEST_RECEIPTS_START_COLUMN = _column_letter(ANALYSIS_HELPER_LATEST_RECEIPTS_COLUMN_INDEX)
-ANALYSIS_HELPER_LATEST_RECEIPTS_END_COLUMN = _column_letter(ANALYSIS_HELPER_LATEST_RECEIPTS_COLUMN_INDEX + 5)
+ANALYSIS_HELPER_LATEST_RECEIPTS_END_COLUMN = _column_letter(ANALYSIS_HELPER_LATEST_RECEIPTS_COLUMN_INDEX + 7)
 ANALYSIS_HELPER_ACTIVE_LINE_ITEMS_START_COLUMN = _column_letter(ANALYSIS_HELPER_ACTIVE_LINE_ITEMS_COLUMN_INDEX)
 ANALYSIS_HELPER_ACTIVE_LINE_ITEMS_END_COLUMN = _column_letter(ANALYSIS_HELPER_ACTIVE_LINE_ITEMS_COLUMN_INDEX + 4)
 ANALYSIS_HELPER_RECEIPT_TOTALS_START_COLUMN = _column_letter(ANALYSIS_HELPER_RECEIPT_TOTALS_COLUMN_INDEX)
-ANALYSIS_HELPER_RECEIPT_TOTALS_END_COLUMN = _column_letter(ANALYSIS_HELPER_RECEIPT_TOTALS_COLUMN_INDEX + 3)
+ANALYSIS_HELPER_RECEIPT_TOTALS_END_COLUMN = _column_letter(ANALYSIS_HELPER_RECEIPT_TOTALS_COLUMN_INDEX + 5)
 ANALYSIS_HELPER_CATEGORY_REFERENCE_START_COLUMN = _column_letter(ANALYSIS_HELPER_CATEGORY_REFERENCE_COLUMN_INDEX)
 ANALYSIS_HELPER_CATEGORY_REFERENCE_END_COLUMN = _column_letter(ANALYSIS_HELPER_CATEGORY_REFERENCE_COLUMN_INDEX + 1)
 ANALYSIS_HELPER_CATEGORY_ROLLUP_START_COLUMN = _column_letter(ANALYSIS_HELPER_CATEGORY_ROLLUP_COLUMN_INDEX)
@@ -265,6 +266,7 @@ ANALYSIS_LINE_ITEM_ROWS_LABEL = "明細行数"
 ANALYSIS_DATE_RANGE_LABEL = "対象期間"
 ANALYSIS_CATEGORY_SECTION_LABEL = "カテゴリ分析"
 ANALYSIS_MERCHANT_SECTION_LABEL = "店舗分析"
+ANALYSIS_AUTHOR_SECTION_LABEL = "支払者分析"
 ANALYSIS_MONTHLY_SECTION_LABEL = "月次推移"
 ANALYSIS_TREND_SECTION_LABEL = "カテゴリ別月次"
 ANALYSIS_CATEGORY_HEADER_LABEL = "カテゴリ"
@@ -274,6 +276,7 @@ ANALYSIS_LINE_ITEMS_HEADER_LABEL = "明細数"
 ANALYSIS_RECEIPTS_HEADER_LABEL = "レシート数"
 ANALYSIS_STATUS_HEADER_LABEL = "利用状況"
 ANALYSIS_MERCHANT_HEADER_LABEL = "店舗"
+ANALYSIS_AUTHOR_HEADER_LABEL = "支払者(authorTag)"
 ANALYSIS_RECEIPT_COUNT_HEADER_LABEL = "件数"
 ANALYSIS_MONTH_HEADER_LABEL = "年月"
 ANALYSIS_AVG_RECEIPT_HEADER_LABEL = "平均レシート額"
@@ -283,14 +286,18 @@ ANALYSIS_USED_LABEL = "使用中"
 ANALYSIS_UNUSED_LABEL = "未使用"
 ANALYSIS_NO_CATEGORY_DATA_LABEL = "(カテゴリデータなし)"
 ANALYSIS_NO_MERCHANT_DATA_LABEL = "(店舗データなし)"
+ANALYSIS_NO_AUTHOR_DATA_LABEL = "(支払者データなし)"
 ANALYSIS_NO_MONTH_DATA_LABEL = "(月次データなし)"
 ANALYSIS_UNCATEGORIZED_LABEL = "(未分類)"
 ANALYSIS_UNKNOWN_MERCHANT_LABEL = "(不明)"
+ANALYSIS_UNKNOWN_AUTHOR_LABEL = "(不明)"
 ANALYSIS_NONE_LABEL = "(なし)"
 ANALYSIS_CATEGORY_CHART_TITLE = "カテゴリ別支出"
 ANALYSIS_MERCHANT_CHART_TITLE = "店舗別支出"
+ANALYSIS_AUTHOR_CHART_TITLE = "支払者別支出"
 ANALYSIS_MONTHLY_CHART_TITLE = "月次支出推移"
 ANALYSIS_CATEGORY_TIMELINE_CHART_TITLE = "月次カテゴリ別支出"
+ANALYSIS_AUTHOR_CHART_ANCHOR_COLUMN_INDEX = 22
 ANALYSIS_CHART_SERIES_PALETTE = [
     ANALYSIS_THEME_FOREST,
     ANALYSIS_THEME_TERRACOTTA,
@@ -444,6 +451,13 @@ def _build_analysis_dashboard_layout_requests(
             end_row_index=support_title_row_index + 1,
             start_column_index=ANALYSIS_CATEGORY_SUMMARY_SECTION_COLUMN_INDEX - 1,
             end_column_index=ANALYSIS_CATEGORY_SUMMARY_SECTION_COLUMN_INDEX + 1,
+        ),
+        _build_analysis_merge_request(
+            sheet_id=sheet_id,
+            start_row_index=support_title_row_index,
+            end_row_index=support_title_row_index + 1,
+            start_column_index=ANALYSIS_AUTHOR_SECTION_COLUMN_INDEX - 1,
+            end_column_index=ANALYSIS_AUTHOR_SECTION_COLUMN_INDEX + 2,
         ),
         _build_analysis_repeat_cell_request(
             sheet_id=sheet_id,
@@ -678,6 +692,13 @@ def _build_analysis_dashboard_layout_requests(
             ANALYSIS_THEME_FOREST,
             ANALYSIS_THEME_IVORY,
         ),
+        (
+            support_title_row_index,
+            ANALYSIS_AUTHOR_SECTION_COLUMN_INDEX - 1,
+            ANALYSIS_AUTHOR_SECTION_COLUMN_INDEX + 2,
+            ANALYSIS_THEME_MOSS,
+            ANALYSIS_THEME_IVORY,
+        ),
     ):
         requests.append(
             _build_analysis_repeat_cell_request(
@@ -724,6 +745,12 @@ def _build_analysis_dashboard_layout_requests(
             ANALYSIS_CATEGORY_SUMMARY_SECTION_COLUMN_INDEX - 1,
             ANALYSIS_CATEGORY_SUMMARY_SECTION_COLUMN_INDEX + 1,
             ANALYSIS_THEME_SAGE,
+        ),
+        (
+            support_header_row_index,
+            ANALYSIS_AUTHOR_SECTION_COLUMN_INDEX - 1,
+            ANALYSIS_AUTHOR_SECTION_COLUMN_INDEX + 2,
+            ANALYSIS_THEME_TEAL_MIST,
         ),
     ):
         requests.append(
@@ -841,6 +868,29 @@ def _build_analysis_dashboard_layout_requests(
             ),
             _build_analysis_repeat_cell_request(
                 sheet_id=sheet_id,
+                start_row_index=support_data_row_index,
+                end_row_index=200,
+                start_column_index=ANALYSIS_AUTHOR_SECTION_COLUMN_INDEX - 1,
+                end_column_index=ANALYSIS_AUTHOR_SECTION_COLUMN_INDEX,
+                user_entered_format={
+                    "backgroundColorStyle": _hex_color_style(ANALYSIS_THEME_IVORY),
+                    "horizontalAlignment": "LEFT",
+                    "verticalAlignment": "TOP",
+                    "wrapStrategy": "WRAP",
+                },
+                fields="userEnteredFormat(backgroundColorStyle,horizontalAlignment,verticalAlignment,wrapStrategy)",
+            ),
+            _build_analysis_repeat_cell_request(
+                sheet_id=sheet_id,
+                start_row_index=support_data_row_index,
+                end_row_index=200,
+                start_column_index=ANALYSIS_AUTHOR_SECTION_COLUMN_INDEX,
+                end_column_index=ANALYSIS_AUTHOR_SECTION_COLUMN_INDEX + 2,
+                user_entered_format={"horizontalAlignment": "RIGHT", "verticalAlignment": "TOP"},
+                fields="userEnteredFormat(horizontalAlignment,verticalAlignment)",
+            ),
+            _build_analysis_repeat_cell_request(
+                sheet_id=sheet_id,
                 start_row_index=1,
                 end_row_index=2,
                 start_column_index=14,
@@ -875,6 +925,15 @@ def _build_analysis_dashboard_layout_requests(
                 end_row_index=200,
                 start_column_index=ANALYSIS_CATEGORY_SUMMARY_SECTION_COLUMN_INDEX,
                 end_column_index=ANALYSIS_CATEGORY_SUMMARY_SECTION_COLUMN_INDEX + 1,
+                user_entered_format={"numberFormat": {"type": "NUMBER", "pattern": "#,##0"}},
+                fields="userEnteredFormat(numberFormat)",
+            ),
+            _build_analysis_repeat_cell_request(
+                sheet_id=sheet_id,
+                start_row_index=support_data_row_index,
+                end_row_index=200,
+                start_column_index=ANALYSIS_AUTHOR_SECTION_COLUMN_INDEX,
+                end_column_index=ANALYSIS_AUTHOR_SECTION_COLUMN_INDEX + 2,
                 user_entered_format={"numberFormat": {"type": "NUMBER", "pattern": "#,##0"}},
                 fields="userEnteredFormat(numberFormat)",
             ),
@@ -940,6 +999,20 @@ def _build_analysis_dashboard_layout_requests(
             _build_analysis_dimension_request(
                 sheet_id=sheet_id,
                 dimension="COLUMNS",
+                start_index=ANALYSIS_AUTHOR_SECTION_COLUMN_INDEX - 1,
+                end_index=ANALYSIS_AUTHOR_SECTION_COLUMN_INDEX,
+                pixel_size=160,
+            ),
+            _build_analysis_dimension_request(
+                sheet_id=sheet_id,
+                dimension="COLUMNS",
+                start_index=ANALYSIS_AUTHOR_SECTION_COLUMN_INDEX,
+                end_index=ANALYSIS_AUTHOR_SECTION_COLUMN_INDEX + 2,
+                pixel_size=110,
+            ),
+            _build_analysis_dimension_request(
+                sheet_id=sheet_id,
+                dimension="COLUMNS",
                 start_index=hidden_start_column_index,
                 end_index=ANALYSIS_MAX_COLUMN_INDEX,
                 hidden_by_user=True,
@@ -985,6 +1058,13 @@ def _build_analysis_dashboard_layout_requests(
             support_data_row_index + ANALYSIS_CATEGORY_CHART_ROW_COUNT,
             ANALYSIS_CATEGORY_SUMMARY_SECTION_COLUMN_INDEX - 1,
             ANALYSIS_CATEGORY_SUMMARY_SECTION_COLUMN_INDEX + 1,
+            "SOLID_MEDIUM",
+        ),
+        (
+            support_title_row_index,
+            support_data_row_index + ANALYSIS_CATEGORY_CHART_ROW_COUNT,
+            ANALYSIS_AUTHOR_SECTION_COLUMN_INDEX - 1,
+            ANALYSIS_AUTHOR_SECTION_COLUMN_INDEX + 2,
             "SOLID_MEDIUM",
         ),
     ):
@@ -2175,6 +2255,7 @@ def build_analysis_sheet_rows(
     _set_grid_cell(rows, support_section_title_row, ANALYSIS_MONTHLY_SECTION_COLUMN_INDEX, ANALYSIS_MONTHLY_SECTION_LABEL)
     _set_grid_cell(rows, support_section_title_row, ANALYSIS_MERCHANT_SECTION_COLUMN_INDEX, ANALYSIS_MERCHANT_SECTION_LABEL)
     _set_grid_cell(rows, support_section_title_row, ANALYSIS_CATEGORY_SUMMARY_SECTION_COLUMN_INDEX, ANALYSIS_CATEGORY_CHART_TITLE)
+    _set_grid_cell(rows, support_section_title_row, ANALYSIS_AUTHOR_SECTION_COLUMN_INDEX, ANALYSIS_AUTHOR_SECTION_LABEL)
     _set_grid_cell(rows, ANALYSIS_MONTHLY_CATEGORY_TIMELINE_TITLE_ROW_NUMBER, ANALYSIS_MONTHLY_CATEGORY_TIMELINE_COLUMN_INDEX, ANALYSIS_TREND_SECTION_LABEL)
 
     _set_grid_cell(rows, support_section_header_row, ANALYSIS_MONTHLY_SECTION_COLUMN_INDEX, ANALYSIS_MONTH_HEADER_LABEL)
@@ -2187,6 +2268,9 @@ def build_analysis_sheet_rows(
     _set_grid_cell(rows, support_section_header_row, ANALYSIS_MERCHANT_SECTION_COLUMN_INDEX + 2, ANALYSIS_RECEIPT_COUNT_HEADER_LABEL)
     _set_grid_cell(rows, support_section_header_row, ANALYSIS_CATEGORY_SUMMARY_SECTION_COLUMN_INDEX, ANALYSIS_CATEGORY_HEADER_LABEL)
     _set_grid_cell(rows, support_section_header_row, ANALYSIS_CATEGORY_SUMMARY_SECTION_COLUMN_INDEX + 1, ANALYSIS_TOTAL_AMOUNT_HEADER_LABEL)
+    _set_grid_cell(rows, support_section_header_row, ANALYSIS_AUTHOR_SECTION_COLUMN_INDEX, ANALYSIS_AUTHOR_HEADER_LABEL)
+    _set_grid_cell(rows, support_section_header_row, ANALYSIS_AUTHOR_SECTION_COLUMN_INDEX + 1, ANALYSIS_TOTAL_AMOUNT_HEADER_LABEL)
+    _set_grid_cell(rows, support_section_header_row, ANALYSIS_AUTHOR_SECTION_COLUMN_INDEX + 2, ANALYSIS_RECEIPT_COUNT_HEADER_LABEL)
 
     if not source_sheet_names:
         _set_grid_cell(rows, 5, 1, 0)
@@ -2205,6 +2289,9 @@ def build_analysis_sheet_rows(
         _set_grid_cell(rows, support_section_data_row, ANALYSIS_MERCHANT_SECTION_COLUMN_INDEX + 2, 0)
         _set_grid_cell(rows, support_section_data_row, ANALYSIS_CATEGORY_SUMMARY_SECTION_COLUMN_INDEX, ANALYSIS_NO_CATEGORY_DATA_LABEL)
         _set_grid_cell(rows, support_section_data_row, ANALYSIS_CATEGORY_SUMMARY_SECTION_COLUMN_INDEX + 1, 0)
+        _set_grid_cell(rows, support_section_data_row, ANALYSIS_AUTHOR_SECTION_COLUMN_INDEX, ANALYSIS_NO_AUTHOR_DATA_LABEL)
+        _set_grid_cell(rows, support_section_data_row, ANALYSIS_AUTHOR_SECTION_COLUMN_INDEX + 1, 0)
+        _set_grid_cell(rows, support_section_data_row, ANALYSIS_AUTHOR_SECTION_COLUMN_INDEX + 2, 0)
         _set_grid_cell(rows, ANALYSIS_MONTHLY_CATEGORY_TIMELINE_START_ROW_NUMBER, ANALYSIS_MONTHLY_CATEGORY_TIMELINE_COLUMN_INDEX, ANALYSIS_NO_MONTH_DATA_LABEL)
         return [_trim_trailing_blank_cells(row) for row in rows]
 
@@ -2258,6 +2345,12 @@ def build_analysis_sheet_rows(
     )
     _set_grid_cell(
         rows,
+        support_section_data_row,
+        ANALYSIS_AUTHOR_SECTION_COLUMN_INDEX,
+        _build_dashboard_author_analysis_formula(),
+    )
+    _set_grid_cell(
+        rows,
         ANALYSIS_MONTHLY_CATEGORY_TIMELINE_START_ROW_NUMBER,
         ANALYSIS_MONTHLY_CATEGORY_TIMELINE_COLUMN_INDEX,
         _build_category_month_matrix_formula(),
@@ -2298,6 +2391,8 @@ def _build_analysis_source_formula(source_sheet_names: list[str]) -> str:
 
 def _build_latest_receipts_formula() -> str:
     source_range = f"${ANALYSIS_HELPER_SOURCE_START_COLUMN}$2:${ANALYSIS_HELPER_SOURCE_END_COLUMN}"
+    normalized_author_id = f'TRIM(TO_TEXT(INDEX({source_range},,8)))'
+    normalized_author_tag = f'TRIM(TO_TEXT(INDEX({source_range},,9)))'
     return (
         '=IFERROR('
         'SORTN('
@@ -2308,13 +2403,15 @@ def _build_latest_receipts_formula() -> str:
         f'INDEX({source_range},,15),'
         f'IF(LEN(INDEX({source_range},,17)), INDEX({source_range},,17), INDEX({source_range},,1)),'
         f'INDEX({source_range},,22),'
-        f'INDEX({source_range},,11)&"|"&INDEX({source_range},,1)'
+        f'INDEX({source_range},,11)&"|"&INDEX({source_range},,1),'
+        f'IF(LEN({normalized_author_id}), {normalized_author_id}, IF(LEN({normalized_author_tag}), {normalized_author_tag}, "{ANALYSIS_UNKNOWN_AUTHOR_LABEL}")),'
+        f'IF(LEN({normalized_author_tag}), {normalized_author_tag}, "{ANALYSIS_UNKNOWN_AUTHOR_LABEL}")'
         f'}}, LEN(INDEX({source_range},,11))),'
         '1, TRUE, 2, FALSE'
         '),'
         '9^9, 2, 1, TRUE'
         '),'
-        '{"","","","","",""}'
+        '{"","","","","","","",""}'
         ')'
     )
 
@@ -2360,9 +2457,11 @@ def _build_receipt_totals_formula() -> str:
         "),"
         "0"
         ")"
-        ")"
+        "),"
+        f'IF(LEN(TRIM(TO_TEXT(INDEX({latest_receipts_range},,7)))), TRIM(TO_TEXT(INDEX({latest_receipts_range},,7))), "{ANALYSIS_UNKNOWN_AUTHOR_LABEL}"),'
+        f'IF(LEN(TRIM(TO_TEXT(INDEX({latest_receipts_range},,8)))), TRIM(TO_TEXT(INDEX({latest_receipts_range},,8))), "{ANALYSIS_UNKNOWN_AUTHOR_LABEL}")'
         f"}}, LEN(INDEX({latest_receipts_range},,1))),"
-        f'{{"","{ANALYSIS_UNKNOWN_MERCHANT_LABEL}","",0}}'
+        f'{{"","{ANALYSIS_UNKNOWN_MERCHANT_LABEL}","",0,"{ANALYSIS_UNKNOWN_AUTHOR_LABEL}","{ANALYSIS_UNKNOWN_AUTHOR_LABEL}"}}'
         ")"
     )
 
@@ -2523,6 +2622,26 @@ def _build_dashboard_merchant_analysis_formula() -> str:
     return f"=ARRAY_CONSTRAIN({merchant_formula.removeprefix('=')}, {ANALYSIS_CATEGORY_CHART_ROW_COUNT}, 3)"
 
 
+def _build_author_analysis_formula() -> str:
+    receipt_totals_range = f"${ANALYSIS_HELPER_RECEIPT_TOTALS_START_COLUMN}$2:${ANALYSIS_HELPER_RECEIPT_TOTALS_END_COLUMN}"
+    return (
+        "=IFERROR(QUERY(FILTER({"
+        f'IF(LEN(INDEX({receipt_totals_range},,6)), INDEX({receipt_totals_range},,6), INDEX({receipt_totals_range},,5)),'
+        f"N(INDEX({receipt_totals_range},,4))"
+        "}, LEN(INDEX("
+        f"{receipt_totals_range}"
+        ",,1))), "
+        "\"select Col1, sum(Col2), count(Col2) where Col1 is not null "
+        "group by Col1 order by sum(Col2) desc, Col1 asc label Col1 '', sum(Col2) '', count(Col2) ''\", 0), "
+        f'{{"{ANALYSIS_NO_AUTHOR_DATA_LABEL}",0,0}})'
+    )
+
+
+def _build_dashboard_author_analysis_formula() -> str:
+    author_formula = _build_author_analysis_formula()
+    return f"=ARRAY_CONSTRAIN({author_formula.removeprefix('=')}, {ANALYSIS_CATEGORY_CHART_ROW_COUNT}, 3)"
+
+
 def _build_month_timeline_formula() -> str:
     month_reference_range = f"${ANALYSIS_HELPER_MONTH_REFERENCE_START_COLUMN}$2:${ANALYSIS_HELPER_MONTH_REFERENCE_START_COLUMN}"
     month_rollup_range = f"${ANALYSIS_HELPER_MONTH_ROLLUP_START_COLUMN}$2:${ANALYSIS_HELPER_MONTH_ROLLUP_END_COLUMN}"
@@ -2652,6 +2771,24 @@ def _build_analysis_dashboard_chart_requests(
             bottom_axis_title=ANALYSIS_RECEIPT_TOTAL_LABEL,
             left_axis_title=ANALYSIS_MERCHANT_HEADER_LABEL,
             series_palette=[ANALYSIS_THEME_TERRACOTTA],
+        ),
+        _build_basic_chart_request(
+            sheet_id=sheet_id,
+            title=ANALYSIS_AUTHOR_CHART_TITLE,
+            chart_type="BAR",
+            domain_start_column=ANALYSIS_AUTHOR_SECTION_COLUMN_INDEX - 1,
+            domain_end_column=ANALYSIS_AUTHOR_SECTION_COLUMN_INDEX,
+            series_start_column=ANALYSIS_AUTHOR_SECTION_COLUMN_INDEX,
+            series_end_column=ANALYSIS_AUTHOR_SECTION_COLUMN_INDEX + 1,
+            start_row_index=support_data_row_index,
+            end_row_index=support_data_row_index + ANALYSIS_CATEGORY_CHART_ROW_COUNT,
+            anchor_row_index=compact_chart_anchor_row_index,
+            anchor_column_index=ANALYSIS_AUTHOR_CHART_ANCHOR_COLUMN_INDEX,
+            width_pixels=520,
+            height_pixels=280,
+            bottom_axis_title=ANALYSIS_RECEIPT_TOTAL_LABEL,
+            left_axis_title=ANALYSIS_AUTHOR_HEADER_LABEL,
+            series_palette=[ANALYSIS_THEME_MOSS],
         ),
         _build_basic_chart_request(
             sheet_id=sheet_id,

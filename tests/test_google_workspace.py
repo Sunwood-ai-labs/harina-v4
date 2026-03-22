@@ -2,6 +2,7 @@ from typing import cast
 
 from app.formatters import RECEIPT_SHEET_HEADERS, ReceiptRecordContext, build_receipt_rows
 from app.google_workspace import (
+    ANALYSIS_AUTHOR_CATEGORY_BREAKDOWN_LABEL,
     ANALYSIS_AUTHOR_CHART_ANCHOR_COLUMN_INDEX,
     ANALYSIS_AUTHOR_CHART_TITLE,
     ANALYSIS_AUTHOR_HEADER_LABEL,
@@ -35,6 +36,8 @@ from app.google_workspace import (
     ANALYSIS_VISIBLE_COLUMN_COUNT,
     GoogleWorkspaceClient,
     _analysis_compact_chart_anchor_row,
+    _analysis_author_category_section_data_row,
+    _analysis_author_category_section_title_row,
     _analysis_monthly_chart_anchor_row,
     _analysis_stacked_chart_anchor_row,
     _analysis_support_section_data_row,
@@ -471,6 +474,12 @@ def test_build_analysis_sheet_rows_creates_empty_template_without_year_sources()
     )
     category_timeline_row_count = _estimated_category_timeline_row_count(source_sheet_names=[])
     support_data_row = _analysis_support_section_data_row(category_timeline_row_count=category_timeline_row_count)
+    author_category_title_row = _analysis_author_category_section_title_row(
+        category_timeline_row_count=category_timeline_row_count
+    )
+    author_category_data_row = _analysis_author_category_section_data_row(
+        category_timeline_row_count=category_timeline_row_count
+    )
 
     assert analysis_rows[1][:6] == ["対象範囲", "全年度", "", "", "対象シート", "(なし)"]
     assert _cell(analysis_rows, 3, 1) == "カテゴリ・店舗・月次のリズムを、一枚で眺めるレシートビュー"
@@ -485,6 +494,8 @@ def test_build_analysis_sheet_rows_creates_empty_template_without_year_sources()
     assert _cell(analysis_rows, support_data_row, ANALYSIS_MONTHLY_SECTION_COLUMN_INDEX) == "(月次データなし)"
     assert _cell(analysis_rows, support_data_row, ANALYSIS_MONTHLY_SECTION_COLUMN_INDEX + 1) == 0
     assert _cell(analysis_rows, ANALYSIS_MONTHLY_CATEGORY_TIMELINE_START_ROW_NUMBER, 1) == "(月次データなし)"
+    assert _cell(analysis_rows, author_category_title_row, 1) == ANALYSIS_AUTHOR_CATEGORY_BREAKDOWN_LABEL
+    assert _cell(analysis_rows, author_category_data_row, 1) == "(支払者データなし)"
 
 
 def test_build_analysis_sheet_rows_includes_formula_paths_for_rescan_and_total_fallback() -> None:
@@ -493,6 +504,9 @@ def test_build_analysis_sheet_rows_includes_formula_paths_for_rescan_and_total_f
         source_sheet_names=["2025"],
     )
     support_data_row = _analysis_support_section_data_row(
+        category_timeline_row_count=_estimated_category_timeline_row_count(source_sheet_names=["2025"])
+    )
+    author_category_data_row = _analysis_author_category_section_data_row(
         category_timeline_row_count=_estimated_category_timeline_row_count(source_sheet_names=["2025"])
     )
 
@@ -522,6 +536,11 @@ def test_build_analysis_sheet_rows_includes_formula_paths_for_rescan_and_total_f
     assert "INDEX(" in str(_cell(analysis_rows, support_data_row, ANALYSIS_AUTHOR_SECTION_COLUMN_INDEX))
     assert "sum(Col2)" in str(_cell(analysis_rows, support_data_row, ANALYSIS_AUTHOR_SECTION_COLUMN_INDEX))
     assert "count(Col2)" in str(_cell(analysis_rows, support_data_row, ANALYSIS_AUTHOR_SECTION_COLUMN_INDEX))
+    assert str(_cell(analysis_rows, author_category_data_row, 1)).startswith("=IFERROR(QUERY(FILTER({")
+    assert "group by Col1, Col2" in str(_cell(analysis_rows, author_category_data_row, 1))
+    assert "sum(Col3)" in str(_cell(analysis_rows, author_category_data_row, 1))
+    assert "count(Col3)" in str(_cell(analysis_rows, author_category_data_row, 1))
+    assert "order by Col1 asc" in str(_cell(analysis_rows, author_category_data_row, 1))
     assert '$' in str(_cell(analysis_rows, ANALYSIS_MONTHLY_CATEGORY_TIMELINE_START_ROW_NUMBER, ANALYSIS_MONTHLY_CATEGORY_TIMELINE_COLUMN_INDEX))
     assert "MAKEARRAY(" in str(_cell(analysis_rows, ANALYSIS_MONTHLY_CATEGORY_TIMELINE_START_ROW_NUMBER, ANALYSIS_MONTHLY_CATEGORY_TIMELINE_COLUMN_INDEX))
     assert f'INDEX(${ANALYSIS_HELPER_CATEGORY_REFERENCE_START_COLUMN}$2:' in str(_cell(analysis_rows, ANALYSIS_MONTHLY_CATEGORY_TIMELINE_START_ROW_NUMBER, ANALYSIS_MONTHLY_CATEGORY_TIMELINE_COLUMN_INDEX))
@@ -537,6 +556,9 @@ def test_build_analysis_sheet_rows_places_category_timeline_formula_in_visible_t
     )
     category_timeline_row_count = _estimated_category_timeline_row_count(source_sheet_names=["2025"])
     support_header_row = _analysis_support_section_header_row(category_timeline_row_count=category_timeline_row_count)
+    author_category_title_row = _analysis_author_category_section_title_row(
+        category_timeline_row_count=category_timeline_row_count
+    )
 
     assert _cell(analysis_rows, ANALYSIS_MONTHLY_CATEGORY_TIMELINE_TITLE_ROW_NUMBER, ANALYSIS_MONTHLY_CATEGORY_TIMELINE_COLUMN_INDEX) == "カテゴリ別月次"
     assert _cell(analysis_rows, support_header_row, ANALYSIS_MONTHLY_SECTION_COLUMN_INDEX) == "年月"
@@ -544,6 +566,7 @@ def test_build_analysis_sheet_rows_places_category_timeline_formula_in_visible_t
     assert _cell(analysis_rows, ANALYSIS_MONTHLY_CATEGORY_TIMELINE_START_ROW_NUMBER, ANALYSIS_MONTHLY_CATEGORY_TIMELINE_COLUMN_INDEX + 1) == ""
     assert _cell(analysis_rows, ANALYSIS_MONTHLY_CATEGORY_TIMELINE_START_ROW_NUMBER + 1, ANALYSIS_MONTHLY_CATEGORY_TIMELINE_COLUMN_INDEX + 1) == ""
     assert _cell(analysis_rows, support_header_row, ANALYSIS_AUTHOR_SECTION_COLUMN_INDEX) == ANALYSIS_AUTHOR_HEADER_LABEL
+    assert _cell(analysis_rows, author_category_title_row, 1) == ANALYSIS_AUTHOR_CATEGORY_BREAKDOWN_LABEL
 
 
 def test_build_analysis_sheet_rows_zero_fills_blank_category_month_cells() -> None:
@@ -681,6 +704,30 @@ def test_apply_analysis_dashboard_layout_sync_styles_subtitle_hides_helper_colum
         and "backgroundColorStyle" in request["repeatCell"]["cell"]["userEnteredFormat"]
         for request in layout_requests
         if "repeatCell" in request
+    )
+    assert any(
+        request.get("repeatCell", {}).get("range")
+        == {
+            "sheetId": 321,
+            "startRowIndex": _analysis_author_category_section_data_row(category_timeline_row_count=13) - 1,
+            "endRowIndex": _analysis_author_category_section_data_row(category_timeline_row_count=13),
+            "startColumnIndex": 0,
+            "endColumnIndex": 4,
+        }
+        and "backgroundColorStyle" in request["repeatCell"]["cell"]["userEnteredFormat"]
+        for request in layout_requests
+        if "repeatCell" in request
+    )
+    assert any(
+        request.get("updateBorders", {}).get("range")
+        == {
+            "sheetId": 321,
+            "startRowIndex": _analysis_author_category_section_title_row(category_timeline_row_count=13) - 1,
+            "endRowIndex": 200,
+            "startColumnIndex": 0,
+            "endColumnIndex": 4,
+        }
+        for request in layout_requests
     )
     assert not any(
         request.get("mergeCells", {}).get("range")

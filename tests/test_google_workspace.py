@@ -3,6 +3,8 @@ from typing import cast
 from app.formatters import RECEIPT_SHEET_HEADERS, ReceiptRecordContext, build_receipt_rows
 from app.google_workspace import (
     ANALYSIS_AUTHOR_CATEGORY_BREAKDOWN_LABEL,
+    ANALYSIS_AUTHOR_CATEGORY_CHART_TITLE,
+    ANALYSIS_AUTHOR_CATEGORY_CHART_ANCHOR_COLUMN_INDEX,
     ANALYSIS_AUTHOR_CHART_ANCHOR_COLUMN_INDEX,
     ANALYSIS_AUTHOR_CHART_TITLE,
     ANALYSIS_AUTHOR_HEADER_LABEL,
@@ -11,6 +13,8 @@ from app.google_workspace import (
     ANALYSIS_CATEGORY_STATUS_COLUMN_INDEX,
     ANALYSIS_CATEGORY_TOTAL_COLUMN_INDEX,
     ANALYSIS_HELPER_ACTIVE_LINE_ITEMS_COLUMN_INDEX,
+    ANALYSIS_HELPER_AUTHOR_CATEGORY_CHART_SOURCE_COLUMN_INDEX,
+    ANALYSIS_HELPER_AUTHOR_CATEGORY_CHART_SOURCE_START_COLUMN,
     ANALYSIS_HELPER_CATEGORY_DASHBOARD_COLUMN_INDEX,
     ANALYSIS_HELPER_CATEGORY_DASHBOARD_START_COLUMN,
     ANALYSIS_HELPER_CATEGORY_CHART_SOURCE_COLUMN_INDEX,
@@ -24,6 +28,7 @@ from app.google_workspace import (
     ANALYSIS_HELPER_MONTH_REFERENCE_COLUMN_INDEX,
     ANALYSIS_HELPER_MONTH_ROLLUP_COLUMN_INDEX,
     ANALYSIS_MERCHANT_SECTION_COLUMN_INDEX,
+    ANALYSIS_MAX_COLUMN_INDEX,
     ANALYSIS_HELPER_RECEIPT_MONTH_LOOKUP_COLUMN_INDEX,
     ANALYSIS_HELPER_RECEIPT_TOTALS_COLUMN_INDEX,
     ANALYSIS_HELPER_SOURCE_COLUMN_INDEX,
@@ -37,6 +42,7 @@ from app.google_workspace import (
     GoogleWorkspaceClient,
     _analysis_compact_chart_anchor_row,
     _analysis_author_category_section_data_row,
+    _analysis_author_category_chart_anchor_row,
     _analysis_author_category_section_title_row,
     _analysis_monthly_chart_anchor_row,
     _analysis_stacked_chart_anchor_row,
@@ -48,6 +54,7 @@ from app.google_workspace import (
     _expected_category_timeline_column_count,
     _resolved_analysis_hidden_start_column_index,
     _resolved_analysis_visible_column_count,
+    _column_letter,
     build_analysis_sheet_rows,
 )
 from app.models import ReceiptExtraction, ReceiptLineItem
@@ -531,6 +538,11 @@ def test_build_analysis_sheet_rows_includes_formula_paths_for_rescan_and_total_f
     assert 'TEXT(IF(ISNUMBER(purchaseDate), purchaseDate, DATEVALUE(LEFT(TO_TEXT(purchaseDate), 10))), "yyyy-mm")' in str(
         _cell(analysis_rows, 2, ANALYSIS_HELPER_ITEM_MONTHS_COLUMN_INDEX)
     )
+    assert str(_cell(analysis_rows, 2, ANALYSIS_HELPER_AUTHOR_CATEGORY_CHART_SOURCE_COLUMN_INDEX)).startswith(
+        "=IFERROR(QUERY(FILTER({"
+    )
+    assert "pivot Col2" in str(_cell(analysis_rows, 2, ANALYSIS_HELPER_AUTHOR_CATEGORY_CHART_SOURCE_COLUMN_INDEX))
+    assert "sum(Col3)" in str(_cell(analysis_rows, 2, ANALYSIS_HELPER_AUTHOR_CATEGORY_CHART_SOURCE_COLUMN_INDEX))
     assert "ARRAY_CONSTRAIN(" in str(_cell(analysis_rows, support_data_row, ANALYSIS_AUTHOR_SECTION_COLUMN_INDEX))
     assert "QUERY(FILTER({" in str(_cell(analysis_rows, support_data_row, ANALYSIS_AUTHOR_SECTION_COLUMN_INDEX))
     assert "INDEX(" in str(_cell(analysis_rows, support_data_row, ANALYSIS_AUTHOR_SECTION_COLUMN_INDEX))
@@ -623,6 +635,22 @@ def test_resolve_category_dashboard_row_count_uses_contiguous_helper_rows(monkey
     ) == 2
 
 
+def test_resolve_author_category_chart_shape_uses_contiguous_helper_rows(monkeypatch) -> None:
+    client, fake_sheets, _fake_drive = _build_workspace_client(monkeypatch)
+    end_column = _column_letter(ANALYSIS_HELPER_AUTHOR_CATEGORY_CHART_SOURCE_COLUMN_INDEX + 3)
+    fake_sheets.values_service.values_by_range[
+        f"'Analysis 2025'!{ANALYSIS_HELPER_AUTHOR_CATEGORY_CHART_SOURCE_START_COLUMN}2:{end_column}200"
+    ] = [
+        ["支払者(authorTag)", "Food", "Daily"],
+        ["Alice", 100, 20],
+        ["Maki", 0, 80],
+        [],
+        ["ignored", 1, 1],
+    ]
+
+    assert client._resolve_author_category_chart_shape_sync(sheet_name="Analysis 2025") == (3, 3)
+
+
 def _disabled_test_wait_for_category_timeline_chart_source_sync_accepts_ready_values(monkeypatch) -> None:
     client, fake_sheets, _fake_drive = _build_workspace_client(monkeypatch)
     fake_sheets.values_service.values_by_range["'Analysis 2025'!EJ2:EM3"] = [
@@ -675,7 +703,12 @@ def test_apply_analysis_dashboard_layout_sync_styles_subtitle_hides_helper_colum
     )
     assert any(
         request.get("updateDimensionProperties", {}).get("range")
-        == {"sheetId": 321, "dimension": "COLUMNS", "startIndex": hidden_start_column_index, "endIndex": 260}
+        == {
+            "sheetId": 321,
+            "dimension": "COLUMNS",
+            "startIndex": hidden_start_column_index,
+            "endIndex": ANALYSIS_MAX_COLUMN_INDEX,
+        }
         and request["updateDimensionProperties"]["properties"]["hiddenByUser"] is True
         for request in layout_requests
     )
@@ -745,9 +778,11 @@ def test_apply_analysis_dashboard_layout_sync_styles_subtitle_hides_helper_colum
 def test_apply_analysis_dashboard_charts_creates_category_merchant_monthly_and_stacked_charts(monkeypatch) -> None:
     client, fake_sheets, _fake_drive = _build_workspace_client(monkeypatch)
     monkeypatch.setattr(client, "_resolve_category_timeline_shape_sync", lambda **kwargs: (4, 13))
+    monkeypatch.setattr(client, "_resolve_author_category_chart_shape_sync", lambda **kwargs: (4, 3))
     compact_chart_anchor_row = _analysis_compact_chart_anchor_row(category_timeline_row_count=13) - 1
     monthly_chart_anchor_row = _analysis_monthly_chart_anchor_row(category_timeline_row_count=13) - 1
     stacked_chart_anchor_row = _analysis_stacked_chart_anchor_row(category_timeline_row_count=13) - 1
+    author_category_chart_anchor_row = _analysis_author_category_chart_anchor_row(category_timeline_row_count=13) - 1
 
     client._apply_analysis_dashboard_charts_sync(
         sheet_id=321,
@@ -756,13 +791,14 @@ def test_apply_analysis_dashboard_charts_creates_category_merchant_monthly_and_s
     )
 
     chart_requests = fake_sheets.batch_update_calls[-1]["requests"]
-    assert len(chart_requests) == 5
+    assert len(chart_requests) == 6
 
     category_chart = chart_requests[0]["addChart"]["chart"]
     merchant_chart = chart_requests[1]["addChart"]["chart"]
     author_chart = chart_requests[2]["addChart"]["chart"]
     monthly_chart = chart_requests[3]["addChart"]["chart"]
     stacked_chart = chart_requests[4]["addChart"]["chart"]
+    author_category_chart = chart_requests[5]["addChart"]["chart"]
 
     assert category_chart["spec"]["title"] == "カテゴリ別支出"
     assert category_chart["spec"]["altText"] == "カテゴリ別支出"
@@ -815,11 +851,30 @@ def test_apply_analysis_dashboard_charts_creates_category_merchant_monthly_and_s
     assert stacked_chart["spec"]["basicChart"]["series"][0]["series"]["sourceRange"]["sources"][0]["endColumnIndex"] == 2
     assert stacked_chart["spec"]["basicChart"]["series"][1]["colorStyle"]["rgbColor"]["red"] > 0.7
 
+    assert author_category_chart["spec"]["title"] == ANALYSIS_AUTHOR_CATEGORY_CHART_TITLE
+    assert author_category_chart["spec"]["basicChart"]["chartType"] == "BAR"
+    assert author_category_chart["spec"]["basicChart"]["stackedType"] == "STACKED"
+    assert author_category_chart["spec"]["basicChart"]["legendPosition"] == "RIGHT_LEGEND"
+    assert author_category_chart["spec"]["basicChart"]["headerCount"] == 1
+    assert author_category_chart["position"]["overlayPosition"]["anchorCell"] == {
+        "sheetId": 321,
+        "rowIndex": author_category_chart_anchor_row,
+        "columnIndex": ANALYSIS_AUTHOR_CATEGORY_CHART_ANCHOR_COLUMN_INDEX,
+    }
+    assert author_category_chart["spec"]["basicChart"]["domains"][0]["domain"]["sourceRange"]["sources"][0][
+        "startColumnIndex"
+    ] == ANALYSIS_HELPER_AUTHOR_CATEGORY_CHART_SOURCE_COLUMN_INDEX - 1
+    assert len(author_category_chart["spec"]["basicChart"]["series"]) == 3
+    assert author_category_chart["spec"]["basicChart"]["series"][0]["series"]["sourceRange"]["sources"][0][
+        "startColumnIndex"
+    ] == ANALYSIS_HELPER_AUTHOR_CATEGORY_CHART_SOURCE_COLUMN_INDEX
+
 
 def test_replace_sheet_values_sync_recreates_chart_requests(monkeypatch) -> None:
     client, fake_sheets, _fake_drive = _build_workspace_client(monkeypatch)
     monkeypatch.setattr(client, "_recreate_analysis_sheet_sync", lambda **kwargs: 777)
     monkeypatch.setattr(client, "_resolve_category_timeline_shape_sync", lambda **kwargs: (4, 13))
+    monkeypatch.setattr(client, "_resolve_author_category_chart_shape_sync", lambda **kwargs: (4, 3))
     monkeypatch.setattr(client, "_resolve_category_dashboard_row_count_sync", lambda **kwargs: 5)
 
     client._replace_sheet_values_sync(sheet_name="Analysis 2025", rows=[["HARINA 分析ダッシュボード"]])
@@ -832,6 +887,7 @@ def test_replace_sheet_values_sync_recreates_chart_requests(monkeypatch) -> None
         "支払者別支出",
         "月次支出推移",
         "月次カテゴリ別支出",
+        ANALYSIS_AUTHOR_CATEGORY_CHART_TITLE,
     ]
 
 

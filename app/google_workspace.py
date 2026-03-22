@@ -212,7 +212,8 @@ ANALYSIS_HELPER_CATEGORY_CHART_SOURCE_COLUMN_INDEX = (
 )
 ANALYSIS_HELPER_RECEIPT_MONTH_LOOKUP_COLUMN_INDEX = 256  # IV
 ANALYSIS_HELPER_ITEM_MONTHS_COLUMN_INDEX = 258  # IX
-ANALYSIS_MAX_COLUMN_INDEX = 260  # IZ
+ANALYSIS_HELPER_AUTHOR_CATEGORY_CHART_SOURCE_COLUMN_INDEX = 260  # IZ
+ANALYSIS_MAX_COLUMN_INDEX = 360  # MU
 ANALYSIS_HIDDEN_START_COLUMN_INDEX = ANALYSIS_HELPER_SOURCE_COLUMN_INDEX - 1  # hide helper columns from CV onward
 ANALYSIS_HELPER_SOURCE_START_COLUMN = _column_letter(ANALYSIS_HELPER_SOURCE_COLUMN_INDEX)
 ANALYSIS_HELPER_SOURCE_END_COLUMN = _column_letter(ANALYSIS_HELPER_SOURCE_END_COLUMN_INDEX)
@@ -234,6 +235,9 @@ ANALYSIS_HELPER_CATEGORY_CHART_SOURCE_START_COLUMN = _column_letter(ANALYSIS_HEL
 ANALYSIS_HELPER_RECEIPT_MONTH_LOOKUP_START_COLUMN = _column_letter(ANALYSIS_HELPER_RECEIPT_MONTH_LOOKUP_COLUMN_INDEX)
 ANALYSIS_HELPER_RECEIPT_MONTH_LOOKUP_END_COLUMN = _column_letter(ANALYSIS_HELPER_RECEIPT_MONTH_LOOKUP_COLUMN_INDEX + 1)
 ANALYSIS_HELPER_ITEM_MONTHS_START_COLUMN = _column_letter(ANALYSIS_HELPER_ITEM_MONTHS_COLUMN_INDEX)
+ANALYSIS_HELPER_AUTHOR_CATEGORY_CHART_SOURCE_START_COLUMN = _column_letter(
+    ANALYSIS_HELPER_AUTHOR_CATEGORY_CHART_SOURCE_COLUMN_INDEX
+)
 ANALYSIS_MONTHLY_CATEGORY_TIMELINE_START_COLUMN = _column_letter(ANALYSIS_MONTHLY_CATEGORY_TIMELINE_COLUMN_INDEX)
 ANALYSIS_THEME_INK = "#1D2A24"
 ANALYSIS_THEME_FOREST = "#234437"
@@ -298,7 +302,9 @@ ANALYSIS_MERCHANT_CHART_TITLE = "店舗別支出"
 ANALYSIS_AUTHOR_CHART_TITLE = "支払者別支出"
 ANALYSIS_MONTHLY_CHART_TITLE = "月次支出推移"
 ANALYSIS_CATEGORY_TIMELINE_CHART_TITLE = "月次カテゴリ別支出"
+ANALYSIS_AUTHOR_CATEGORY_CHART_TITLE = "支払者(authorTag)別カテゴリ支出"
 ANALYSIS_AUTHOR_CHART_ANCHOR_COLUMN_INDEX = 22
+ANALYSIS_AUTHOR_CATEGORY_CHART_ANCHOR_COLUMN_INDEX = 7
 ANALYSIS_CHART_SERIES_PALETTE = [
     ANALYSIS_THEME_FOREST,
     ANALYSIS_THEME_TERRACOTTA,
@@ -347,6 +353,10 @@ def _analysis_author_category_section_title_row(*, category_timeline_row_count: 
 
 def _analysis_author_category_section_data_row(*, category_timeline_row_count: int) -> int:
     return _analysis_author_category_section_title_row(category_timeline_row_count=category_timeline_row_count) + 1
+
+
+def _analysis_author_category_chart_anchor_row(*, category_timeline_row_count: int) -> int:
+    return _analysis_author_category_section_data_row(category_timeline_row_count=category_timeline_row_count) + 1
 
 
 def _resolved_analysis_visible_column_count(*, category_timeline_column_count: int) -> int:
@@ -2130,6 +2140,9 @@ class GoogleWorkspaceClient:
             category_timeline_column_count, category_timeline_row_count = self._resolve_category_timeline_shape_sync(
                 sheet_name=sheet_name
             )
+        author_category_chart_column_count, author_category_chart_row_count = (
+            self._resolve_author_category_chart_shape_sync(sheet_name=sheet_name)
+        )
         if category_chart_row_count is None:
             category_chart_row_count = self._resolve_category_dashboard_row_count_sync(
                 sheet_name=sheet_name,
@@ -2140,6 +2153,8 @@ class GoogleWorkspaceClient:
             category_chart_row_count=category_chart_row_count,
             category_timeline_series_count=max(category_timeline_column_count - 1, 1),
             category_timeline_row_count=max(category_timeline_row_count, 2),
+            author_category_series_count=max(author_category_chart_column_count - 1, 1),
+            author_category_row_count=max(author_category_chart_row_count, 2),
         )
         if not requests:
             return
@@ -2199,6 +2214,38 @@ class GoogleWorkspaceClient:
                 .get(
                     spreadsheetId=self._spreadsheet_id,
                     range=timeline_range,
+                    valueRenderOption="UNFORMATTED_VALUE",
+                )
+                .execute()
+            )
+            values = response.get("values", [])
+            contiguous_values: list[list[object]] = []
+            for row in values:
+                if any(cell not in ("", None) for cell in row):
+                    contiguous_values.append(row)
+                    continue
+                if contiguous_values:
+                    break
+            if len(contiguous_values) > 1 and len(contiguous_values[0]) > 1 and len(contiguous_values[1]) > 1:
+                return max(len(row) for row in contiguous_values), len(contiguous_values)
+            time.sleep(0.5)
+        return fallback_column_count, 2
+
+    def _resolve_author_category_chart_shape_sync(self, *, sheet_name: str) -> tuple[int, int]:
+        fallback_column_count = max(len(self._list_receipt_categories_sync()) + 1, 2)
+        chart_end_column = _column_letter(
+            ANALYSIS_HELPER_AUTHOR_CATEGORY_CHART_SOURCE_COLUMN_INDEX + fallback_column_count - 1
+        )
+        chart_range = (
+            f"'{sheet_name}'!{ANALYSIS_HELPER_AUTHOR_CATEGORY_CHART_SOURCE_START_COLUMN}2:{chart_end_column}200"
+        )
+        for _ in range(10):
+            response = (
+                self._sheets.spreadsheets()
+                .values()
+                .get(
+                    spreadsheetId=self._spreadsheet_id,
+                    range=chart_range,
                     valueRenderOption="UNFORMATTED_VALUE",
                 )
                 .execute()
@@ -2403,6 +2450,12 @@ def build_analysis_sheet_rows(
     _set_grid_cell(rows, 2, ANALYSIS_HELPER_CATEGORY_CHART_SOURCE_COLUMN_INDEX, _build_category_chart_source_formula())
     _set_grid_cell(rows, 2, ANALYSIS_HELPER_RECEIPT_MONTH_LOOKUP_COLUMN_INDEX, _build_receipt_month_lookup_formula())
     _set_grid_cell(rows, 2, ANALYSIS_HELPER_ITEM_MONTHS_COLUMN_INDEX, _build_item_months_formula())
+    _set_grid_cell(
+        rows,
+        2,
+        ANALYSIS_HELPER_AUTHOR_CATEGORY_CHART_SOURCE_COLUMN_INDEX,
+        _build_author_category_chart_source_formula(),
+    )
 
     _set_grid_cell(rows, 5, 1, f'=IFERROR(COUNTA(FILTER(INDEX(${ANALYSIS_HELPER_RECEIPT_TOTALS_START_COLUMN}$2:${ANALYSIS_HELPER_RECEIPT_TOTALS_END_COLUMN},,1), LEN(INDEX(${ANALYSIS_HELPER_RECEIPT_TOTALS_START_COLUMN}$2:${ANALYSIS_HELPER_RECEIPT_TOTALS_END_COLUMN},,1)))), 0)')
     _set_grid_cell(rows, 5, 5, f'=IFERROR(SUM(FILTER(INDEX(${ANALYSIS_HELPER_RECEIPT_TOTALS_START_COLUMN}$2:${ANALYSIS_HELPER_RECEIPT_TOTALS_END_COLUMN},,4), LEN(INDEX(${ANALYSIS_HELPER_RECEIPT_TOTALS_START_COLUMN}$2:${ANALYSIS_HELPER_RECEIPT_TOTALS_END_COLUMN},,1)))), 0)')
@@ -2769,6 +2822,25 @@ def _build_author_category_breakdown_formula() -> str:
     )
 
 
+def _build_author_category_chart_source_formula() -> str:
+    active_line_items_range = f"${ANALYSIS_HELPER_ACTIVE_LINE_ITEMS_START_COLUMN}$2:${ANALYSIS_HELPER_ACTIVE_LINE_ITEMS_END_COLUMN}"
+    return (
+        "=IFERROR(QUERY(FILTER({"
+        f"INDEX({active_line_items_range},,6),"
+        f"INDEX({active_line_items_range},,1),"
+        f"N(INDEX({active_line_items_range},,2))"
+        "}, LEN(INDEX("
+        f"{active_line_items_range}"
+        ",,6))), "
+        "\"select Col1, sum(Col3) "
+        "where Col1 is not null "
+        "group by Col1 pivot Col2 "
+        "order by Col1 asc "
+        f"label Col1 '{ANALYSIS_AUTHOR_HEADER_LABEL}'\", 0), "
+        f'{{"{ANALYSIS_AUTHOR_HEADER_LABEL}","{ANALYSIS_NO_CATEGORY_DATA_LABEL}";"{ANALYSIS_NO_AUTHOR_DATA_LABEL}",0}})'
+    )
+
+
 def _build_month_timeline_formula() -> str:
     month_reference_range = f"${ANALYSIS_HELPER_MONTH_REFERENCE_START_COLUMN}$2:${ANALYSIS_HELPER_MONTH_REFERENCE_START_COLUMN}"
     month_rollup_range = f"${ANALYSIS_HELPER_MONTH_ROLLUP_START_COLUMN}$2:${ANALYSIS_HELPER_MONTH_ROLLUP_END_COLUMN}"
@@ -2848,6 +2920,8 @@ def _build_analysis_dashboard_chart_requests(
     category_chart_row_count: int,
     category_timeline_series_count: int,
     category_timeline_row_count: int,
+    author_category_series_count: int,
+    author_category_row_count: int,
 ) -> list[dict[str, object]]:
     month_data_row_count = max(category_timeline_row_count - 1, 1)
     support_data_row_index = _analysis_support_section_data_row(
@@ -2860,6 +2934,9 @@ def _build_analysis_dashboard_chart_requests(
         category_timeline_row_count=category_timeline_row_count
     ) - 1
     stacked_chart_anchor_row_index = _analysis_stacked_chart_anchor_row(
+        category_timeline_row_count=category_timeline_row_count
+    ) - 1
+    author_category_chart_anchor_row_index = _analysis_author_category_chart_anchor_row(
         category_timeline_row_count=category_timeline_row_count
     ) - 1
     return [
@@ -2958,6 +3035,34 @@ def _build_analysis_dashboard_chart_requests(
             height_pixels=360,
             bottom_axis_title=ANALYSIS_MONTH_HEADER_LABEL,
             left_axis_title=ANALYSIS_TOTAL_AMOUNT_HEADER_LABEL,
+            header_count=1,
+            legend_position="RIGHT_LEGEND",
+            stacked_type="STACKED",
+            series_palette=ANALYSIS_CHART_SERIES_PALETTE,
+        ),
+        _build_basic_chart_request(
+            sheet_id=sheet_id,
+            title=ANALYSIS_AUTHOR_CATEGORY_CHART_TITLE,
+            chart_type="BAR",
+            domain_start_column=ANALYSIS_HELPER_AUTHOR_CATEGORY_CHART_SOURCE_COLUMN_INDEX - 1,
+            domain_end_column=ANALYSIS_HELPER_AUTHOR_CATEGORY_CHART_SOURCE_COLUMN_INDEX,
+            series_start_column=ANALYSIS_HELPER_AUTHOR_CATEGORY_CHART_SOURCE_COLUMN_INDEX,
+            series_end_column=ANALYSIS_HELPER_AUTHOR_CATEGORY_CHART_SOURCE_COLUMN_INDEX + 1,
+            series_column_ranges=[
+                (
+                    ANALYSIS_HELPER_AUTHOR_CATEGORY_CHART_SOURCE_COLUMN_INDEX + offset,
+                    ANALYSIS_HELPER_AUTHOR_CATEGORY_CHART_SOURCE_COLUMN_INDEX + offset + 1,
+                )
+                for offset in range(author_category_series_count)
+            ],
+            start_row_index=1,
+            end_row_index=1 + author_category_row_count,
+            anchor_row_index=author_category_chart_anchor_row_index,
+            anchor_column_index=ANALYSIS_AUTHOR_CATEGORY_CHART_ANCHOR_COLUMN_INDEX,
+            width_pixels=920,
+            height_pixels=340,
+            bottom_axis_title=ANALYSIS_TOTAL_AMOUNT_HEADER_LABEL,
+            left_axis_title=ANALYSIS_AUTHOR_HEADER_LABEL,
             header_count=1,
             legend_position="RIGHT_LEGEND",
             stacked_type="STACKED",

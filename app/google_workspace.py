@@ -183,7 +183,15 @@ GOOGLE_DRIVE_FOLDER_MIME_TYPE = "application/vnd.google-apps.folder"
 ANALYSIS_SHEET_PREFIX = "Analysis "
 ANALYSIS_ALL_YEARS_SHEET_NAME = "Analysis All Years"
 RECEIPT_LAST_COLUMN = _column_letter(len(RECEIPT_SHEET_HEADERS))
-ANALYSIS_VISIBLE_COLUMN_COUNT = 20  # T
+ANALYSIS_CATEGORY_MONTH_COLUMN_COUNT = 12
+ANALYSIS_CATEGORY_TOTAL_COLUMN_INDEX = 15  # O
+ANALYSIS_CATEGORY_LINE_ITEMS_COLUMN_INDEX = 16  # P
+ANALYSIS_CATEGORY_RECEIPTS_COLUMN_INDEX = 17  # Q
+ANALYSIS_CATEGORY_STATUS_COLUMN_INDEX = 18  # R
+ANALYSIS_MONTHLY_SECTION_COLUMN_INDEX = 20  # T
+ANALYSIS_MERCHANT_SECTION_COLUMN_INDEX = 26  # Z
+ANALYSIS_MONTHLY_CATEGORY_TIMELINE_COLUMN_INDEX = 30  # AD hidden helper
+ANALYSIS_VISIBLE_COLUMN_COUNT = 29  # AC
 ANALYSIS_HELPER_SOURCE_COLUMN_INDEX = 100  # CV
 ANALYSIS_HELPER_SOURCE_END_COLUMN_INDEX = ANALYSIS_HELPER_SOURCE_COLUMN_INDEX + len(RECEIPT_SHEET_HEADERS) - 1  # BI
 ANALYSIS_HELPER_LATEST_RECEIPTS_COLUMN_INDEX = ANALYSIS_HELPER_SOURCE_END_COLUMN_INDEX + 2
@@ -196,6 +204,7 @@ ANALYSIS_HELPER_MONTH_ROLLUP_COLUMN_INDEX = ANALYSIS_HELPER_MONTH_REFERENCE_COLU
 ANALYSIS_HELPER_RECEIPT_MONTH_LOOKUP_COLUMN_INDEX = 256  # IV
 ANALYSIS_HELPER_ITEM_MONTHS_COLUMN_INDEX = 258  # IX
 ANALYSIS_MAX_COLUMN_INDEX = 260  # IZ
+ANALYSIS_HIDDEN_START_COLUMN_INDEX = ANALYSIS_MONTHLY_CATEGORY_TIMELINE_COLUMN_INDEX - 1  # hide from AD onward
 ANALYSIS_HELPER_SOURCE_START_COLUMN = _column_letter(ANALYSIS_HELPER_SOURCE_COLUMN_INDEX)
 ANALYSIS_HELPER_SOURCE_END_COLUMN = _column_letter(ANALYSIS_HELPER_SOURCE_END_COLUMN_INDEX)
 ANALYSIS_HELPER_LATEST_RECEIPTS_START_COLUMN = _column_letter(ANALYSIS_HELPER_LATEST_RECEIPTS_COLUMN_INDEX)
@@ -214,6 +223,7 @@ ANALYSIS_HELPER_MONTH_ROLLUP_END_COLUMN = _column_letter(ANALYSIS_HELPER_MONTH_R
 ANALYSIS_HELPER_RECEIPT_MONTH_LOOKUP_START_COLUMN = _column_letter(ANALYSIS_HELPER_RECEIPT_MONTH_LOOKUP_COLUMN_INDEX)
 ANALYSIS_HELPER_RECEIPT_MONTH_LOOKUP_END_COLUMN = _column_letter(ANALYSIS_HELPER_RECEIPT_MONTH_LOOKUP_COLUMN_INDEX + 1)
 ANALYSIS_HELPER_ITEM_MONTHS_START_COLUMN = _column_letter(ANALYSIS_HELPER_ITEM_MONTHS_COLUMN_INDEX)
+ANALYSIS_MONTHLY_CATEGORY_TIMELINE_START_COLUMN = _column_letter(ANALYSIS_MONTHLY_CATEGORY_TIMELINE_COLUMN_INDEX)
 ANALYSIS_THEME_INK = "#1D2A24"
 ANALYSIS_THEME_FOREST = "#234437"
 ANALYSIS_THEME_MOSS = "#456A58"
@@ -231,8 +241,6 @@ ANALYSIS_THEME_AMBER_MIST = "#F3E5C4"
 ANALYSIS_THEME_IVORY = "#FFFDF8"
 ANALYSIS_THEME_SLATE = "#6A756F"
 ANALYSIS_THEME_BORDER = "#C9B89B"
-ANALYSIS_MONTHLY_CATEGORY_TIMELINE_COLUMN_INDEX = 17  # Q
-ANALYSIS_MONTHLY_CATEGORY_TIMELINE_START_COLUMN = _column_letter(ANALYSIS_MONTHLY_CATEGORY_TIMELINE_COLUMN_INDEX)
 ANALYSIS_DASHBOARD_TITLE = "HARINA 分析ダッシュボード"
 ANALYSIS_DASHBOARD_SUBTITLE = "カテゴリ・店舗・月次のリズムを、一枚で眺めるレシートビュー"
 ANALYSIS_SCOPE_LABEL = "対象範囲"
@@ -415,7 +423,11 @@ def _build_analysis_dashboard_layout_requests(*, sheet_id: int) -> list[dict[str
             )
         )
 
-    for start_column, end_column in ((0, 6), (7, 10), (11, 16), (17, 20)):
+    for start_column, end_column in (
+        (0, ANALYSIS_CATEGORY_STATUS_COLUMN_INDEX),
+        (ANALYSIS_MONTHLY_SECTION_COLUMN_INDEX - 1, ANALYSIS_MONTHLY_SECTION_COLUMN_INDEX + 4),
+        (ANALYSIS_MERCHANT_SECTION_COLUMN_INDEX - 1, ANALYSIS_MERCHANT_SECTION_COLUMN_INDEX + 2),
+    ):
         requests.append(
             _build_analysis_merge_request(
                 sheet_id=sheet_id,
@@ -522,16 +534,29 @@ def _build_analysis_dashboard_layout_requests(*, sheet_id: int) -> list[dict[str
             )
         )
 
-    for start_column, end_column, background_color, text_color in (
-        (0, 4, ANALYSIS_THEME_FOREST, ANALYSIS_THEME_IVORY),
-        (4, 20, ANALYSIS_THEME_SAND, ANALYSIS_THEME_INK),
-        (0, 6, ANALYSIS_THEME_FOREST, ANALYSIS_THEME_IVORY),
-        (7, 10, ANALYSIS_THEME_TERRACOTTA, ANALYSIS_THEME_IVORY),
-        (11, 16, ANALYSIS_THEME_NAVY, ANALYSIS_THEME_IVORY),
-        (17, 20, ANALYSIS_THEME_AMBER, ANALYSIS_THEME_INK),
+    for start_column, end_column, background_color, text_color, start_row_index, end_row_index, alignment in (
+        (0, 4, ANALYSIS_THEME_FOREST, ANALYSIS_THEME_IVORY, 6, 7, "CENTER"),
+        (4, ANALYSIS_VISIBLE_COLUMN_COUNT, ANALYSIS_THEME_SAND, ANALYSIS_THEME_INK, 6, 7, "LEFT"),
+        (0, ANALYSIS_CATEGORY_STATUS_COLUMN_INDEX, ANALYSIS_THEME_FOREST, ANALYSIS_THEME_IVORY, 7, 8, "CENTER"),
+        (
+            ANALYSIS_MONTHLY_SECTION_COLUMN_INDEX - 1,
+            ANALYSIS_MONTHLY_SECTION_COLUMN_INDEX + 4,
+            ANALYSIS_THEME_NAVY,
+            ANALYSIS_THEME_IVORY,
+            7,
+            8,
+            "CENTER",
+        ),
+        (
+            ANALYSIS_MERCHANT_SECTION_COLUMN_INDEX - 1,
+            ANALYSIS_MERCHANT_SECTION_COLUMN_INDEX + 2,
+            ANALYSIS_THEME_TERRACOTTA,
+            ANALYSIS_THEME_IVORY,
+            7,
+            8,
+            "CENTER",
+        ),
     ):
-        start_row_index = 6 if start_column in (0, 4) and end_column in (4, 20) else 7
-        end_row_index = 7 if start_column in (0, 4) and end_column in (4, 20) else 8
         requests.append(
             _build_analysis_repeat_cell_request(
                 sheet_id=sheet_id,
@@ -541,24 +566,23 @@ def _build_analysis_dashboard_layout_requests(*, sheet_id: int) -> list[dict[str
                 end_column_index=end_column,
                 user_entered_format={
                     "backgroundColorStyle": _hex_color_style(background_color),
-                    "horizontalAlignment": "CENTER" if start_row_index == 7 else ("LEFT" if start_column == 4 else "CENTER"),
+                    "horizontalAlignment": alignment,
                     "verticalAlignment": "MIDDLE",
                     "textFormat": {
                         "foregroundColorStyle": _hex_color_style(text_color),
                         "fontSize": 11 if start_row_index == 7 else 10,
                         "bold": True,
                     },
-                    **({"wrapStrategy": "WRAP"} if start_column == 4 and start_row_index == 6 else {}),
+                    **({"wrapStrategy": "WRAP"} if start_row_index == 6 and start_column == 4 else {}),
                 },
                 fields="userEnteredFormat(backgroundColorStyle,textFormat,horizontalAlignment,verticalAlignment,wrapStrategy)",
             )
         )
 
     for start_column, end_column, background_color in (
-        (0, 6, ANALYSIS_THEME_SAGE),
-        (7, 10, ANALYSIS_THEME_TERRACOTTA_MIST),
-        (11, 16, ANALYSIS_THEME_NAVY_MIST),
-        (17, 20, ANALYSIS_THEME_AMBER_MIST),
+        (0, ANALYSIS_CATEGORY_STATUS_COLUMN_INDEX, ANALYSIS_THEME_SAGE),
+        (ANALYSIS_MONTHLY_SECTION_COLUMN_INDEX - 1, ANALYSIS_MONTHLY_SECTION_COLUMN_INDEX + 4, ANALYSIS_THEME_NAVY_MIST),
+        (ANALYSIS_MERCHANT_SECTION_COLUMN_INDEX - 1, ANALYSIS_MERCHANT_SECTION_COLUMN_INDEX + 2, ANALYSIS_THEME_TERRACOTTA_MIST),
     ):
         requests.append(
             _build_analysis_repeat_cell_request(
@@ -600,8 +624,8 @@ def _build_analysis_dashboard_layout_requests(*, sheet_id: int) -> list[dict[str
                 sheet_id=sheet_id,
                 start_row_index=9,
                 end_row_index=200,
-                start_column_index=7,
-                end_column_index=8,
+                start_column_index=ANALYSIS_MERCHANT_SECTION_COLUMN_INDEX - 1,
+                end_column_index=ANALYSIS_MERCHANT_SECTION_COLUMN_INDEX,
                 user_entered_format={
                     "backgroundColorStyle": _hex_color_style(ANALYSIS_THEME_IVORY),
                     "verticalAlignment": "TOP",
@@ -614,7 +638,7 @@ def _build_analysis_dashboard_layout_requests(*, sheet_id: int) -> list[dict[str
                 start_row_index=9,
                 end_row_index=200,
                 start_column_index=2,
-                end_column_index=5,
+                end_column_index=ANALYSIS_CATEGORY_RECEIPTS_COLUMN_INDEX,
                 user_entered_format={"horizontalAlignment": "RIGHT", "verticalAlignment": "TOP"},
                 fields="userEnteredFormat(horizontalAlignment,verticalAlignment)",
             ),
@@ -622,8 +646,8 @@ def _build_analysis_dashboard_layout_requests(*, sheet_id: int) -> list[dict[str
                 sheet_id=sheet_id,
                 start_row_index=9,
                 end_row_index=200,
-                start_column_index=8,
-                end_column_index=10,
+                start_column_index=ANALYSIS_MONTHLY_SECTION_COLUMN_INDEX,
+                end_column_index=ANALYSIS_MONTHLY_SECTION_COLUMN_INDEX + 4,
                 user_entered_format={"horizontalAlignment": "RIGHT", "verticalAlignment": "TOP"},
                 fields="userEnteredFormat(horizontalAlignment,verticalAlignment)",
             ),
@@ -631,8 +655,8 @@ def _build_analysis_dashboard_layout_requests(*, sheet_id: int) -> list[dict[str
                 sheet_id=sheet_id,
                 start_row_index=9,
                 end_row_index=200,
-                start_column_index=12,
-                end_column_index=16,
+                start_column_index=ANALYSIS_MERCHANT_SECTION_COLUMN_INDEX,
+                end_column_index=ANALYSIS_MERCHANT_SECTION_COLUMN_INDEX + 2,
                 user_entered_format={"horizontalAlignment": "RIGHT", "verticalAlignment": "TOP"},
                 fields="userEnteredFormat(horizontalAlignment,verticalAlignment)",
             ),
@@ -640,8 +664,8 @@ def _build_analysis_dashboard_layout_requests(*, sheet_id: int) -> list[dict[str
                 sheet_id=sheet_id,
                 start_row_index=9,
                 end_row_index=200,
-                start_column_index=5,
-                end_column_index=6,
+                start_column_index=ANALYSIS_CATEGORY_STATUS_COLUMN_INDEX - 1,
+                end_column_index=ANALYSIS_CATEGORY_STATUS_COLUMN_INDEX,
                 user_entered_format={
                     "horizontalAlignment": "CENTER",
                     "verticalAlignment": "TOP",
@@ -653,8 +677,8 @@ def _build_analysis_dashboard_layout_requests(*, sheet_id: int) -> list[dict[str
                 sheet_id=sheet_id,
                 start_row_index=9,
                 end_row_index=200,
-                start_column_index=11,
-                end_column_index=12,
+                start_column_index=ANALYSIS_MONTHLY_SECTION_COLUMN_INDEX - 1,
+                end_column_index=ANALYSIS_MONTHLY_SECTION_COLUMN_INDEX,
                 user_entered_format={"horizontalAlignment": "CENTER", "verticalAlignment": "TOP"},
                 fields="userEnteredFormat(horizontalAlignment,verticalAlignment)",
             ),
@@ -680,7 +704,7 @@ def _build_analysis_dashboard_layout_requests(*, sheet_id: int) -> list[dict[str
                 start_row_index=9,
                 end_row_index=200,
                 start_column_index=2,
-                end_column_index=3,
+                end_column_index=ANALYSIS_CATEGORY_TOTAL_COLUMN_INDEX,
                 user_entered_format={"numberFormat": {"type": "NUMBER", "pattern": "#,##0"}},
                 fields="userEnteredFormat(numberFormat)",
             ),
@@ -688,8 +712,8 @@ def _build_analysis_dashboard_layout_requests(*, sheet_id: int) -> list[dict[str
                 sheet_id=sheet_id,
                 start_row_index=9,
                 end_row_index=200,
-                start_column_index=3,
-                end_column_index=5,
+                start_column_index=ANALYSIS_CATEGORY_LINE_ITEMS_COLUMN_INDEX - 1,
+                end_column_index=ANALYSIS_CATEGORY_RECEIPTS_COLUMN_INDEX,
                 user_entered_format={"numberFormat": {"type": "NUMBER", "pattern": "#,##0"}},
                 fields="userEnteredFormat(numberFormat)",
             ),
@@ -697,8 +721,8 @@ def _build_analysis_dashboard_layout_requests(*, sheet_id: int) -> list[dict[str
                 sheet_id=sheet_id,
                 start_row_index=9,
                 end_row_index=200,
-                start_column_index=8,
-                end_column_index=10,
+                start_column_index=ANALYSIS_MONTHLY_SECTION_COLUMN_INDEX,
+                end_column_index=ANALYSIS_MONTHLY_SECTION_COLUMN_INDEX + 4,
                 user_entered_format={"numberFormat": {"type": "NUMBER", "pattern": "#,##0"}},
                 fields="userEnteredFormat(numberFormat)",
             ),
@@ -706,8 +730,8 @@ def _build_analysis_dashboard_layout_requests(*, sheet_id: int) -> list[dict[str
                 sheet_id=sheet_id,
                 start_row_index=9,
                 end_row_index=200,
-                start_column_index=12,
-                end_column_index=16,
+                start_column_index=ANALYSIS_MERCHANT_SECTION_COLUMN_INDEX,
+                end_column_index=ANALYSIS_MERCHANT_SECTION_COLUMN_INDEX + 2,
                 user_entered_format={"numberFormat": {"type": "NUMBER", "pattern": "#,##0"}},
                 fields="userEnteredFormat(numberFormat)",
             ),
@@ -727,16 +751,56 @@ def _build_analysis_dashboard_layout_requests(*, sheet_id: int) -> list[dict[str
                 pixel_size=104,
             ),
             _build_analysis_dimension_request(sheet_id=sheet_id, dimension="COLUMNS", start_index=1, end_index=2, pixel_size=220),
-            _build_analysis_dimension_request(sheet_id=sheet_id, dimension="COLUMNS", start_index=6, end_index=7, pixel_size=28),
-            _build_analysis_dimension_request(sheet_id=sheet_id, dimension="COLUMNS", start_index=7, end_index=8, pixel_size=200),
-            _build_analysis_dimension_request(sheet_id=sheet_id, dimension="COLUMNS", start_index=10, end_index=11, pixel_size=28),
-            _build_analysis_dimension_request(sheet_id=sheet_id, dimension="COLUMNS", start_index=11, end_index=12, pixel_size=118),
-            _build_analysis_dimension_request(sheet_id=sheet_id, dimension="COLUMNS", start_index=16, end_index=17, pixel_size=28),
-            _build_analysis_dimension_request(sheet_id=sheet_id, dimension="COLUMNS", start_index=17, end_index=20, pixel_size=122),
+            _build_analysis_dimension_request(sheet_id=sheet_id, dimension="COLUMNS", start_index=2, end_index=14, pixel_size=88),
+            _build_analysis_dimension_request(sheet_id=sheet_id, dimension="COLUMNS", start_index=14, end_index=15, pixel_size=118),
+            _build_analysis_dimension_request(sheet_id=sheet_id, dimension="COLUMNS", start_index=15, end_index=17, pixel_size=92),
+            _build_analysis_dimension_request(sheet_id=sheet_id, dimension="COLUMNS", start_index=17, end_index=18, pixel_size=96),
             _build_analysis_dimension_request(
                 sheet_id=sheet_id,
                 dimension="COLUMNS",
-                start_index=ANALYSIS_VISIBLE_COLUMN_COUNT,
+                start_index=ANALYSIS_MONTHLY_SECTION_COLUMN_INDEX - 2,
+                end_index=ANALYSIS_MONTHLY_SECTION_COLUMN_INDEX - 1,
+                pixel_size=28,
+            ),
+            _build_analysis_dimension_request(
+                sheet_id=sheet_id,
+                dimension="COLUMNS",
+                start_index=ANALYSIS_MONTHLY_SECTION_COLUMN_INDEX - 1,
+                end_index=ANALYSIS_MONTHLY_SECTION_COLUMN_INDEX,
+                pixel_size=118,
+            ),
+            _build_analysis_dimension_request(
+                sheet_id=sheet_id,
+                dimension="COLUMNS",
+                start_index=ANALYSIS_MONTHLY_SECTION_COLUMN_INDEX,
+                end_index=ANALYSIS_MONTHLY_SECTION_COLUMN_INDEX + 4,
+                pixel_size=100,
+            ),
+            _build_analysis_dimension_request(
+                sheet_id=sheet_id,
+                dimension="COLUMNS",
+                start_index=ANALYSIS_MERCHANT_SECTION_COLUMN_INDEX - 2,
+                end_index=ANALYSIS_MERCHANT_SECTION_COLUMN_INDEX - 1,
+                pixel_size=28,
+            ),
+            _build_analysis_dimension_request(
+                sheet_id=sheet_id,
+                dimension="COLUMNS",
+                start_index=ANALYSIS_MERCHANT_SECTION_COLUMN_INDEX - 1,
+                end_index=ANALYSIS_MERCHANT_SECTION_COLUMN_INDEX,
+                pixel_size=200,
+            ),
+            _build_analysis_dimension_request(
+                sheet_id=sheet_id,
+                dimension="COLUMNS",
+                start_index=ANALYSIS_MERCHANT_SECTION_COLUMN_INDEX,
+                end_index=ANALYSIS_MERCHANT_SECTION_COLUMN_INDEX + 2,
+                pixel_size=110,
+            ),
+            _build_analysis_dimension_request(
+                sheet_id=sheet_id,
+                dimension="COLUMNS",
+                start_index=ANALYSIS_HIDDEN_START_COLUMN_INDEX,
                 end_index=ANALYSIS_MAX_COLUMN_INDEX,
                 hidden_by_user=True,
             ),
@@ -754,11 +818,10 @@ def _build_analysis_dashboard_layout_requests(*, sheet_id: int) -> list[dict[str
         (4, 6, 12, 16, "SOLID_MEDIUM"),
         (4, 6, 16, 20, "SOLID_MEDIUM"),
         (6, 7, 0, 4, "SOLID_MEDIUM"),
-        (6, 7, 4, 20, "SOLID_MEDIUM"),
-        (7, 9, 0, 6, "SOLID_MEDIUM"),
-        (7, 9, 7, 10, "SOLID_MEDIUM"),
-        (7, 9, 11, 16, "SOLID_MEDIUM"),
-        (7, 12, 17, 20, "SOLID_MEDIUM"),
+        (6, 7, 4, ANALYSIS_VISIBLE_COLUMN_COUNT, "SOLID_MEDIUM"),
+        (7, 12, 0, ANALYSIS_CATEGORY_STATUS_COLUMN_INDEX, "SOLID_MEDIUM"),
+        (7, 12, ANALYSIS_MONTHLY_SECTION_COLUMN_INDEX - 1, ANALYSIS_MONTHLY_SECTION_COLUMN_INDEX + 4, "SOLID_MEDIUM"),
+        (7, 12, ANALYSIS_MERCHANT_SECTION_COLUMN_INDEX - 1, ANALYSIS_MERCHANT_SECTION_COLUMN_INDEX + 2, "SOLID_MEDIUM"),
     ):
         requests.append(
             _build_analysis_outlined_range_request(
@@ -1830,24 +1893,25 @@ def build_analysis_sheet_rows(
     _set_grid_cell(rows, 7, 1, ANALYSIS_DATE_RANGE_LABEL)
 
     _set_grid_cell(rows, 8, 1, ANALYSIS_CATEGORY_SECTION_LABEL)
-    _set_grid_cell(rows, 8, 8, ANALYSIS_MERCHANT_SECTION_LABEL)
-    _set_grid_cell(rows, 8, 12, ANALYSIS_MONTHLY_SECTION_LABEL)
-    _set_grid_cell(rows, 8, 18, ANALYSIS_TREND_SECTION_LABEL)
+    _set_grid_cell(rows, 8, ANALYSIS_MONTHLY_SECTION_COLUMN_INDEX, ANALYSIS_MONTHLY_SECTION_LABEL)
+    _set_grid_cell(rows, 8, ANALYSIS_MERCHANT_SECTION_COLUMN_INDEX, ANALYSIS_MERCHANT_SECTION_LABEL)
 
     _set_grid_cell(rows, 9, 1, ANALYSIS_CATEGORY_HEADER_LABEL)
     _set_grid_cell(rows, 9, 2, ANALYSIS_DESCRIPTION_HEADER_LABEL)
-    _set_grid_cell(rows, 9, 3, ANALYSIS_TOTAL_AMOUNT_HEADER_LABEL)
-    _set_grid_cell(rows, 9, 4, ANALYSIS_LINE_ITEMS_HEADER_LABEL)
-    _set_grid_cell(rows, 9, 5, ANALYSIS_RECEIPTS_HEADER_LABEL)
-    _set_grid_cell(rows, 9, 6, ANALYSIS_STATUS_HEADER_LABEL)
-    _set_grid_cell(rows, 9, 8, ANALYSIS_MERCHANT_HEADER_LABEL)
-    _set_grid_cell(rows, 9, 9, ANALYSIS_RECEIPT_TOTAL_LABEL)
-    _set_grid_cell(rows, 9, 10, ANALYSIS_RECEIPT_COUNT_HEADER_LABEL)
-    _set_grid_cell(rows, 9, 12, ANALYSIS_MONTH_HEADER_LABEL)
-    _set_grid_cell(rows, 9, 13, ANALYSIS_RECEIPT_TOTAL_LABEL)
-    _set_grid_cell(rows, 9, 14, ANALYSIS_RECEIPT_COUNT_HEADER_LABEL)
-    _set_grid_cell(rows, 9, 15, ANALYSIS_AVG_RECEIPT_HEADER_LABEL)
-    _set_grid_cell(rows, 9, 16, ANALYSIS_MERCHANTS_HEADER_LABEL)
+    for month_offset in range(ANALYSIS_CATEGORY_MONTH_COLUMN_COUNT):
+        _set_grid_cell(rows, 9, 3 + month_offset, f"{month_offset + 1}月")
+    _set_grid_cell(rows, 9, ANALYSIS_CATEGORY_TOTAL_COLUMN_INDEX, ANALYSIS_TOTAL_AMOUNT_HEADER_LABEL)
+    _set_grid_cell(rows, 9, ANALYSIS_CATEGORY_LINE_ITEMS_COLUMN_INDEX, ANALYSIS_LINE_ITEMS_HEADER_LABEL)
+    _set_grid_cell(rows, 9, ANALYSIS_CATEGORY_RECEIPTS_COLUMN_INDEX, ANALYSIS_RECEIPTS_HEADER_LABEL)
+    _set_grid_cell(rows, 9, ANALYSIS_CATEGORY_STATUS_COLUMN_INDEX, ANALYSIS_STATUS_HEADER_LABEL)
+    _set_grid_cell(rows, 9, ANALYSIS_MONTHLY_SECTION_COLUMN_INDEX, ANALYSIS_MONTH_HEADER_LABEL)
+    _set_grid_cell(rows, 9, ANALYSIS_MONTHLY_SECTION_COLUMN_INDEX + 1, ANALYSIS_RECEIPT_TOTAL_LABEL)
+    _set_grid_cell(rows, 9, ANALYSIS_MONTHLY_SECTION_COLUMN_INDEX + 2, ANALYSIS_RECEIPT_COUNT_HEADER_LABEL)
+    _set_grid_cell(rows, 9, ANALYSIS_MONTHLY_SECTION_COLUMN_INDEX + 3, ANALYSIS_AVG_RECEIPT_HEADER_LABEL)
+    _set_grid_cell(rows, 9, ANALYSIS_MONTHLY_SECTION_COLUMN_INDEX + 4, ANALYSIS_MERCHANTS_HEADER_LABEL)
+    _set_grid_cell(rows, 9, ANALYSIS_MERCHANT_SECTION_COLUMN_INDEX, ANALYSIS_MERCHANT_HEADER_LABEL)
+    _set_grid_cell(rows, 9, ANALYSIS_MERCHANT_SECTION_COLUMN_INDEX + 1, ANALYSIS_RECEIPT_TOTAL_LABEL)
+    _set_grid_cell(rows, 9, ANALYSIS_MERCHANT_SECTION_COLUMN_INDEX + 2, ANALYSIS_RECEIPT_COUNT_HEADER_LABEL)
 
     if not source_sheet_names:
         _set_grid_cell(rows, 5, 1, 0)
@@ -1858,18 +1922,20 @@ def build_analysis_sheet_rows(
         _set_grid_cell(rows, 7, 5, ANALYSIS_NONE_LABEL)
         _set_grid_cell(rows, 10, 1, ANALYSIS_NO_CATEGORY_DATA_LABEL)
         _set_grid_cell(rows, 10, 2, "")
-        _set_grid_cell(rows, 10, 3, 0)
-        _set_grid_cell(rows, 10, 4, 0)
-        _set_grid_cell(rows, 10, 5, 0)
-        _set_grid_cell(rows, 10, 6, ANALYSIS_UNUSED_LABEL)
-        _set_grid_cell(rows, 10, 8, ANALYSIS_NO_MERCHANT_DATA_LABEL)
-        _set_grid_cell(rows, 10, 9, 0)
-        _set_grid_cell(rows, 10, 10, 0)
-        _set_grid_cell(rows, 10, 12, ANALYSIS_NO_MONTH_DATA_LABEL)
-        _set_grid_cell(rows, 10, 13, 0)
-        _set_grid_cell(rows, 10, 14, 0)
-        _set_grid_cell(rows, 10, 15, 0)
-        _set_grid_cell(rows, 10, 16, 0)
+        for month_offset in range(ANALYSIS_CATEGORY_MONTH_COLUMN_COUNT):
+            _set_grid_cell(rows, 10, 3 + month_offset, 0)
+        _set_grid_cell(rows, 10, ANALYSIS_CATEGORY_TOTAL_COLUMN_INDEX, 0)
+        _set_grid_cell(rows, 10, ANALYSIS_CATEGORY_LINE_ITEMS_COLUMN_INDEX, 0)
+        _set_grid_cell(rows, 10, ANALYSIS_CATEGORY_RECEIPTS_COLUMN_INDEX, 0)
+        _set_grid_cell(rows, 10, ANALYSIS_CATEGORY_STATUS_COLUMN_INDEX, ANALYSIS_UNUSED_LABEL)
+        _set_grid_cell(rows, 10, ANALYSIS_MONTHLY_SECTION_COLUMN_INDEX, ANALYSIS_NO_MONTH_DATA_LABEL)
+        _set_grid_cell(rows, 10, ANALYSIS_MONTHLY_SECTION_COLUMN_INDEX + 1, 0)
+        _set_grid_cell(rows, 10, ANALYSIS_MONTHLY_SECTION_COLUMN_INDEX + 2, 0)
+        _set_grid_cell(rows, 10, ANALYSIS_MONTHLY_SECTION_COLUMN_INDEX + 3, 0)
+        _set_grid_cell(rows, 10, ANALYSIS_MONTHLY_SECTION_COLUMN_INDEX + 4, 0)
+        _set_grid_cell(rows, 10, ANALYSIS_MERCHANT_SECTION_COLUMN_INDEX, ANALYSIS_NO_MERCHANT_DATA_LABEL)
+        _set_grid_cell(rows, 10, ANALYSIS_MERCHANT_SECTION_COLUMN_INDEX + 1, 0)
+        _set_grid_cell(rows, 10, ANALYSIS_MERCHANT_SECTION_COLUMN_INDEX + 2, 0)
         return [_trim_trailing_blank_cells(row) for row in rows]
 
     source_formula = _build_analysis_source_formula(source_sheet_names)
@@ -1909,14 +1975,14 @@ def build_analysis_sheet_rows(
     _set_grid_cell(
         rows,
         10,
-        8,
-        _build_merchant_analysis_formula(),
+        ANALYSIS_MONTHLY_SECTION_COLUMN_INDEX,
+        _build_month_timeline_formula(),
     )
     _set_grid_cell(
         rows,
         10,
-        12,
-        _build_month_timeline_formula(),
+        ANALYSIS_MERCHANT_SECTION_COLUMN_INDEX,
+        _build_merchant_analysis_formula(),
     )
     _set_grid_cell(
         rows,
@@ -2092,17 +2158,51 @@ def _build_month_rollup_formula() -> str:
 def _build_category_analysis_formula() -> str:
     category_reference_range = f"${ANALYSIS_HELPER_CATEGORY_REFERENCE_START_COLUMN}$2:${ANALYSIS_HELPER_CATEGORY_REFERENCE_END_COLUMN}"
     category_rollup_range = f"${ANALYSIS_HELPER_CATEGORY_ROLLUP_START_COLUMN}$2:${ANALYSIS_HELPER_CATEGORY_ROLLUP_END_COLUMN}"
+    active_line_item_category_range = f"${ANALYSIS_HELPER_ACTIVE_LINE_ITEMS_START_COLUMN}$2:${ANALYSIS_HELPER_ACTIVE_LINE_ITEMS_START_COLUMN}"
+    active_line_item_amount_column = _column_letter(ANALYSIS_HELPER_ACTIVE_LINE_ITEMS_COLUMN_INDEX + 1)
+    active_line_item_amount_range = f"${active_line_item_amount_column}$2:${active_line_item_amount_column}"
+    item_months_range = f"${ANALYSIS_HELPER_ITEM_MONTHS_START_COLUMN}$2:${ANALYSIS_HELPER_ITEM_MONTHS_START_COLUMN}"
+    fallback_row = ",".join(
+        [
+            f'"{ANALYSIS_NO_CATEGORY_DATA_LABEL}"',
+            '""',
+            *["0" for _ in range(ANALYSIS_CATEGORY_MONTH_COLUMN_COUNT)],
+            "0",
+            "0",
+            "0",
+            f'"{ANALYSIS_UNUSED_LABEL}"',
+        ]
+    )
     return (
-        "=IFERROR(SORT(FILTER({"
-        f"INDEX({category_reference_range},,1),"
-        f"INDEX({category_reference_range},,2),"
-        f"IFNA(VLOOKUP(INDEX({category_reference_range},,1), {category_rollup_range}, 2, FALSE), 0),"
-        f"IFNA(VLOOKUP(INDEX({category_reference_range},,1), {category_rollup_range}, 3, FALSE), 0),"
-        f"IFNA(VLOOKUP(INDEX({category_reference_range},,1), {category_rollup_range}, 4, FALSE), 0),"
-        f'IF(IFNA(VLOOKUP(INDEX({category_reference_range},,1), {category_rollup_range}, 4, FALSE), 0)>0, "{ANALYSIS_USED_LABEL}", "{ANALYSIS_UNUSED_LABEL}")'
-        "}, LEN(INDEX("
-        f"{category_reference_range},,1))), 3, FALSE, 1, TRUE), "
-        f'{{"{ANALYSIS_NO_CATEGORY_DATA_LABEL}","",0,0,0,"{ANALYSIS_UNUSED_LABEL}"}})'
+        "=IFERROR(LET("
+        f"categories, FILTER(INDEX({category_reference_range},,1), LEN(INDEX({category_reference_range},,1))),"
+        f"descriptions, FILTER(INDEX({category_reference_range},,2), LEN(INDEX({category_reference_range},,1))),"
+        f"amounts, {active_line_item_amount_range},"
+        f"itemCategories, {active_line_item_category_range},"
+        f"itemMonths, {item_months_range},"
+        "monthlyBreakdown, MAKEARRAY("
+        "ROWS(categories),"
+        f"{ANALYSIS_CATEGORY_MONTH_COLUMN_COUNT},"
+        "LAMBDA(rowIndex, monthIndex, "
+        "IFERROR("
+        'SUMIFS(amounts, itemCategories, INDEX(categories, rowIndex), itemMonths, "*-"&TEXT(monthIndex, "00")),'
+        "0"
+        ")"
+        ")),"
+        "totals, MAP(categories, LAMBDA(category_name, IFNA(VLOOKUP(category_name, "
+        f"{category_rollup_range}, 2, FALSE), 0))),"
+        "lineItems, MAP(categories, LAMBDA(category_name, IFNA(VLOOKUP(category_name, "
+        f"{category_rollup_range}, 3, FALSE), 0))),"
+        "receipts, MAP(categories, LAMBDA(category_name, IFNA(VLOOKUP(category_name, "
+        f"{category_rollup_range}, 4, FALSE), 0))),"
+        "statuses, MAP(receipts, LAMBDA(receiptCount, "
+        f'IF(receiptCount>0, "{ANALYSIS_USED_LABEL}", "{ANALYSIS_UNUSED_LABEL}"))),'
+        "data, HSTACK(categories, descriptions, monthlyBreakdown, totals, lineItems, receipts, statuses),"
+        f"SORT(data, {ANALYSIS_CATEGORY_TOTAL_COLUMN_INDEX}, FALSE, 1, TRUE)"
+        "), "
+        "{"
+        f"{fallback_row}"
+        "})"
     )
 
 
@@ -2170,18 +2270,28 @@ def _build_item_months_formula() -> str:
 
 
 def _build_category_month_matrix_formula() -> str:
-    active_line_items_range = f"${ANALYSIS_HELPER_ACTIVE_LINE_ITEMS_START_COLUMN}$2:${ANALYSIS_HELPER_ACTIVE_LINE_ITEMS_END_COLUMN}"
+    active_line_item_category_range = f"${ANALYSIS_HELPER_ACTIVE_LINE_ITEMS_START_COLUMN}$2:${ANALYSIS_HELPER_ACTIVE_LINE_ITEMS_START_COLUMN}"
+    active_line_item_amount_column = _column_letter(ANALYSIS_HELPER_ACTIVE_LINE_ITEMS_COLUMN_INDEX + 1)
+    active_line_item_amount_range = f"${active_line_item_amount_column}$2:${active_line_item_amount_column}"
     item_months_range = f"${ANALYSIS_HELPER_ITEM_MONTHS_START_COLUMN}$2:${ANALYSIS_HELPER_ITEM_MONTHS_START_COLUMN}"
+    visible_category_range = "$A$10:$A"
+    visible_month_range = f"${_column_letter(ANALYSIS_MONTHLY_SECTION_COLUMN_INDEX)}$10:${_column_letter(ANALYSIS_MONTHLY_SECTION_COLUMN_INDEX)}"
     return (
-        "=IFERROR(QUERY(FILTER({"
-        f"{item_months_range},"
-        f"INDEX({active_line_items_range},,1),"
-        f"N(INDEX({active_line_items_range},,2))"
-        "}, LEN("
-        f"{item_months_range}),"
-        f"LEN(INDEX({active_line_items_range},,1))), "
-        "\"select Col1, sum(Col3) where Col1 is not null group by Col1 pivot Col2 "
-        "label sum(Col3) ''\", 0), "
+        "=IFERROR(LET("
+        f'categories, FILTER({visible_category_range}, LEN({visible_category_range}), {visible_category_range}<>"{ANALYSIS_NO_CATEGORY_DATA_LABEL}"), '
+        f'months, FILTER({visible_month_range}, LEN({visible_month_range}), {visible_month_range}<>"{ANALYSIS_NO_MONTH_DATA_LABEL}"), '
+        f"amounts, {active_line_item_amount_range}, "
+        f"itemCategories, {active_line_item_category_range}, "
+        f"itemMonths, {item_months_range}, "
+        f'headerRow, HSTACK("{ANALYSIS_MONTH_HEADER_LABEL}", TRANSPOSE(categories)), '
+        "body, MAKEARRAY(ROWS(months), ROWS(categories)+1, "
+        "LAMBDA(rowIndex, columnIndex, "
+        "IF(columnIndex=1, "
+        "INDEX(months, rowIndex), "
+        "IFERROR(SUMIFS(amounts, itemMonths, INDEX(months, rowIndex), itemCategories, INDEX(categories, columnIndex-1)), 0)"
+        "))), "
+        "VSTACK(headerRow, body)"
+        "), "
         f'{{"{ANALYSIS_MONTH_HEADER_LABEL}",0}})'
     )
 
@@ -2199,8 +2309,8 @@ def _build_analysis_dashboard_chart_requests(
             chart_type="BAR",
             domain_start_column=0,
             domain_end_column=1,
-            series_start_column=2,
-            series_end_column=3,
+            series_start_column=ANALYSIS_CATEGORY_TOTAL_COLUMN_INDEX - 1,
+            series_end_column=ANALYSIS_CATEGORY_TOTAL_COLUMN_INDEX,
             start_row_index=9,
             end_row_index=21,
             anchor_row_index=12,
@@ -2215,14 +2325,14 @@ def _build_analysis_dashboard_chart_requests(
             sheet_id=sheet_id,
             title=ANALYSIS_MERCHANT_CHART_TITLE,
             chart_type="BAR",
-            domain_start_column=7,
-            domain_end_column=8,
-            series_start_column=8,
-            series_end_column=9,
+            domain_start_column=ANALYSIS_MERCHANT_SECTION_COLUMN_INDEX - 1,
+            domain_end_column=ANALYSIS_MERCHANT_SECTION_COLUMN_INDEX,
+            series_start_column=ANALYSIS_MERCHANT_SECTION_COLUMN_INDEX,
+            series_end_column=ANALYSIS_MERCHANT_SECTION_COLUMN_INDEX + 1,
             start_row_index=9,
             end_row_index=21,
             anchor_row_index=12,
-            anchor_column_index=10,
+            anchor_column_index=20,
             width_pixels=520,
             height_pixels=280,
             bottom_axis_title=ANALYSIS_RECEIPT_TOTAL_LABEL,
@@ -2233,10 +2343,10 @@ def _build_analysis_dashboard_chart_requests(
             sheet_id=sheet_id,
             title=ANALYSIS_MONTHLY_CHART_TITLE,
             chart_type="COLUMN",
-            domain_start_column=11,
-            domain_end_column=12,
-            series_start_column=12,
-            series_end_column=13,
+            domain_start_column=ANALYSIS_MONTHLY_SECTION_COLUMN_INDEX - 1,
+            domain_end_column=ANALYSIS_MONTHLY_SECTION_COLUMN_INDEX,
+            series_start_column=ANALYSIS_MONTHLY_SECTION_COLUMN_INDEX,
+            series_end_column=ANALYSIS_MONTHLY_SECTION_COLUMN_INDEX + 1,
             start_row_index=9,
             end_row_index=200,
             anchor_row_index=32,

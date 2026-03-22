@@ -184,19 +184,17 @@ ANALYSIS_SHEET_PREFIX = "Analysis "
 ANALYSIS_ALL_YEARS_SHEET_NAME = "Analysis All Years"
 RECEIPT_LAST_COLUMN = _column_letter(len(RECEIPT_SHEET_HEADERS))
 ANALYSIS_VISIBLE_COLUMN_COUNT = 20  # T
-ANALYSIS_HELPER_SOURCE_COLUMN_INDEX = 24  # X
+ANALYSIS_HELPER_SOURCE_COLUMN_INDEX = 100  # CV
 ANALYSIS_HELPER_SOURCE_END_COLUMN_INDEX = ANALYSIS_HELPER_SOURCE_COLUMN_INDEX + len(RECEIPT_SHEET_HEADERS) - 1  # BI
-ANALYSIS_HELPER_LATEST_RECEIPTS_COLUMN_INDEX = 63  # BK
-ANALYSIS_HELPER_ACTIVE_LINE_ITEMS_COLUMN_INDEX = 70  # BR
-ANALYSIS_HELPER_RECEIPT_TOTALS_COLUMN_INDEX = 75  # BW
-ANALYSIS_HELPER_CATEGORY_REFERENCE_COLUMN_INDEX = 80  # CB
-ANALYSIS_HELPER_CATEGORY_ROLLUP_COLUMN_INDEX = 83  # CE
-ANALYSIS_HELPER_MONTH_REFERENCE_COLUMN_INDEX = 88  # CJ
-ANALYSIS_HELPER_MONTH_ROLLUP_COLUMN_INDEX = 90  # CL
-ANALYSIS_HELPER_RECEIPT_MONTH_LOOKUP_COLUMN_INDEX = 180  # FX
-ANALYSIS_HELPER_ITEM_MONTHS_COLUMN_INDEX = 182  # FZ
-ANALYSIS_HELPER_CATEGORY_MONTH_MATRIX_COLUMN_INDEX = 96  # CR
-ANALYSIS_HELPER_CATEGORY_MONTH_CHART_SOURCE_COLUMN_INDEX = 140  # EJ
+ANALYSIS_HELPER_LATEST_RECEIPTS_COLUMN_INDEX = ANALYSIS_HELPER_SOURCE_END_COLUMN_INDEX + 2
+ANALYSIS_HELPER_ACTIVE_LINE_ITEMS_COLUMN_INDEX = ANALYSIS_HELPER_LATEST_RECEIPTS_COLUMN_INDEX + 7
+ANALYSIS_HELPER_RECEIPT_TOTALS_COLUMN_INDEX = ANALYSIS_HELPER_ACTIVE_LINE_ITEMS_COLUMN_INDEX + 5
+ANALYSIS_HELPER_CATEGORY_REFERENCE_COLUMN_INDEX = ANALYSIS_HELPER_RECEIPT_TOTALS_COLUMN_INDEX + 5
+ANALYSIS_HELPER_CATEGORY_ROLLUP_COLUMN_INDEX = ANALYSIS_HELPER_CATEGORY_REFERENCE_COLUMN_INDEX + 3
+ANALYSIS_HELPER_MONTH_REFERENCE_COLUMN_INDEX = ANALYSIS_HELPER_CATEGORY_ROLLUP_COLUMN_INDEX + 5
+ANALYSIS_HELPER_MONTH_ROLLUP_COLUMN_INDEX = ANALYSIS_HELPER_MONTH_REFERENCE_COLUMN_INDEX + 2
+ANALYSIS_HELPER_RECEIPT_MONTH_LOOKUP_COLUMN_INDEX = 256  # IV
+ANALYSIS_HELPER_ITEM_MONTHS_COLUMN_INDEX = 258  # IX
 ANALYSIS_MAX_COLUMN_INDEX = 260  # IZ
 ANALYSIS_HELPER_SOURCE_START_COLUMN = _column_letter(ANALYSIS_HELPER_SOURCE_COLUMN_INDEX)
 ANALYSIS_HELPER_SOURCE_END_COLUMN = _column_letter(ANALYSIS_HELPER_SOURCE_END_COLUMN_INDEX)
@@ -216,8 +214,6 @@ ANALYSIS_HELPER_MONTH_ROLLUP_END_COLUMN = _column_letter(ANALYSIS_HELPER_MONTH_R
 ANALYSIS_HELPER_RECEIPT_MONTH_LOOKUP_START_COLUMN = _column_letter(ANALYSIS_HELPER_RECEIPT_MONTH_LOOKUP_COLUMN_INDEX)
 ANALYSIS_HELPER_RECEIPT_MONTH_LOOKUP_END_COLUMN = _column_letter(ANALYSIS_HELPER_RECEIPT_MONTH_LOOKUP_COLUMN_INDEX + 1)
 ANALYSIS_HELPER_ITEM_MONTHS_START_COLUMN = _column_letter(ANALYSIS_HELPER_ITEM_MONTHS_COLUMN_INDEX)
-ANALYSIS_HELPER_CATEGORY_MONTH_MATRIX_START_COLUMN = _column_letter(ANALYSIS_HELPER_CATEGORY_MONTH_MATRIX_COLUMN_INDEX)
-ANALYSIS_HELPER_CATEGORY_MONTH_CHART_SOURCE_START_COLUMN = _column_letter(ANALYSIS_HELPER_CATEGORY_MONTH_CHART_SOURCE_COLUMN_INDEX)
 ANALYSIS_THEME_INK = "#1D2A24"
 ANALYSIS_THEME_FOREST = "#234437"
 ANALYSIS_THEME_MOSS = "#456A58"
@@ -235,6 +231,8 @@ ANALYSIS_THEME_AMBER_MIST = "#F3E5C4"
 ANALYSIS_THEME_IVORY = "#FFFDF8"
 ANALYSIS_THEME_SLATE = "#6A756F"
 ANALYSIS_THEME_BORDER = "#C9B89B"
+ANALYSIS_MONTHLY_CATEGORY_TIMELINE_COLUMN_INDEX = 17  # Q
+ANALYSIS_MONTHLY_CATEGORY_TIMELINE_START_COLUMN = _column_letter(ANALYSIS_MONTHLY_CATEGORY_TIMELINE_COLUMN_INDEX)
 ANALYSIS_DASHBOARD_TITLE = "HARINA 分析ダッシュボード"
 ANALYSIS_DASHBOARD_SUBTITLE = "カテゴリ・店舗・月次のリズムを、一枚で眺めるレシートビュー"
 ANALYSIS_SCOPE_LABEL = "対象範囲"
@@ -250,7 +248,7 @@ ANALYSIS_DATE_RANGE_LABEL = "対象期間"
 ANALYSIS_CATEGORY_SECTION_LABEL = "カテゴリ分析"
 ANALYSIS_MERCHANT_SECTION_LABEL = "店舗分析"
 ANALYSIS_MONTHLY_SECTION_LABEL = "月次推移"
-ANALYSIS_TREND_SECTION_LABEL = "トレンド"
+ANALYSIS_TREND_SECTION_LABEL = "カテゴリ別月次"
 ANALYSIS_CATEGORY_HEADER_LABEL = "カテゴリ"
 ANALYSIS_DESCRIPTION_HEADER_LABEL = "説明"
 ANALYSIS_TOTAL_AMOUNT_HEADER_LABEL = "合計金額"
@@ -334,13 +332,6 @@ def _build_analysis_dashboard_layout_requests(*, sheet_id: int) -> list[dict[str
             end_row_index=7,
             start_column_index=4,
             end_column_index=ANALYSIS_VISIBLE_COLUMN_COUNT,
-        ),
-        _build_analysis_merge_request(
-            sheet_id=sheet_id,
-            start_row_index=9,
-            end_row_index=12,
-            start_column_index=17,
-            end_column_index=20,
         ),
         _build_analysis_repeat_cell_request(
             sheet_id=sheet_id,
@@ -1693,15 +1684,6 @@ class GoogleWorkspaceClient:
         category_timeline_column_count, category_timeline_row_count = self._resolve_category_timeline_shape_sync(
             sheet_name=sheet_name
         )
-        self._sync_category_timeline_chart_source_sync(
-            sheet_name=sheet_name,
-            column_count=category_timeline_column_count,
-            row_count=category_timeline_row_count,
-        )
-        self._wait_for_category_timeline_chart_source_sync(
-            sheet_name=sheet_name,
-            column_count=category_timeline_column_count,
-        )
         requests = _build_analysis_dashboard_chart_requests(
             sheet_id=sheet_id,
             category_timeline_series_count=max(category_timeline_column_count - 1, 1),
@@ -1720,15 +1702,15 @@ class GoogleWorkspaceClient:
 
     def _resolve_category_timeline_shape_sync(self, *, sheet_name: str) -> tuple[int, int]:
         fallback_column_count = max(len(self._list_receipt_categories_sync()) + 1, 2)
-        helper_end_column = _column_letter(ANALYSIS_HELPER_CATEGORY_MONTH_MATRIX_COLUMN_INDEX + fallback_column_count - 1)
-        helper_range = f"'{sheet_name}'!{ANALYSIS_HELPER_CATEGORY_MONTH_MATRIX_START_COLUMN}2:{helper_end_column}200"
+        timeline_end_column = _column_letter(ANALYSIS_MONTHLY_CATEGORY_TIMELINE_COLUMN_INDEX + fallback_column_count - 1)
+        timeline_range = f"'{sheet_name}'!{ANALYSIS_MONTHLY_CATEGORY_TIMELINE_START_COLUMN}9:{timeline_end_column}200"
         for _ in range(10):
             response = (
                 self._sheets.spreadsheets()
                 .values()
                 .get(
                     spreadsheetId=self._spreadsheet_id,
-                    range=helper_range,
+                    range=timeline_range,
                     valueRenderOption="UNFORMATTED_VALUE",
                 )
                 .execute()
@@ -1738,46 +1720,6 @@ class GoogleWorkspaceClient:
                 return len(values[0]), len(values)
             time.sleep(0.5)
         return fallback_column_count, 2
-
-    def _sync_category_timeline_chart_source_sync(self, *, sheet_name: str, column_count: int, row_count: int) -> None:
-        target_end_column = _column_letter(ANALYSIS_HELPER_CATEGORY_MONTH_CHART_SOURCE_COLUMN_INDEX + column_count - 1)
-        source_rows = [
-            [
-                f"={_column_letter(ANALYSIS_HELPER_CATEGORY_MONTH_MATRIX_COLUMN_INDEX + column_offset)}{row_number}"
-                for column_offset in range(column_count)
-            ]
-            for row_number in range(2, 2 + row_count)
-        ]
-        (
-            self._sheets.spreadsheets()
-            .values()
-            .update(
-                spreadsheetId=self._spreadsheet_id,
-                range=f"'{sheet_name}'!{ANALYSIS_HELPER_CATEGORY_MONTH_CHART_SOURCE_START_COLUMN}2:{target_end_column}{row_count + 1}",
-                valueInputOption="USER_ENTERED",
-                body={"values": source_rows},
-            )
-            .execute()
-        )
-
-    def _wait_for_category_timeline_chart_source_sync(self, *, sheet_name: str, column_count: int) -> None:
-        target_end_column = _column_letter(ANALYSIS_HELPER_CATEGORY_MONTH_CHART_SOURCE_COLUMN_INDEX + column_count - 1)
-        target_range = f"'{sheet_name}'!{ANALYSIS_HELPER_CATEGORY_MONTH_CHART_SOURCE_START_COLUMN}2:{target_end_column}3"
-        for _ in range(10):
-            response = (
-                self._sheets.spreadsheets()
-                .values()
-                .get(
-                    spreadsheetId=self._spreadsheet_id,
-                    range=target_range,
-                    valueRenderOption="UNFORMATTED_VALUE",
-                )
-                .execute()
-            )
-            values = response.get("values", [])
-            if len(values) > 1 and len(values[0]) > 1 and len(values[1]) > 1:
-                return
-            time.sleep(0.5)
 
     def _resolve_receipt_sheet_name(self, row: list[str]) -> str:
         for column_index in (RECEIPT_PURCHASE_DATE_INDEX, RECEIPT_PROCESSED_AT_INDEX):
@@ -1906,7 +1848,6 @@ def build_analysis_sheet_rows(
     _set_grid_cell(rows, 9, 14, ANALYSIS_RECEIPT_COUNT_HEADER_LABEL)
     _set_grid_cell(rows, 9, 15, ANALYSIS_AVG_RECEIPT_HEADER_LABEL)
     _set_grid_cell(rows, 9, 16, ANALYSIS_MERCHANTS_HEADER_LABEL)
-    _set_grid_cell(rows, 9, 18, ANALYSIS_MONTHLY_TOTAL_TREND_HEADER_LABEL)
 
     if not source_sheet_names:
         _set_grid_cell(rows, 5, 1, 0)
@@ -1942,7 +1883,6 @@ def build_analysis_sheet_rows(
     _set_grid_cell(rows, 2, ANALYSIS_HELPER_MONTH_ROLLUP_COLUMN_INDEX, _build_month_rollup_formula())
     _set_grid_cell(rows, 2, ANALYSIS_HELPER_RECEIPT_MONTH_LOOKUP_COLUMN_INDEX, _build_receipt_month_lookup_formula())
     _set_grid_cell(rows, 2, ANALYSIS_HELPER_ITEM_MONTHS_COLUMN_INDEX, _build_item_months_formula())
-    _set_grid_cell(rows, 2, ANALYSIS_HELPER_CATEGORY_MONTH_MATRIX_COLUMN_INDEX, _build_category_month_matrix_formula())
 
     _set_grid_cell(rows, 5, 1, f'=IFERROR(COUNTA(FILTER(INDEX(${ANALYSIS_HELPER_RECEIPT_TOTALS_START_COLUMN}$2:${ANALYSIS_HELPER_RECEIPT_TOTALS_END_COLUMN},,1), LEN(INDEX(${ANALYSIS_HELPER_RECEIPT_TOTALS_START_COLUMN}$2:${ANALYSIS_HELPER_RECEIPT_TOTALS_END_COLUMN},,1)))), 0)')
     _set_grid_cell(rows, 5, 5, f'=IFERROR(SUM(FILTER(INDEX(${ANALYSIS_HELPER_RECEIPT_TOTALS_START_COLUMN}$2:${ANALYSIS_HELPER_RECEIPT_TOTALS_END_COLUMN},,4), LEN(INDEX(${ANALYSIS_HELPER_RECEIPT_TOTALS_START_COLUMN}$2:${ANALYSIS_HELPER_RECEIPT_TOTALS_END_COLUMN},,1)))), 0)')
@@ -1980,9 +1920,9 @@ def build_analysis_sheet_rows(
     )
     _set_grid_cell(
         rows,
-        10,
-        18,
-        _build_month_trend_sparkline_formula(),
+        9,
+        ANALYSIS_MONTHLY_CATEGORY_TIMELINE_COLUMN_INDEX,
+        _build_category_month_matrix_formula(),
     )
 
     return [_trim_trailing_blank_cells(row) for row in rows]
@@ -2311,19 +2251,19 @@ def _build_analysis_dashboard_chart_requests(
             sheet_id=sheet_id,
             title=ANALYSIS_CATEGORY_TIMELINE_CHART_TITLE,
             chart_type="COLUMN",
-            domain_start_column=ANALYSIS_HELPER_CATEGORY_MONTH_CHART_SOURCE_COLUMN_INDEX - 1,
-            domain_end_column=ANALYSIS_HELPER_CATEGORY_MONTH_CHART_SOURCE_COLUMN_INDEX,
-            series_start_column=ANALYSIS_HELPER_CATEGORY_MONTH_CHART_SOURCE_COLUMN_INDEX,
-            series_end_column=ANALYSIS_HELPER_CATEGORY_MONTH_CHART_SOURCE_COLUMN_INDEX + 1,
+            domain_start_column=ANALYSIS_MONTHLY_CATEGORY_TIMELINE_COLUMN_INDEX - 1,
+            domain_end_column=ANALYSIS_MONTHLY_CATEGORY_TIMELINE_COLUMN_INDEX,
+            series_start_column=ANALYSIS_MONTHLY_CATEGORY_TIMELINE_COLUMN_INDEX,
+            series_end_column=ANALYSIS_MONTHLY_CATEGORY_TIMELINE_COLUMN_INDEX + 1,
             series_column_ranges=[
                 (
-                    ANALYSIS_HELPER_CATEGORY_MONTH_CHART_SOURCE_COLUMN_INDEX + offset,
-                    ANALYSIS_HELPER_CATEGORY_MONTH_CHART_SOURCE_COLUMN_INDEX + offset + 1,
+                    ANALYSIS_MONTHLY_CATEGORY_TIMELINE_COLUMN_INDEX + offset,
+                    ANALYSIS_MONTHLY_CATEGORY_TIMELINE_COLUMN_INDEX + offset + 1,
                 )
                 for offset in range(category_timeline_series_count)
             ],
-            start_row_index=1,
-            end_row_index=1 + category_timeline_row_count,
+            start_row_index=8,
+            end_row_index=8 + category_timeline_row_count,
             anchor_row_index=54,
             anchor_column_index=0,
             width_pixels=1040,

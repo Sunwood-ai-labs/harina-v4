@@ -1,3 +1,5 @@
+from typing import cast
+
 from app.formatters import RECEIPT_SHEET_HEADERS, ReceiptRecordContext, build_receipt_rows
 from app.google_workspace import (
     ANALYSIS_CATEGORY_SUMMARY_SECTION_COLUMN_INDEX,
@@ -33,6 +35,8 @@ from app.google_workspace import (
     _analysis_support_section_header_row,
     _analysis_support_section_title_row,
     _estimated_category_timeline_row_count,
+    _expected_category_chart_row_count,
+    _expected_category_timeline_column_count,
     _resolved_analysis_hidden_start_column_index,
     _resolved_analysis_visible_column_count,
     build_analysis_sheet_rows,
@@ -320,9 +324,11 @@ def test_append_receipt_rows_refreshes_formula_analysis_for_touched_year(monkeyp
     client, fake_sheets, _fake_drive = _build_workspace_client(monkeypatch)
     client._sync_analysis_sheets_sync = GoogleWorkspaceClient._sync_analysis_sheets_sync.__get__(client, GoogleWorkspaceClient)  # type: ignore[method-assign]
     analysis_write_calls: list[tuple[str, list[list[object]]]] = []
+    hint_calls: list[dict[str, object]] = []
 
-    def fake_write(*, sheet_name: str, rows: list[list[object]]) -> None:
+    def fake_write(*, sheet_name: str, rows: list[list[object]], **kwargs: object) -> None:
         analysis_write_calls.append((sheet_name, rows))
+        hint_calls.append(kwargs)
 
     monkeypatch.setattr(client, "_replace_sheet_values_sync", fake_write)
 
@@ -332,6 +338,7 @@ def test_append_receipt_rows_refreshes_formula_analysis_for_touched_year(monkeyp
     assert "2025" in fake_sheets.sheet_names
     assert [sheet_name for sheet_name, _rows in analysis_write_calls] == ["Analysis 2025", "Analysis All Years"]
     assert _cell(analysis_write_calls[0][1], 2, ANALYSIS_HELPER_SOURCE_COLUMN_INDEX) == '=QUERY(\'2025\'!A2:AL, "select * where Col11 is not null", 0)'
+    assert hint_calls[0]["category_timeline_row_count"] == _estimated_category_timeline_row_count(source_sheet_names=["2025"])
 
 
 def test_resolve_receipt_sheet_name_uses_configured_year_when_row_dates_are_missing(monkeypatch) -> None:
@@ -412,7 +419,9 @@ def _disabled_test_build_analysis_sheet_rows_uses_sheet_formulas_for_all_years_s
     assert "'Categories'!A2:A" in str(_cell(analysis_rows, 2, ANALYSIS_HELPER_CATEGORY_REFERENCE_COLUMN_INDEX))
     assert '{"2025-01";"2025-02"' in str(_cell(analysis_rows, 2, ANALYSIS_HELPER_MONTH_REFERENCE_COLUMN_INDEX))
     assert "HSTACK(" in str(_cell(analysis_rows, 2, ANALYSIS_HELPER_RECEIPT_MONTH_LOOKUP_COLUMN_INDEX))
-    assert "XLOOKUP(attachmentName" in str(_cell(analysis_rows, 2, ANALYSIS_HELPER_ITEM_MONTHS_COLUMN_INDEX))
+    assert 'TEXT(IF(ISNUMBER(purchaseDate), purchaseDate, DATEVALUE(LEFT(TO_TEXT(purchaseDate), 10))), "yyyy-mm")' in str(
+        _cell(analysis_rows, 2, ANALYSIS_HELPER_ITEM_MONTHS_COLUMN_INDEX)
+    )
     assert "QUERY(FILTER({" in str(_cell(analysis_rows, 2, 96))
     assert 'pivot Col2' in str(_cell(analysis_rows, 2, 96))
     assert str(_cell(analysis_rows, 5, 1)).startswith("=IFERROR(COUNTA(FILTER(")
@@ -443,7 +452,9 @@ def _disabled_test_build_analysis_sheet_rows_uses_single_year_source_formula() -
     assert _cell(analysis_rows, 2, ANALYSIS_HELPER_SOURCE_COLUMN_INDEX) == '=QUERY(\'2025\'!A2:AL, "select * where Col11 is not null", 0)'
     assert '"2025-01"' in str(_cell(analysis_rows, 2, ANALYSIS_HELPER_MONTH_REFERENCE_COLUMN_INDEX))
     assert "HSTACK(" in str(_cell(analysis_rows, 2, ANALYSIS_HELPER_RECEIPT_MONTH_LOOKUP_COLUMN_INDEX))
-    assert "XLOOKUP(attachmentName" in str(_cell(analysis_rows, 2, ANALYSIS_HELPER_ITEM_MONTHS_COLUMN_INDEX))
+    assert 'TEXT(IF(ISNUMBER(purchaseDate), purchaseDate, DATEVALUE(LEFT(TO_TEXT(purchaseDate), 10))), "yyyy-mm")' in str(
+        _cell(analysis_rows, 2, ANALYSIS_HELPER_ITEM_MONTHS_COLUMN_INDEX)
+    )
     assert "QUERY(FILTER({" in str(_cell(analysis_rows, 2, 96))
 
 
@@ -491,7 +502,9 @@ def test_build_analysis_sheet_rows_includes_formula_paths_for_rescan_and_total_f
         _cell(analysis_rows, 2, ANALYSIS_HELPER_CATEGORY_CHART_SOURCE_COLUMN_INDEX)
     )
     assert "HSTACK(" in str(_cell(analysis_rows, 2, ANALYSIS_HELPER_RECEIPT_MONTH_LOOKUP_COLUMN_INDEX))
-    assert "XLOOKUP(attachmentName" in str(_cell(analysis_rows, 2, ANALYSIS_HELPER_ITEM_MONTHS_COLUMN_INDEX))
+    assert 'TEXT(IF(ISNUMBER(purchaseDate), purchaseDate, DATEVALUE(LEFT(TO_TEXT(purchaseDate), 10))), "yyyy-mm")' in str(
+        _cell(analysis_rows, 2, ANALYSIS_HELPER_ITEM_MONTHS_COLUMN_INDEX)
+    )
     assert '$' in str(_cell(analysis_rows, ANALYSIS_MONTHLY_CATEGORY_TIMELINE_START_ROW_NUMBER, ANALYSIS_MONTHLY_CATEGORY_TIMELINE_COLUMN_INDEX))
     assert "MAKEARRAY(" in str(_cell(analysis_rows, ANALYSIS_MONTHLY_CATEGORY_TIMELINE_START_ROW_NUMBER, ANALYSIS_MONTHLY_CATEGORY_TIMELINE_COLUMN_INDEX))
     assert f'INDEX(${ANALYSIS_HELPER_CATEGORY_REFERENCE_START_COLUMN}$2:' in str(_cell(analysis_rows, ANALYSIS_MONTHLY_CATEGORY_TIMELINE_START_ROW_NUMBER, ANALYSIS_MONTHLY_CATEGORY_TIMELINE_COLUMN_INDEX))
@@ -667,12 +680,15 @@ def test_apply_analysis_dashboard_layout_sync_styles_subtitle_hides_helper_colum
 def test_apply_analysis_dashboard_charts_creates_category_merchant_monthly_and_stacked_charts(monkeypatch) -> None:
     client, fake_sheets, _fake_drive = _build_workspace_client(monkeypatch)
     monkeypatch.setattr(client, "_resolve_category_timeline_shape_sync", lambda **kwargs: (4, 13))
-    monkeypatch.setattr(client, "_resolve_category_dashboard_row_count_sync", lambda **kwargs: 5)
     compact_chart_anchor_row = _analysis_compact_chart_anchor_row(category_timeline_row_count=13) - 1
     monthly_chart_anchor_row = _analysis_monthly_chart_anchor_row(category_timeline_row_count=13) - 1
     stacked_chart_anchor_row = _analysis_stacked_chart_anchor_row(category_timeline_row_count=13) - 1
 
-    client._apply_analysis_dashboard_charts_sync(sheet_id=321, sheet_name="Analysis 2025")
+    client._apply_analysis_dashboard_charts_sync(
+        sheet_id=321,
+        sheet_name="Analysis 2025",
+        category_chart_row_count=5,
+    )
 
     chart_requests = fake_sheets.batch_update_calls[-1]["requests"]
     assert len(chart_requests) == 4
@@ -743,11 +759,14 @@ def test_sync_analysis_sheets_updates_year_and_all_years_tabs(monkeypatch) -> No
     client, _fake_sheets, _fake_drive = _build_workspace_client(monkeypatch)
     client._sync_analysis_sheets_sync = GoogleWorkspaceClient._sync_analysis_sheets_sync.__get__(client, GoogleWorkspaceClient)  # type: ignore[method-assign]
     monkeypatch.setattr(client, "_list_receipt_sheet_names_sync", lambda: ["2025", "2026", "Receipts"])
+    monkeypatch.setattr(client, "_list_receipt_categories_sync", lambda: ["Food", "Daily", "Pets"])
 
     write_calls: list[tuple[str, list[list[object]]]] = []
+    hint_calls: list[dict[str, object]] = []
 
-    def fake_write(*, sheet_name: str, rows: list[list[object]]) -> None:
+    def fake_write(*, sheet_name: str, rows: list[list[object]], **kwargs: object) -> None:
         write_calls.append((sheet_name, rows))
+        hint_calls.append(kwargs)
 
     monkeypatch.setattr(client, "_replace_sheet_values_sync", fake_write)
 
@@ -762,17 +781,27 @@ def test_sync_analysis_sheets_updates_year_and_all_years_tabs(monkeypatch) -> No
     assert write_calls[1][0] == "Analysis All Years"
     assert write_calls[1][1][0] == ["HARINA 分析ダッシュボード"]
     assert _cell(write_calls[1][1], 2, ANALYSIS_HELPER_SOURCE_COLUMN_INDEX) == '=QUERY({\'2025\'!A2:AL;\'2026\'!A2:AL}, "select * where Col11 is not null", 0)'
+    assert hint_calls[0]["category_timeline_column_count"] == _expected_category_timeline_column_count(3)
+    assert hint_calls[0]["category_timeline_row_count"] == _estimated_category_timeline_row_count(source_sheet_names=["2025"])
+    assert hint_calls[0]["category_chart_row_count"] == _expected_category_chart_row_count(3)
+    assert hint_calls[1]["category_timeline_column_count"] == _expected_category_timeline_column_count(3)
+    assert hint_calls[1]["category_timeline_row_count"] == _estimated_category_timeline_row_count(
+        source_sheet_names=["2025", "2026"]
+    )
+    assert hint_calls[1]["category_chart_row_count"] == _expected_category_chart_row_count(3)
 
 
 def test_sync_analysis_sheets_reports_missing_years_without_creating_empty_analysis(monkeypatch) -> None:
     client, _fake_sheets, _fake_drive = _build_workspace_client(monkeypatch)
     client._sync_analysis_sheets_sync = GoogleWorkspaceClient._sync_analysis_sheets_sync.__get__(client, GoogleWorkspaceClient)  # type: ignore[method-assign]
     monkeypatch.setattr(client, "_list_receipt_sheet_names_sync", lambda: ["2025", "Receipts"])
+    monkeypatch.setattr(client, "_list_receipt_categories_sync", lambda: ["Food", "Daily"])
 
     write_calls: list[str] = []
 
-    def fake_write(*, sheet_name: str, rows: list[list[object]]) -> None:
+    def fake_write(*, sheet_name: str, rows: list[list[object]], **kwargs: object) -> None:
         del rows
+        del kwargs
         write_calls.append(sheet_name)
 
     monkeypatch.setattr(client, "_replace_sheet_values_sync", fake_write)
@@ -789,11 +818,14 @@ def test_sync_analysis_sheets_creates_empty_all_years_when_no_year_tabs_exist(mo
     client, _fake_sheets, _fake_drive = _build_workspace_client(monkeypatch)
     client._sync_analysis_sheets_sync = GoogleWorkspaceClient._sync_analysis_sheets_sync.__get__(client, GoogleWorkspaceClient)  # type: ignore[method-assign]
     monkeypatch.setattr(client, "_list_receipt_sheet_names_sync", lambda: ["Receipts"])
+    monkeypatch.setattr(client, "_list_receipt_categories_sync", lambda: ["Food", "Daily"])
 
     write_calls: list[tuple[str, list[list[object]]]] = []
+    hint_calls: list[dict[str, object]] = []
 
-    def fake_write(*, sheet_name: str, rows: list[list[object]]) -> None:
+    def fake_write(*, sheet_name: str, rows: list[list[object]], **kwargs: object) -> None:
         write_calls.append((sheet_name, rows))
+        hint_calls.append(kwargs)
 
     monkeypatch.setattr(client, "_replace_sheet_values_sync", fake_write)
 
@@ -804,17 +836,23 @@ def test_sync_analysis_sheets_creates_empty_all_years_when_no_year_tabs_exist(mo
     assert summary["updated_analysis_sheets"] == ["Analysis All Years"]
     assert write_calls[0][0] == "Analysis All Years"
     assert write_calls[0][1][1][:6] == ["対象範囲", "全年度", "", "", "対象シート", "(なし)"]
+    assert hint_calls[0]["category_timeline_column_count"] == _expected_category_timeline_column_count(2)
+    assert hint_calls[0]["category_timeline_row_count"] == _estimated_category_timeline_row_count(source_sheet_names=[])
+    assert hint_calls[0]["category_chart_row_count"] == _expected_category_chart_row_count(2)
 
 
 def test_sync_analysis_sheets_all_years_excludes_legacy_receipts_when_year_tabs_exist(monkeypatch) -> None:
     client, _fake_sheets, _fake_drive = _build_workspace_client(monkeypatch)
     client._sync_analysis_sheets_sync = GoogleWorkspaceClient._sync_analysis_sheets_sync.__get__(client, GoogleWorkspaceClient)  # type: ignore[method-assign]
     monkeypatch.setattr(client, "_list_receipt_sheet_names_sync", lambda: ["2025", "Receipts"])
+    monkeypatch.setattr(client, "_list_receipt_categories_sync", lambda: ["Food", "Daily"])
 
     write_calls: list[tuple[str, list[list[object]]]] = []
+    hint_calls: list[dict[str, object]] = []
 
-    def fake_write(*, sheet_name: str, rows: list[list[object]]) -> None:
+    def fake_write(*, sheet_name: str, rows: list[list[object]], **kwargs: object) -> None:
         write_calls.append((sheet_name, rows))
+        hint_calls.append(kwargs)
 
     monkeypatch.setattr(client, "_replace_sheet_values_sync", fake_write)
 
@@ -824,6 +862,9 @@ def test_sync_analysis_sheets_all_years_excludes_legacy_receipts_when_year_tabs_
     assert write_calls[1][0] == "Analysis All Years"
     assert write_calls[1][1][1][:6] == ["対象範囲", "全年度", "", "", "対象シート", "2025"]
     assert _cell(write_calls[1][1], 2, ANALYSIS_HELPER_SOURCE_COLUMN_INDEX) == '=QUERY(\'2025\'!A2:AL, "select * where Col11 is not null", 0)'
+    assert hint_calls[1]["category_timeline_column_count"] == _expected_category_timeline_column_count(2)
+    assert hint_calls[1]["category_timeline_row_count"] == _estimated_category_timeline_row_count(source_sheet_names=["2025"])
+    assert hint_calls[1]["category_chart_row_count"] == _expected_category_chart_row_count(2)
 
 
 def test_list_receipt_sheet_names_excludes_analysis_tabs(monkeypatch) -> None:

@@ -218,7 +218,7 @@ ANALYSIS_HELPER_SOURCE_END_COLUMN = _column_letter(ANALYSIS_HELPER_SOURCE_END_CO
 ANALYSIS_HELPER_LATEST_RECEIPTS_START_COLUMN = _column_letter(ANALYSIS_HELPER_LATEST_RECEIPTS_COLUMN_INDEX)
 ANALYSIS_HELPER_LATEST_RECEIPTS_END_COLUMN = _column_letter(ANALYSIS_HELPER_LATEST_RECEIPTS_COLUMN_INDEX + 5)
 ANALYSIS_HELPER_ACTIVE_LINE_ITEMS_START_COLUMN = _column_letter(ANALYSIS_HELPER_ACTIVE_LINE_ITEMS_COLUMN_INDEX)
-ANALYSIS_HELPER_ACTIVE_LINE_ITEMS_END_COLUMN = _column_letter(ANALYSIS_HELPER_ACTIVE_LINE_ITEMS_COLUMN_INDEX + 3)
+ANALYSIS_HELPER_ACTIVE_LINE_ITEMS_END_COLUMN = _column_letter(ANALYSIS_HELPER_ACTIVE_LINE_ITEMS_COLUMN_INDEX + 4)
 ANALYSIS_HELPER_RECEIPT_TOTALS_START_COLUMN = _column_letter(ANALYSIS_HELPER_RECEIPT_TOTALS_COLUMN_INDEX)
 ANALYSIS_HELPER_RECEIPT_TOTALS_END_COLUMN = _column_letter(ANALYSIS_HELPER_RECEIPT_TOTALS_COLUMN_INDEX + 3)
 ANALYSIS_HELPER_CATEGORY_REFERENCE_START_COLUMN = _column_letter(ANALYSIS_HELPER_CATEGORY_REFERENCE_COLUMN_INDEX)
@@ -1836,6 +1836,7 @@ class GoogleWorkspaceClient:
         include_all_years: bool = True,
     ) -> dict[str, object]:
         available_receipt_sheet_names = self._list_receipt_sheet_names_sync()
+        active_category_count = len(self._list_receipt_categories_sync())
         available_year_sheet_names = sorted(
             sheet_name for sheet_name in available_receipt_sheet_names if _is_year_sheet_name(sheet_name)
         )
@@ -1860,7 +1861,13 @@ class GoogleWorkspaceClient:
         for year_sheet_name in year_sheet_names:
             analysis_rows = self._build_analysis_sheet_rows_sync([year_sheet_name], scope_label=year_sheet_name)
             analysis_sheet_name = f"{ANALYSIS_SHEET_PREFIX}{year_sheet_name}"
-            self._replace_sheet_values_sync(sheet_name=analysis_sheet_name, rows=analysis_rows)
+            self._replace_sheet_values_sync(
+                sheet_name=analysis_sheet_name,
+                rows=analysis_rows,
+                category_timeline_column_count=_expected_category_timeline_column_count(active_category_count),
+                category_timeline_row_count=_estimated_category_timeline_row_count(source_sheet_names=[year_sheet_name]),
+                category_chart_row_count=_expected_category_chart_row_count(active_category_count),
+            )
             updated_analysis_sheets.append(analysis_sheet_name)
 
         if include_all_years:
@@ -1868,7 +1875,15 @@ class GoogleWorkspaceClient:
                 available_year_sheet_names,
                 scope_label="All Years",
             )
-            self._replace_sheet_values_sync(sheet_name=ANALYSIS_ALL_YEARS_SHEET_NAME, rows=analysis_rows)
+            self._replace_sheet_values_sync(
+                sheet_name=ANALYSIS_ALL_YEARS_SHEET_NAME,
+                rows=analysis_rows,
+                category_timeline_column_count=_expected_category_timeline_column_count(active_category_count),
+                category_timeline_row_count=_estimated_category_timeline_row_count(
+                    source_sheet_names=available_year_sheet_names
+                ),
+                category_chart_row_count=_expected_category_chart_row_count(active_category_count),
+            )
             updated_analysis_sheets.append(ANALYSIS_ALL_YEARS_SHEET_NAME)
 
         return {
@@ -1898,7 +1913,15 @@ class GoogleWorkspaceClient:
         )
         return [list(row) for row in response.get("values", [])]
 
-    def _replace_sheet_values_sync(self, *, sheet_name: str, rows: list[list[object]]) -> None:
+    def _replace_sheet_values_sync(
+        self,
+        *,
+        sheet_name: str,
+        rows: list[list[object]],
+        category_timeline_column_count: int | None = None,
+        category_timeline_row_count: int | None = None,
+        category_chart_row_count: int | None = None,
+    ) -> None:
         sheet_id = self._recreate_analysis_sheet_sync(
             sheet_name=sheet_name,
             row_count=len(rows),
@@ -1915,9 +1938,10 @@ class GoogleWorkspaceClient:
             )
             .execute()
         )
-        category_timeline_column_count, category_timeline_row_count = self._resolve_category_timeline_shape_sync(
-            sheet_name=sheet_name
-        )
+        if category_timeline_column_count is None or category_timeline_row_count is None:
+            category_timeline_column_count, category_timeline_row_count = self._resolve_category_timeline_shape_sync(
+                sheet_name=sheet_name
+            )
         self._apply_analysis_dashboard_layout_sync(
             sheet_id=sheet_id,
             category_timeline_column_count=category_timeline_column_count,
@@ -1928,6 +1952,7 @@ class GoogleWorkspaceClient:
             sheet_name=sheet_name,
             category_timeline_column_count=category_timeline_column_count,
             category_timeline_row_count=category_timeline_row_count,
+            category_chart_row_count=category_chart_row_count,
         )
 
     def _apply_analysis_dashboard_charts_sync(
@@ -1937,15 +1962,17 @@ class GoogleWorkspaceClient:
         sheet_name: str,
         category_timeline_column_count: int | None = None,
         category_timeline_row_count: int | None = None,
+        category_chart_row_count: int | None = None,
     ) -> None:
         if category_timeline_column_count is None or category_timeline_row_count is None:
             category_timeline_column_count, category_timeline_row_count = self._resolve_category_timeline_shape_sync(
                 sheet_name=sheet_name
             )
-        category_chart_row_count = self._resolve_category_dashboard_row_count_sync(
-            sheet_name=sheet_name,
-            category_timeline_row_count=max(category_timeline_row_count, 2),
-        )
+        if category_chart_row_count is None:
+            category_chart_row_count = self._resolve_category_dashboard_row_count_sync(
+                sheet_name=sheet_name,
+                category_timeline_row_count=max(category_timeline_row_count, 2),
+            )
         requests = _build_analysis_dashboard_chart_requests(
             sheet_id=sheet_id,
             category_chart_row_count=category_chart_row_count,
@@ -2301,12 +2328,13 @@ def _build_active_line_items_formula() -> str:
         f'IF(LEN(INDEX({source_range},,33)), INDEX({source_range},,33), "{ANALYSIS_UNCATEGORIZED_LABEL}"),'
         f'N(INDEX({source_range},,36)),'
         f'INDEX({source_range},,11)&"|"&INDEX({source_range},,1),'
-        f'INDEX({source_range},,11)'
+        f'INDEX({source_range},,11),'
+        f'INDEX({source_range},,17)'
         '},'
         f'INDEX({source_range},,30)="line_item",'
         f'ISNUMBER(MATCH(INDEX({source_range},,11)&"|"&INDEX({source_range},,1), INDEX({latest_receipts_range},,6), 0))'
         '),'
-        '{"",0,"",""}'
+        '{"",0,"","",""}'
         ')'
     )
 
@@ -2378,6 +2406,14 @@ def _build_month_reference_formula(source_sheet_names: list[str]) -> str:
     if not month_keys:
         return '={""}'
     return "={" + ";".join(f'"{month_key}"' for month_key in month_keys) + "}"
+
+
+def _expected_category_timeline_column_count(active_category_count: int) -> int:
+    return max(active_category_count + 1, 2)
+
+
+def _expected_category_chart_row_count(active_category_count: int) -> int:
+    return max(min(active_category_count, ANALYSIS_CATEGORY_CHART_ROW_COUNT), 1)
 
 
 def _build_month_rollup_formula() -> str:
@@ -2524,14 +2560,11 @@ def _build_receipt_month_lookup_formula() -> str:
 
 def _build_item_months_formula() -> str:
     active_line_items_range = f"${ANALYSIS_HELPER_ACTIVE_LINE_ITEMS_START_COLUMN}$2:${ANALYSIS_HELPER_ACTIVE_LINE_ITEMS_END_COLUMN}"
-    receipt_month_lookup_range = (
-        f"${ANALYSIS_HELPER_RECEIPT_MONTH_LOOKUP_START_COLUMN}$2:${ANALYSIS_HELPER_RECEIPT_MONTH_LOOKUP_END_COLUMN}"
-    )
     return (
         "=IFERROR(MAP("
-        f"INDEX({active_line_items_range},,4), "
-        "LAMBDA(attachmentName, "
-        f'IFNA(XLOOKUP(attachmentName, INDEX({receipt_month_lookup_range},,1), INDEX({receipt_month_lookup_range},,2)), "")))'
+        f"INDEX({active_line_items_range},,5), "
+        "LAMBDA(purchaseDate, "
+        'IF(LEN(purchaseDate), TEXT(IF(ISNUMBER(purchaseDate), purchaseDate, DATEVALUE(LEFT(TO_TEXT(purchaseDate), 10))), "yyyy-mm"), "")))'
         ', {""})'
     )
 

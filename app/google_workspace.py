@@ -190,8 +190,10 @@ ANALYSIS_CATEGORY_RECEIPTS_COLUMN_INDEX = 17  # Q
 ANALYSIS_CATEGORY_STATUS_COLUMN_INDEX = 18  # R
 ANALYSIS_MONTHLY_SECTION_COLUMN_INDEX = 20  # T
 ANALYSIS_MERCHANT_SECTION_COLUMN_INDEX = 26  # Z
-ANALYSIS_MONTHLY_CATEGORY_TIMELINE_COLUMN_INDEX = 30  # AD hidden helper
-ANALYSIS_VISIBLE_COLUMN_COUNT = 29  # AC
+ANALYSIS_MONTHLY_CATEGORY_TIMELINE_COLUMN_INDEX = 1  # A
+ANALYSIS_MONTHLY_CATEGORY_TIMELINE_TITLE_ROW_NUMBER = 54
+ANALYSIS_MONTHLY_CATEGORY_TIMELINE_START_ROW_NUMBER = 55
+ANALYSIS_VISIBLE_COLUMN_COUNT = 29  # AC base visible width before the timeline matrix
 ANALYSIS_HELPER_SOURCE_COLUMN_INDEX = 100  # CV
 ANALYSIS_HELPER_SOURCE_END_COLUMN_INDEX = ANALYSIS_HELPER_SOURCE_COLUMN_INDEX + len(RECEIPT_SHEET_HEADERS) - 1  # BI
 ANALYSIS_HELPER_LATEST_RECEIPTS_COLUMN_INDEX = ANALYSIS_HELPER_SOURCE_END_COLUMN_INDEX + 2
@@ -204,7 +206,7 @@ ANALYSIS_HELPER_MONTH_ROLLUP_COLUMN_INDEX = ANALYSIS_HELPER_MONTH_REFERENCE_COLU
 ANALYSIS_HELPER_RECEIPT_MONTH_LOOKUP_COLUMN_INDEX = 256  # IV
 ANALYSIS_HELPER_ITEM_MONTHS_COLUMN_INDEX = 258  # IX
 ANALYSIS_MAX_COLUMN_INDEX = 260  # IZ
-ANALYSIS_HIDDEN_START_COLUMN_INDEX = ANALYSIS_MONTHLY_CATEGORY_TIMELINE_COLUMN_INDEX - 1  # hide from AD onward
+ANALYSIS_HIDDEN_START_COLUMN_INDEX = ANALYSIS_HELPER_SOURCE_COLUMN_INDEX - 1  # hide helper columns from CV onward
 ANALYSIS_HELPER_SOURCE_START_COLUMN = _column_letter(ANALYSIS_HELPER_SOURCE_COLUMN_INDEX)
 ANALYSIS_HELPER_SOURCE_END_COLUMN = _column_letter(ANALYSIS_HELPER_SOURCE_END_COLUMN_INDEX)
 ANALYSIS_HELPER_LATEST_RECEIPTS_START_COLUMN = _column_letter(ANALYSIS_HELPER_LATEST_RECEIPTS_COLUMN_INDEX)
@@ -290,14 +292,38 @@ ANALYSIS_CHART_SERIES_PALETTE = [
 ]
 
 
-def _build_analysis_dashboard_layout_requests(*, sheet_id: int) -> list[dict[str, object]]:
+def _resolved_analysis_visible_column_count(*, category_timeline_column_count: int) -> int:
+    return max(
+        ANALYSIS_VISIBLE_COLUMN_COUNT,
+        max(category_timeline_column_count, 2),
+    )
+
+
+def _resolved_analysis_hidden_start_column_index(*, category_timeline_column_count: int) -> int:
+    del category_timeline_column_count
+    return ANALYSIS_HIDDEN_START_COLUMN_INDEX
+
+
+def _build_analysis_dashboard_layout_requests(
+    *,
+    sheet_id: int,
+    category_timeline_column_count: int,
+    category_timeline_row_count: int,
+) -> list[dict[str, object]]:
+    visible_column_count = _resolved_analysis_visible_column_count(
+        category_timeline_column_count=category_timeline_column_count
+    )
+    hidden_start_column_index = _resolved_analysis_hidden_start_column_index(
+        category_timeline_column_count=category_timeline_column_count
+    )
+    timeline_end_column_index = hidden_start_column_index
     requests: list[dict[str, object]] = [
         _build_analysis_merge_request(
             sheet_id=sheet_id,
             start_row_index=0,
             end_row_index=1,
             start_column_index=0,
-            end_column_index=ANALYSIS_VISIBLE_COLUMN_COUNT,
+            end_column_index=visible_column_count,
         ),
         _build_analysis_merge_request(
             sheet_id=sheet_id,
@@ -325,7 +351,7 @@ def _build_analysis_dashboard_layout_requests(*, sheet_id: int) -> list[dict[str
             start_row_index=2,
             end_row_index=3,
             start_column_index=0,
-            end_column_index=ANALYSIS_VISIBLE_COLUMN_COUNT,
+            end_column_index=visible_column_count,
         ),
         _build_analysis_merge_request(
             sheet_id=sheet_id,
@@ -339,14 +365,14 @@ def _build_analysis_dashboard_layout_requests(*, sheet_id: int) -> list[dict[str
             start_row_index=6,
             end_row_index=7,
             start_column_index=4,
-            end_column_index=ANALYSIS_VISIBLE_COLUMN_COUNT,
+            end_column_index=visible_column_count,
         ),
         _build_analysis_repeat_cell_request(
             sheet_id=sheet_id,
             start_row_index=0,
             end_row_index=200,
             start_column_index=0,
-            end_column_index=ANALYSIS_VISIBLE_COLUMN_COUNT,
+            end_column_index=visible_column_count,
             user_entered_format={
                 "backgroundColorStyle": _hex_color_style(ANALYSIS_THEME_PARCHMENT),
                 "textFormat": {"foregroundColorStyle": _hex_color_style(ANALYSIS_THEME_INK)},
@@ -360,7 +386,7 @@ def _build_analysis_dashboard_layout_requests(*, sheet_id: int) -> list[dict[str
             start_row_index=0,
             end_row_index=1,
             start_column_index=0,
-            end_column_index=ANALYSIS_VISIBLE_COLUMN_COUNT,
+            end_column_index=visible_column_count,
             user_entered_format={
                 "backgroundColorStyle": _hex_color_style(ANALYSIS_THEME_FOREST),
                 "horizontalAlignment": "CENTER",
@@ -379,7 +405,7 @@ def _build_analysis_dashboard_layout_requests(*, sheet_id: int) -> list[dict[str
             start_row_index=2,
             end_row_index=3,
             start_column_index=0,
-            end_column_index=ANALYSIS_VISIBLE_COLUMN_COUNT,
+            end_column_index=visible_column_count,
             user_entered_format={
                 "backgroundColorStyle": _hex_color_style(ANALYSIS_THEME_PARCHMENT),
                 "horizontalAlignment": "CENTER",
@@ -397,7 +423,7 @@ def _build_analysis_dashboard_layout_requests(*, sheet_id: int) -> list[dict[str
             start_row_index=3,
             end_row_index=4,
             start_column_index=0,
-            end_column_index=ANALYSIS_VISIBLE_COLUMN_COUNT,
+            end_column_index=visible_column_count,
             user_entered_format={
                 "backgroundColorStyle": _hex_color_style(ANALYSIS_THEME_PARCHMENT),
                 "horizontalAlignment": "CENTER",
@@ -536,7 +562,7 @@ def _build_analysis_dashboard_layout_requests(*, sheet_id: int) -> list[dict[str
 
     for start_column, end_column, background_color, text_color, start_row_index, end_row_index, alignment in (
         (0, 4, ANALYSIS_THEME_FOREST, ANALYSIS_THEME_IVORY, 6, 7, "CENTER"),
-        (4, ANALYSIS_VISIBLE_COLUMN_COUNT, ANALYSIS_THEME_SAND, ANALYSIS_THEME_INK, 6, 7, "LEFT"),
+        (4, visible_column_count, ANALYSIS_THEME_SAND, ANALYSIS_THEME_INK, 6, 7, "LEFT"),
         (0, ANALYSIS_CATEGORY_STATUS_COLUMN_INDEX, ANALYSIS_THEME_FOREST, ANALYSIS_THEME_IVORY, 7, 8, "CENTER"),
         (
             ANALYSIS_MONTHLY_SECTION_COLUMN_INDEX - 1,
@@ -747,7 +773,7 @@ def _build_analysis_dashboard_layout_requests(*, sheet_id: int) -> list[dict[str
                 sheet_id=sheet_id,
                 dimension="COLUMNS",
                 start_index=0,
-                end_index=ANALYSIS_VISIBLE_COLUMN_COUNT,
+                end_index=visible_column_count,
                 pixel_size=104,
             ),
             _build_analysis_dimension_request(sheet_id=sheet_id, dimension="COLUMNS", start_index=1, end_index=2, pixel_size=220),
@@ -800,7 +826,7 @@ def _build_analysis_dashboard_layout_requests(*, sheet_id: int) -> list[dict[str
             _build_analysis_dimension_request(
                 sheet_id=sheet_id,
                 dimension="COLUMNS",
-                start_index=ANALYSIS_HIDDEN_START_COLUMN_INDEX,
+                start_index=hidden_start_column_index,
                 end_index=ANALYSIS_MAX_COLUMN_INDEX,
                 hidden_by_user=True,
             ),
@@ -811,14 +837,14 @@ def _build_analysis_dashboard_layout_requests(*, sheet_id: int) -> list[dict[str
         (1, 2, 0, 3, "SOLID_MEDIUM"),
         (1, 2, 4, 12, "SOLID_MEDIUM"),
         (1, 2, 13, 17, "SOLID_MEDIUM"),
-        (2, 3, 0, ANALYSIS_VISIBLE_COLUMN_COUNT, "SOLID"),
+        (2, 3, 0, visible_column_count, "SOLID"),
         (4, 6, 0, 4, "SOLID_MEDIUM"),
         (4, 6, 4, 8, "SOLID_MEDIUM"),
         (4, 6, 8, 12, "SOLID_MEDIUM"),
         (4, 6, 12, 16, "SOLID_MEDIUM"),
         (4, 6, 16, 20, "SOLID_MEDIUM"),
         (6, 7, 0, 4, "SOLID_MEDIUM"),
-        (6, 7, 4, ANALYSIS_VISIBLE_COLUMN_COUNT, "SOLID_MEDIUM"),
+        (6, 7, 4, visible_column_count, "SOLID_MEDIUM"),
         (7, 12, 0, ANALYSIS_CATEGORY_STATUS_COLUMN_INDEX, "SOLID_MEDIUM"),
         (7, 12, ANALYSIS_MONTHLY_SECTION_COLUMN_INDEX - 1, ANALYSIS_MONTHLY_SECTION_COLUMN_INDEX + 4, "SOLID_MEDIUM"),
         (7, 12, ANALYSIS_MERCHANT_SECTION_COLUMN_INDEX - 1, ANALYSIS_MERCHANT_SECTION_COLUMN_INDEX + 2, "SOLID_MEDIUM"),
@@ -833,6 +859,112 @@ def _build_analysis_dashboard_layout_requests(*, sheet_id: int) -> list[dict[str
                 style=style,
             )
         )
+
+    timeline_table_start_row_index = ANALYSIS_MONTHLY_CATEGORY_TIMELINE_START_ROW_NUMBER - 1
+    timeline_title_row_index = ANALYSIS_MONTHLY_CATEGORY_TIMELINE_TITLE_ROW_NUMBER - 1
+    requests.extend(
+        [
+            _build_analysis_merge_request(
+                sheet_id=sheet_id,
+                start_row_index=timeline_title_row_index,
+                end_row_index=timeline_title_row_index + 1,
+                start_column_index=0,
+                end_column_index=visible_column_count,
+            ),
+            _build_analysis_repeat_cell_request(
+                sheet_id=sheet_id,
+                start_row_index=timeline_title_row_index,
+                end_row_index=timeline_title_row_index + 1,
+                start_column_index=0,
+                end_column_index=visible_column_count,
+                user_entered_format={
+                    "backgroundColorStyle": _hex_color_style(ANALYSIS_THEME_TEAL_MIST),
+                    "horizontalAlignment": "CENTER",
+                    "verticalAlignment": "MIDDLE",
+                    "textFormat": {
+                        "foregroundColorStyle": _hex_color_style(ANALYSIS_THEME_MOSS),
+                        "fontSize": 11,
+                        "bold": True,
+                    },
+                },
+                fields="userEnteredFormat(backgroundColorStyle,textFormat,horizontalAlignment,verticalAlignment)",
+            ),
+            _build_analysis_repeat_cell_request(
+                sheet_id=sheet_id,
+                start_row_index=timeline_table_start_row_index,
+                end_row_index=timeline_table_start_row_index + 1,
+                start_column_index=0,
+                end_column_index=visible_column_count,
+                user_entered_format={
+                    "backgroundColorStyle": _hex_color_style(ANALYSIS_THEME_TEAL_MIST),
+                    "horizontalAlignment": "CENTER",
+                    "verticalAlignment": "MIDDLE",
+                    "textFormat": {
+                        "foregroundColorStyle": _hex_color_style(ANALYSIS_THEME_INK),
+                        "fontSize": 10,
+                        "bold": True,
+                    },
+                },
+                fields="userEnteredFormat(backgroundColorStyle,textFormat,horizontalAlignment,verticalAlignment)",
+            ),
+            _build_analysis_repeat_cell_request(
+                sheet_id=sheet_id,
+                start_row_index=timeline_table_start_row_index + 1,
+                end_row_index=200,
+                start_column_index=0,
+                end_column_index=1,
+                user_entered_format={"horizontalAlignment": "CENTER", "verticalAlignment": "TOP"},
+                fields="userEnteredFormat(horizontalAlignment,verticalAlignment)",
+            ),
+            _build_analysis_repeat_cell_request(
+                sheet_id=sheet_id,
+                start_row_index=timeline_table_start_row_index + 1,
+                end_row_index=200,
+                start_column_index=1,
+                end_column_index=visible_column_count,
+                user_entered_format={"horizontalAlignment": "RIGHT", "verticalAlignment": "TOP"},
+                fields="userEnteredFormat(horizontalAlignment,verticalAlignment)",
+            ),
+            _build_analysis_repeat_cell_request(
+                sheet_id=sheet_id,
+                start_row_index=timeline_table_start_row_index + 1,
+                end_row_index=200,
+                start_column_index=1,
+                end_column_index=visible_column_count,
+                user_entered_format={"numberFormat": {"type": "NUMBER", "pattern": "#,##0"}},
+                fields="userEnteredFormat(numberFormat)",
+            ),
+            _build_analysis_dimension_request(
+                sheet_id=sheet_id,
+                dimension="ROWS",
+                start_index=timeline_title_row_index,
+                end_index=timeline_title_row_index + 1,
+                pixel_size=28,
+            ),
+            _build_analysis_dimension_request(
+                sheet_id=sheet_id,
+                dimension="COLUMNS",
+                start_index=0,
+                end_index=1,
+                pixel_size=118,
+            ),
+            _build_analysis_dimension_request(
+                sheet_id=sheet_id,
+                dimension="COLUMNS",
+                start_index=1,
+                end_index=visible_column_count,
+                pixel_size=92,
+            ),
+            _build_analysis_outlined_range_request(
+                sheet_id=sheet_id,
+                start_row_index=timeline_title_row_index,
+                end_row_index=timeline_title_row_index + max(category_timeline_row_count + 2, 3),
+                start_column_index=0,
+                end_column_index=visible_column_count,
+                style="SOLID_MEDIUM",
+            ),
+        ]
+    )
 
     return requests
 
@@ -1294,8 +1426,18 @@ class GoogleWorkspaceClient:
             raise RuntimeError(f"Failed to recreate analysis sheet: {sheet_name}")
         return int(created_properties["sheetId"])
 
-    def _apply_analysis_dashboard_layout_sync(self, *, sheet_id: int) -> None:
-        requests = _build_analysis_dashboard_layout_requests(sheet_id=sheet_id)
+    def _apply_analysis_dashboard_layout_sync(
+        self,
+        *,
+        sheet_id: int,
+        category_timeline_column_count: int,
+        category_timeline_row_count: int,
+    ) -> None:
+        requests = _build_analysis_dashboard_layout_requests(
+            sheet_id=sheet_id,
+            category_timeline_column_count=category_timeline_column_count,
+            category_timeline_row_count=category_timeline_row_count,
+        )
         (
             self._sheets.spreadsheets()
             .batchUpdate(
@@ -1740,13 +1882,33 @@ class GoogleWorkspaceClient:
             )
             .execute()
         )
-        self._apply_analysis_dashboard_layout_sync(sheet_id=sheet_id)
-        self._apply_analysis_dashboard_charts_sync(sheet_id=sheet_id, sheet_name=sheet_name)
-
-    def _apply_analysis_dashboard_charts_sync(self, *, sheet_id: int, sheet_name: str) -> None:
         category_timeline_column_count, category_timeline_row_count = self._resolve_category_timeline_shape_sync(
             sheet_name=sheet_name
         )
+        self._apply_analysis_dashboard_layout_sync(
+            sheet_id=sheet_id,
+            category_timeline_column_count=category_timeline_column_count,
+            category_timeline_row_count=category_timeline_row_count,
+        )
+        self._apply_analysis_dashboard_charts_sync(
+            sheet_id=sheet_id,
+            sheet_name=sheet_name,
+            category_timeline_column_count=category_timeline_column_count,
+            category_timeline_row_count=category_timeline_row_count,
+        )
+
+    def _apply_analysis_dashboard_charts_sync(
+        self,
+        *,
+        sheet_id: int,
+        sheet_name: str,
+        category_timeline_column_count: int | None = None,
+        category_timeline_row_count: int | None = None,
+    ) -> None:
+        if category_timeline_column_count is None or category_timeline_row_count is None:
+            category_timeline_column_count, category_timeline_row_count = self._resolve_category_timeline_shape_sync(
+                sheet_name=sheet_name
+            )
         requests = _build_analysis_dashboard_chart_requests(
             sheet_id=sheet_id,
             category_timeline_series_count=max(category_timeline_column_count - 1, 1),
@@ -1766,7 +1928,10 @@ class GoogleWorkspaceClient:
     def _resolve_category_timeline_shape_sync(self, *, sheet_name: str) -> tuple[int, int]:
         fallback_column_count = max(len(self._list_receipt_categories_sync()) + 1, 2)
         timeline_end_column = _column_letter(ANALYSIS_MONTHLY_CATEGORY_TIMELINE_COLUMN_INDEX + fallback_column_count - 1)
-        timeline_range = f"'{sheet_name}'!{ANALYSIS_MONTHLY_CATEGORY_TIMELINE_START_COLUMN}9:{timeline_end_column}200"
+        timeline_range = (
+            f"'{sheet_name}'!{ANALYSIS_MONTHLY_CATEGORY_TIMELINE_START_COLUMN}"
+            f"{ANALYSIS_MONTHLY_CATEGORY_TIMELINE_START_ROW_NUMBER}:{timeline_end_column}200"
+        )
         for _ in range(10):
             response = (
                 self._sheets.spreadsheets()
@@ -1872,7 +2037,7 @@ def build_analysis_sheet_rows(
     receipt_rows: list[list[str]] | None = None,
 ) -> list[list[object]]:
     del receipt_rows
-    rows = _new_analysis_grid(row_count=12)
+    rows = _new_analysis_grid(row_count=ANALYSIS_MONTHLY_CATEGORY_TIMELINE_START_ROW_NUMBER + 1)
     source_sheet_text = ", ".join(source_sheet_names) if source_sheet_names else ANALYSIS_NONE_LABEL
     display_scope_label = ANALYSIS_SCOPE_ALL_YEARS_LABEL if scope_label == "All Years" else scope_label
 
@@ -1895,6 +2060,7 @@ def build_analysis_sheet_rows(
     _set_grid_cell(rows, 8, 1, ANALYSIS_CATEGORY_SECTION_LABEL)
     _set_grid_cell(rows, 8, ANALYSIS_MONTHLY_SECTION_COLUMN_INDEX, ANALYSIS_MONTHLY_SECTION_LABEL)
     _set_grid_cell(rows, 8, ANALYSIS_MERCHANT_SECTION_COLUMN_INDEX, ANALYSIS_MERCHANT_SECTION_LABEL)
+    _set_grid_cell(rows, ANALYSIS_MONTHLY_CATEGORY_TIMELINE_TITLE_ROW_NUMBER, ANALYSIS_MONTHLY_CATEGORY_TIMELINE_COLUMN_INDEX, ANALYSIS_TREND_SECTION_LABEL)
 
     _set_grid_cell(rows, 9, 1, ANALYSIS_CATEGORY_HEADER_LABEL)
     _set_grid_cell(rows, 9, 2, ANALYSIS_DESCRIPTION_HEADER_LABEL)
@@ -1936,6 +2102,7 @@ def build_analysis_sheet_rows(
         _set_grid_cell(rows, 10, ANALYSIS_MERCHANT_SECTION_COLUMN_INDEX, ANALYSIS_NO_MERCHANT_DATA_LABEL)
         _set_grid_cell(rows, 10, ANALYSIS_MERCHANT_SECTION_COLUMN_INDEX + 1, 0)
         _set_grid_cell(rows, 10, ANALYSIS_MERCHANT_SECTION_COLUMN_INDEX + 2, 0)
+        _set_grid_cell(rows, ANALYSIS_MONTHLY_CATEGORY_TIMELINE_START_ROW_NUMBER, ANALYSIS_MONTHLY_CATEGORY_TIMELINE_COLUMN_INDEX, ANALYSIS_NO_MONTH_DATA_LABEL)
         return [_trim_trailing_blank_cells(row) for row in rows]
 
     source_formula = _build_analysis_source_formula(source_sheet_names)
@@ -1986,7 +2153,7 @@ def build_analysis_sheet_rows(
     )
     _set_grid_cell(
         rows,
-        9,
+        ANALYSIS_MONTHLY_CATEGORY_TIMELINE_START_ROW_NUMBER,
         ANALYSIS_MONTHLY_CATEGORY_TIMELINE_COLUMN_INDEX,
         _build_category_month_matrix_formula(),
     )
@@ -2274,8 +2441,8 @@ def _build_category_month_matrix_formula() -> str:
     active_line_item_amount_column = _column_letter(ANALYSIS_HELPER_ACTIVE_LINE_ITEMS_COLUMN_INDEX + 1)
     active_line_item_amount_range = f"${active_line_item_amount_column}$2:${active_line_item_amount_column}"
     item_months_range = f"${ANALYSIS_HELPER_ITEM_MONTHS_START_COLUMN}$2:${ANALYSIS_HELPER_ITEM_MONTHS_START_COLUMN}"
-    visible_category_range = "$A$10:$A"
-    visible_month_range = f"${_column_letter(ANALYSIS_MONTHLY_SECTION_COLUMN_INDEX)}$10:${_column_letter(ANALYSIS_MONTHLY_SECTION_COLUMN_INDEX)}"
+    visible_category_range = f"$A$10:$A${ANALYSIS_MONTHLY_CATEGORY_TIMELINE_TITLE_ROW_NUMBER - 1}"
+    visible_month_range = f"${ANALYSIS_HELPER_MONTH_REFERENCE_START_COLUMN}$2:${ANALYSIS_HELPER_MONTH_REFERENCE_START_COLUMN}"
     return (
         "=IFERROR(LET("
         f'categories, FILTER({visible_category_range}, LEN({visible_category_range}), {visible_category_range}<>"{ANALYSIS_NO_CATEGORY_DATA_LABEL}"), '
@@ -2372,9 +2539,9 @@ def _build_analysis_dashboard_chart_requests(
                 )
                 for offset in range(category_timeline_series_count)
             ],
-            start_row_index=8,
-            end_row_index=8 + category_timeline_row_count,
-            anchor_row_index=54,
+            start_row_index=ANALYSIS_MONTHLY_CATEGORY_TIMELINE_START_ROW_NUMBER - 1,
+            end_row_index=ANALYSIS_MONTHLY_CATEGORY_TIMELINE_START_ROW_NUMBER - 1 + category_timeline_row_count,
+            anchor_row_index=ANALYSIS_MONTHLY_CATEGORY_TIMELINE_START_ROW_NUMBER + category_timeline_row_count + 2,
             anchor_column_index=0,
             width_pixels=1040,
             height_pixels=360,

@@ -15,9 +15,13 @@ from app.google_workspace import (
     ANALYSIS_HELPER_RECEIPT_TOTALS_COLUMN_INDEX,
     ANALYSIS_HELPER_SOURCE_COLUMN_INDEX,
     ANALYSIS_MONTHLY_CATEGORY_TIMELINE_COLUMN_INDEX,
+    ANALYSIS_MONTHLY_CATEGORY_TIMELINE_START_ROW_NUMBER,
+    ANALYSIS_MONTHLY_CATEGORY_TIMELINE_TITLE_ROW_NUMBER,
     ANALYSIS_MONTHLY_SECTION_COLUMN_INDEX,
     ANALYSIS_VISIBLE_COLUMN_COUNT,
     GoogleWorkspaceClient,
+    _resolved_analysis_hidden_start_column_index,
+    _resolved_analysis_visible_column_count,
     build_analysis_sheet_rows,
 )
 from app.models import ReceiptExtraction, ReceiptLineItem
@@ -473,24 +477,25 @@ def test_build_analysis_sheet_rows_includes_formula_paths_for_rescan_and_total_f
     assert _cell(analysis_rows, 9, 3) == "1月"
     assert _cell(analysis_rows, 9, 14) == "12月"
     assert _cell(analysis_rows, 9, ANALYSIS_CATEGORY_TOTAL_COLUMN_INDEX) == "合計金額"
-    assert '$' in str(_cell(analysis_rows, 9, ANALYSIS_MONTHLY_CATEGORY_TIMELINE_COLUMN_INDEX))
-    assert "MAKEARRAY(" in str(_cell(analysis_rows, 9, ANALYSIS_MONTHLY_CATEGORY_TIMELINE_COLUMN_INDEX))
-    assert 'FILTER($A$10:$A' in str(_cell(analysis_rows, 9, ANALYSIS_MONTHLY_CATEGORY_TIMELINE_COLUMN_INDEX))
+    assert '$' in str(_cell(analysis_rows, ANALYSIS_MONTHLY_CATEGORY_TIMELINE_START_ROW_NUMBER, ANALYSIS_MONTHLY_CATEGORY_TIMELINE_COLUMN_INDEX))
+    assert "MAKEARRAY(" in str(_cell(analysis_rows, ANALYSIS_MONTHLY_CATEGORY_TIMELINE_START_ROW_NUMBER, ANALYSIS_MONTHLY_CATEGORY_TIMELINE_COLUMN_INDEX))
+    assert 'FILTER($A$10:$A' in str(_cell(analysis_rows, ANALYSIS_MONTHLY_CATEGORY_TIMELINE_START_ROW_NUMBER, ANALYSIS_MONTHLY_CATEGORY_TIMELINE_COLUMN_INDEX))
     assert "ISNUMBER(" in str(_cell(analysis_rows, 7, 5))
     assert "count distinct" not in str(_cell(analysis_rows, 2, ANALYSIS_HELPER_CATEGORY_ROLLUP_COLUMN_INDEX)).lower()
     assert "count distinct" not in str(_cell(analysis_rows, 2, ANALYSIS_HELPER_MONTH_ROLLUP_COLUMN_INDEX)).lower()
 
 
-def test_build_analysis_sheet_rows_places_category_timeline_formula_in_hidden_helper_section() -> None:
+def test_build_analysis_sheet_rows_places_category_timeline_formula_in_visible_timeline_section() -> None:
     analysis_rows = build_analysis_sheet_rows(
         scope_label="2025",
         source_sheet_names=["2025"],
     )
 
+    assert _cell(analysis_rows, ANALYSIS_MONTHLY_CATEGORY_TIMELINE_TITLE_ROW_NUMBER, ANALYSIS_MONTHLY_CATEGORY_TIMELINE_COLUMN_INDEX) == "カテゴリ別月次"
     assert _cell(analysis_rows, 9, ANALYSIS_MONTHLY_SECTION_COLUMN_INDEX) == "年月"
-    assert str(_cell(analysis_rows, 9, ANALYSIS_MONTHLY_CATEGORY_TIMELINE_COLUMN_INDEX)).startswith("=IFERROR(LET(")
-    assert _cell(analysis_rows, 9, ANALYSIS_MONTHLY_CATEGORY_TIMELINE_COLUMN_INDEX + 1) == ""
-    assert _cell(analysis_rows, 10, ANALYSIS_MONTHLY_CATEGORY_TIMELINE_COLUMN_INDEX + 1) == ""
+    assert str(_cell(analysis_rows, ANALYSIS_MONTHLY_CATEGORY_TIMELINE_START_ROW_NUMBER, ANALYSIS_MONTHLY_CATEGORY_TIMELINE_COLUMN_INDEX)).startswith("=IFERROR(LET(")
+    assert _cell(analysis_rows, ANALYSIS_MONTHLY_CATEGORY_TIMELINE_START_ROW_NUMBER, ANALYSIS_MONTHLY_CATEGORY_TIMELINE_COLUMN_INDEX + 1) == ""
+    assert _cell(analysis_rows, ANALYSIS_MONTHLY_CATEGORY_TIMELINE_START_ROW_NUMBER + 1, ANALYSIS_MONTHLY_CATEGORY_TIMELINE_COLUMN_INDEX + 1) == ""
 
 
 def test_build_analysis_sheet_rows_zero_fills_blank_category_month_cells() -> None:
@@ -499,10 +504,10 @@ def test_build_analysis_sheet_rows_zero_fills_blank_category_month_cells() -> No
         source_sheet_names=["2025"],
     )
 
-    timeline_formula = str(_cell(analysis_rows, 9, ANALYSIS_MONTHLY_CATEGORY_TIMELINE_COLUMN_INDEX))
+    timeline_formula = str(_cell(analysis_rows, ANALYSIS_MONTHLY_CATEGORY_TIMELINE_START_ROW_NUMBER, ANALYSIS_MONTHLY_CATEGORY_TIMELINE_COLUMN_INDEX))
     assert timeline_formula.startswith("=IFERROR(LET(")
     assert 'FILTER($A$10:$A' in timeline_formula
-    assert 'FILTER($T$10:$T' in timeline_formula
+    assert 'FILTER($FH$2:$FH' in timeline_formula
     assert "MAKEARRAY(" in timeline_formula
     assert 'TRANSPOSE(categories)' in timeline_formula
     assert "SUMIFS(amounts" in timeline_formula
@@ -510,7 +515,7 @@ def test_build_analysis_sheet_rows_zero_fills_blank_category_month_cells() -> No
 
 def test_resolve_category_timeline_shape_uses_spilled_matrix(monkeypatch) -> None:
     client, fake_sheets, _fake_drive = _build_workspace_client(monkeypatch)
-    fake_sheets.values_service.values_by_range["'Analysis 2025'!AD9:AG10"] = [
+    fake_sheets.values_service.values_by_range["'Analysis 2025'!A55:D56"] = [
         ["年月", "Food", "Daily", "Pets"],
         ["2025-01", 10, 0, 0],
     ]
@@ -530,8 +535,10 @@ def _disabled_test_wait_for_category_timeline_chart_source_sync_accepts_ready_va
 
 def test_apply_analysis_dashboard_layout_sync_styles_subtitle_hides_helper_columns_and_sets_row_sizes(monkeypatch) -> None:
     client, fake_sheets, _fake_drive = _build_workspace_client(monkeypatch)
+    visible_column_count = _resolved_analysis_visible_column_count(category_timeline_column_count=4)
+    hidden_start_column_index = _resolved_analysis_hidden_start_column_index(category_timeline_column_count=4)
 
-    client._apply_analysis_dashboard_layout_sync(sheet_id=321)
+    client._apply_analysis_dashboard_layout_sync(sheet_id=321, category_timeline_column_count=4, category_timeline_row_count=13)
 
     layout_requests = fake_sheets.batch_update_calls[-1]["requests"]
     assert any(
@@ -541,7 +548,7 @@ def test_apply_analysis_dashboard_layout_sync_styles_subtitle_hides_helper_colum
             "startRowIndex": 2,
             "endRowIndex": 3,
             "startColumnIndex": 0,
-            "endColumnIndex": ANALYSIS_VISIBLE_COLUMN_COUNT,
+            "endColumnIndex": visible_column_count,
         }
         for request in layout_requests
     )
@@ -566,7 +573,7 @@ def test_apply_analysis_dashboard_layout_sync_styles_subtitle_hides_helper_colum
     )
     assert any(
         request.get("updateDimensionProperties", {}).get("range")
-        == {"sheetId": 321, "dimension": "COLUMNS", "startIndex": ANALYSIS_HIDDEN_START_COLUMN_INDEX, "endIndex": 260}
+        == {"sheetId": 321, "dimension": "COLUMNS", "startIndex": hidden_start_column_index, "endIndex": 260}
         and request["updateDimensionProperties"]["properties"]["hiddenByUser"] is True
         for request in layout_requests
     )
@@ -622,11 +629,11 @@ def test_apply_analysis_dashboard_charts_creates_category_merchant_monthly_and_s
     assert stacked_chart["spec"]["basicChart"]["stackedType"] == "STACKED"
     assert stacked_chart["spec"]["basicChart"]["legendPosition"] == "RIGHT_LEGEND"
     assert stacked_chart["spec"]["basicChart"]["headerCount"] == 1
-    assert stacked_chart["position"]["overlayPosition"]["anchorCell"] == {"sheetId": 321, "rowIndex": 54, "columnIndex": 0}
-    assert stacked_chart["spec"]["basicChart"]["domains"][0]["domain"]["sourceRange"]["sources"][0]["startColumnIndex"] == 29
+    assert stacked_chart["position"]["overlayPosition"]["anchorCell"] == {"sheetId": 321, "rowIndex": 70, "columnIndex": 0}
+    assert stacked_chart["spec"]["basicChart"]["domains"][0]["domain"]["sourceRange"]["sources"][0]["startColumnIndex"] == 0
     assert len(stacked_chart["spec"]["basicChart"]["series"]) == 3
-    assert stacked_chart["spec"]["basicChart"]["series"][0]["series"]["sourceRange"]["sources"][0]["startColumnIndex"] == 30
-    assert stacked_chart["spec"]["basicChart"]["series"][0]["series"]["sourceRange"]["sources"][0]["endColumnIndex"] == 31
+    assert stacked_chart["spec"]["basicChart"]["series"][0]["series"]["sourceRange"]["sources"][0]["startColumnIndex"] == 1
+    assert stacked_chart["spec"]["basicChart"]["series"][0]["series"]["sourceRange"]["sources"][0]["endColumnIndex"] == 2
     assert stacked_chart["spec"]["basicChart"]["series"][1]["colorStyle"]["rgbColor"]["red"] > 0.7
 
 

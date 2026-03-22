@@ -5,6 +5,8 @@ from app.google_workspace import (
     ANALYSIS_AUTHOR_CATEGORY_BREAKDOWN_LABEL,
     ANALYSIS_AUTHOR_CATEGORY_CHART_TITLE,
     ANALYSIS_AUTHOR_CATEGORY_CHART_ANCHOR_COLUMN_INDEX,
+    ANALYSIS_AUTHOR_CATEGORY_CHART_TOP_CATEGORY_COUNT,
+    ANALYSIS_AUTHOR_CATEGORY_MATRIX_COLUMN_INDEX,
     ANALYSIS_AUTHOR_CHART_ANCHOR_COLUMN_INDEX,
     ANALYSIS_AUTHOR_CHART_TITLE,
     ANALYSIS_AUTHOR_HEADER_LABEL,
@@ -36,6 +38,7 @@ from app.google_workspace import (
     ANALYSIS_MONTHLY_CATEGORY_TIMELINE_START_ROW_NUMBER,
     ANALYSIS_MONTHLY_CATEGORY_TIMELINE_TITLE_ROW_NUMBER,
     ANALYSIS_MONTHLY_SECTION_COLUMN_INDEX,
+    ANALYSIS_NO_CATEGORY_DATA_LABEL,
     ANALYSIS_NO_AUTHOR_DATA_LABEL,
     ANALYSIS_UNKNOWN_AUTHOR_LABEL,
     ANALYSIS_VISIBLE_COLUMN_COUNT,
@@ -438,8 +441,9 @@ def _disabled_test_build_analysis_sheet_rows_uses_sheet_formulas_for_all_years_s
     assert 'TEXT(IF(ISNUMBER(purchaseDate), purchaseDate, DATEVALUE(LEFT(TO_TEXT(purchaseDate), 10))), "yyyy-mm")' in str(
         _cell(analysis_rows, 2, ANALYSIS_HELPER_ITEM_MONTHS_COLUMN_INDEX)
     )
-    assert "QUERY(FILTER({" in str(_cell(analysis_rows, 2, 96))
-    assert 'pivot Col2' in str(_cell(analysis_rows, 2, 96))
+    assert str(_cell(analysis_rows, 2, 96)).startswith("=IFERROR(LET(")
+    assert "topCategories" in str(_cell(analysis_rows, 2, 96))
+    assert "MAKEARRAY(" in str(_cell(analysis_rows, 2, 96))
     assert str(_cell(analysis_rows, 5, 1)).startswith("=IFERROR(COUNTA(FILTER(")
     assert _cell(analysis_rows, 8, 1) == "カテゴリ分析"
     assert _cell(analysis_rows, 8, 8) == "店舗分析"
@@ -471,7 +475,7 @@ def _disabled_test_build_analysis_sheet_rows_uses_single_year_source_formula() -
     assert 'TEXT(IF(ISNUMBER(purchaseDate), purchaseDate, DATEVALUE(LEFT(TO_TEXT(purchaseDate), 10))), "yyyy-mm")' in str(
         _cell(analysis_rows, 2, ANALYSIS_HELPER_ITEM_MONTHS_COLUMN_INDEX)
     )
-    assert "QUERY(FILTER({" in str(_cell(analysis_rows, 2, 96))
+    assert str(_cell(analysis_rows, 2, 96)).startswith("=IFERROR(LET(")
 
 
 def test_build_analysis_sheet_rows_creates_empty_template_without_year_sources() -> None:
@@ -538,11 +542,26 @@ def test_build_analysis_sheet_rows_includes_formula_paths_for_rescan_and_total_f
     assert 'TEXT(IF(ISNUMBER(purchaseDate), purchaseDate, DATEVALUE(LEFT(TO_TEXT(purchaseDate), 10))), "yyyy-mm")' in str(
         _cell(analysis_rows, 2, ANALYSIS_HELPER_ITEM_MONTHS_COLUMN_INDEX)
     )
-    assert str(_cell(analysis_rows, 2, ANALYSIS_HELPER_AUTHOR_CATEGORY_CHART_SOURCE_COLUMN_INDEX)).startswith(
-        "=IFERROR(QUERY(FILTER({"
+    author_category_chart_source_formula = str(
+        _cell(analysis_rows, 2, ANALYSIS_HELPER_AUTHOR_CATEGORY_CHART_SOURCE_COLUMN_INDEX)
     )
-    assert "pivot Col2" in str(_cell(analysis_rows, 2, ANALYSIS_HELPER_AUTHOR_CATEGORY_CHART_SOURCE_COLUMN_INDEX))
-    assert "sum(Col3)" in str(_cell(analysis_rows, 2, ANALYSIS_HELPER_AUTHOR_CATEGORY_CHART_SOURCE_COLUMN_INDEX))
+    assert author_category_chart_source_formula.startswith("=IFERROR(LET(")
+    assert "authorSummary" in author_category_chart_source_formula
+    assert "authorNames" in author_category_chart_source_formula
+    assert "categorySummary" in author_category_chart_source_formula
+    assert f'ARRAY_CONSTRAIN(QUERY(categorySummary, "select Col1 label Col1 \'\'", 0), {ANALYSIS_AUTHOR_CATEGORY_CHART_TOP_CATEGORY_COUNT}, 1)' in (
+        author_category_chart_source_formula
+    )
+    assert "topCategories" in author_category_chart_source_formula
+    assert "MAKEARRAY(" in author_category_chart_source_formula
+    assert "SUM(FILTER(" in author_category_chart_source_formula
+    assert "MAP(" in author_category_chart_source_formula
+    assert 'headerRow, HSTACK("' in author_category_chart_source_formula
+    assert f"$A${author_category_data_row}:$A" in author_category_chart_source_formula
+    assert f"$B${author_category_data_row}:$B" in author_category_chart_source_formula
+    assert f"$C${author_category_data_row}:$C" in author_category_chart_source_formula
+    assert "INDEX(authorNames, rowIndex, 1)" in author_category_chart_source_formula
+    assert "INDEX(topCategories, columnIndex, 1)" in author_category_chart_source_formula
     assert "ARRAY_CONSTRAIN(" in str(_cell(analysis_rows, support_data_row, ANALYSIS_AUTHOR_SECTION_COLUMN_INDEX))
     assert "QUERY(FILTER({" in str(_cell(analysis_rows, support_data_row, ANALYSIS_AUTHOR_SECTION_COLUMN_INDEX))
     assert "INDEX(" in str(_cell(analysis_rows, support_data_row, ANALYSIS_AUTHOR_SECTION_COLUMN_INDEX))
@@ -637,9 +656,17 @@ def test_resolve_category_dashboard_row_count_uses_contiguous_helper_rows(monkey
 
 def test_resolve_author_category_chart_shape_uses_contiguous_helper_rows(monkeypatch) -> None:
     client, fake_sheets, _fake_drive = _build_workspace_client(monkeypatch)
-    end_column = _column_letter(ANALYSIS_HELPER_AUTHOR_CATEGORY_CHART_SOURCE_COLUMN_INDEX + 3)
+    category_timeline_row_count = 13
+    chart_start_row = _analysis_author_category_section_data_row(
+        category_timeline_row_count=category_timeline_row_count
+    )
+    end_column = _column_letter(
+        ANALYSIS_AUTHOR_CATEGORY_MATRIX_COLUMN_INDEX
+        + ANALYSIS_AUTHOR_CATEGORY_CHART_TOP_CATEGORY_COUNT
+        + 1
+    )
     fake_sheets.values_service.values_by_range[
-        f"'Analysis 2025'!{ANALYSIS_HELPER_AUTHOR_CATEGORY_CHART_SOURCE_START_COLUMN}2:{end_column}200"
+        f"'Analysis 2025'!{_column_letter(ANALYSIS_AUTHOR_CATEGORY_MATRIX_COLUMN_INDEX)}{chart_start_row}:{end_column}200"
     ] = [
         ["支払者(authorTag)", "Food", "Daily"],
         ["Alice", 100, 20],
@@ -648,7 +675,40 @@ def test_resolve_author_category_chart_shape_uses_contiguous_helper_rows(monkeyp
         ["ignored", 1, 1],
     ]
 
-    assert client._resolve_author_category_chart_shape_sync(sheet_name="Analysis 2025") == (3, 3)
+    assert client._resolve_author_category_chart_shape_sync(
+        sheet_name="Analysis 2025",
+        category_timeline_row_count=category_timeline_row_count,
+    ) == (3, 3)
+
+
+def test_resolve_author_category_chart_shape_waits_past_placeholder(monkeypatch) -> None:
+    import app.google_workspace as google_workspace_module
+
+    client, fake_sheets, _fake_drive = _build_workspace_client(monkeypatch)
+    category_timeline_row_count = 13
+    responses = [
+        [
+            [ANALYSIS_AUTHOR_HEADER_LABEL, ANALYSIS_NO_CATEGORY_DATA_LABEL, "その他"],
+            [ANALYSIS_NO_AUTHOR_DATA_LABEL, 0, 0],
+        ],
+        [
+            [ANALYSIS_AUTHOR_HEADER_LABEL, "Food", "Daily"],
+            ["Alice", 100, 20],
+            ["Maki", 0, 80],
+        ],
+    ]
+
+    def fake_get(*, spreadsheetId: str, range: str, valueRenderOption: str | None = None) -> _Execute:
+        del spreadsheetId, range, valueRenderOption
+        return _Execute({"values": responses.pop(0)})
+
+    monkeypatch.setattr(fake_sheets.values_service, "get", fake_get)
+    monkeypatch.setattr(google_workspace_module.time, "sleep", lambda _seconds: None)
+
+    assert client._resolve_author_category_chart_shape_sync(
+        sheet_name="Analysis 2025",
+        category_timeline_row_count=category_timeline_row_count,
+    ) == (3, 3)
 
 
 def _disabled_test_wait_for_category_timeline_chart_source_sync_accepts_ready_values(monkeypatch) -> None:
@@ -782,7 +842,10 @@ def test_apply_analysis_dashboard_charts_creates_category_merchant_monthly_and_s
     compact_chart_anchor_row = _analysis_compact_chart_anchor_row(category_timeline_row_count=13) - 1
     monthly_chart_anchor_row = _analysis_monthly_chart_anchor_row(category_timeline_row_count=13) - 1
     stacked_chart_anchor_row = _analysis_stacked_chart_anchor_row(category_timeline_row_count=13) - 1
-    author_category_chart_anchor_row = _analysis_author_category_chart_anchor_row(category_timeline_row_count=13) - 1
+    author_category_chart_anchor_row = _analysis_author_category_chart_anchor_row(
+        category_timeline_row_count=13,
+        author_category_row_count=3,
+    ) - 1
 
     client._apply_analysis_dashboard_charts_sync(
         sheet_id=321,
@@ -863,11 +926,11 @@ def test_apply_analysis_dashboard_charts_creates_category_merchant_monthly_and_s
     }
     assert author_category_chart["spec"]["basicChart"]["domains"][0]["domain"]["sourceRange"]["sources"][0][
         "startColumnIndex"
-    ] == ANALYSIS_HELPER_AUTHOR_CATEGORY_CHART_SOURCE_COLUMN_INDEX - 1
+    ] == ANALYSIS_AUTHOR_CATEGORY_MATRIX_COLUMN_INDEX - 1
     assert len(author_category_chart["spec"]["basicChart"]["series"]) == 3
     assert author_category_chart["spec"]["basicChart"]["series"][0]["series"]["sourceRange"]["sources"][0][
         "startColumnIndex"
-    ] == ANALYSIS_HELPER_AUTHOR_CATEGORY_CHART_SOURCE_COLUMN_INDEX
+    ] == ANALYSIS_AUTHOR_CATEGORY_MATRIX_COLUMN_INDEX
 
 
 def test_replace_sheet_values_sync_recreates_chart_requests(monkeypatch) -> None:

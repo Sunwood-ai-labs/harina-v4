@@ -193,6 +193,8 @@ ANALYSIS_HELPER_CATEGORY_REFERENCE_COLUMN_INDEX = 80  # CB
 ANALYSIS_HELPER_CATEGORY_ROLLUP_COLUMN_INDEX = 83  # CE
 ANALYSIS_HELPER_MONTH_REFERENCE_COLUMN_INDEX = 88  # CJ
 ANALYSIS_HELPER_MONTH_ROLLUP_COLUMN_INDEX = 90  # CL
+ANALYSIS_HELPER_RECEIPT_MONTH_LOOKUP_COLUMN_INDEX = 180  # FX
+ANALYSIS_HELPER_ITEM_MONTHS_COLUMN_INDEX = 182  # FZ
 ANALYSIS_HELPER_CATEGORY_MONTH_MATRIX_COLUMN_INDEX = 96  # CR
 ANALYSIS_HELPER_CATEGORY_MONTH_CHART_SOURCE_COLUMN_INDEX = 140  # EJ
 ANALYSIS_MAX_COLUMN_INDEX = 260  # IZ
@@ -211,6 +213,9 @@ ANALYSIS_HELPER_CATEGORY_ROLLUP_END_COLUMN = _column_letter(ANALYSIS_HELPER_CATE
 ANALYSIS_HELPER_MONTH_REFERENCE_START_COLUMN = _column_letter(ANALYSIS_HELPER_MONTH_REFERENCE_COLUMN_INDEX)
 ANALYSIS_HELPER_MONTH_ROLLUP_START_COLUMN = _column_letter(ANALYSIS_HELPER_MONTH_ROLLUP_COLUMN_INDEX)
 ANALYSIS_HELPER_MONTH_ROLLUP_END_COLUMN = _column_letter(ANALYSIS_HELPER_MONTH_ROLLUP_COLUMN_INDEX + 4)
+ANALYSIS_HELPER_RECEIPT_MONTH_LOOKUP_START_COLUMN = _column_letter(ANALYSIS_HELPER_RECEIPT_MONTH_LOOKUP_COLUMN_INDEX)
+ANALYSIS_HELPER_RECEIPT_MONTH_LOOKUP_END_COLUMN = _column_letter(ANALYSIS_HELPER_RECEIPT_MONTH_LOOKUP_COLUMN_INDEX + 1)
+ANALYSIS_HELPER_ITEM_MONTHS_START_COLUMN = _column_letter(ANALYSIS_HELPER_ITEM_MONTHS_COLUMN_INDEX)
 ANALYSIS_HELPER_CATEGORY_MONTH_MATRIX_START_COLUMN = _column_letter(ANALYSIS_HELPER_CATEGORY_MONTH_MATRIX_COLUMN_INDEX)
 ANALYSIS_HELPER_CATEGORY_MONTH_CHART_SOURCE_START_COLUMN = _column_letter(ANALYSIS_HELPER_CATEGORY_MONTH_CHART_SOURCE_COLUMN_INDEX)
 ANALYSIS_THEME_INK = "#1D2A24"
@@ -1935,6 +1940,8 @@ def build_analysis_sheet_rows(
     _set_grid_cell(rows, 2, ANALYSIS_HELPER_CATEGORY_ROLLUP_COLUMN_INDEX, _build_category_rollup_formula())
     _set_grid_cell(rows, 2, ANALYSIS_HELPER_MONTH_REFERENCE_COLUMN_INDEX, _build_month_reference_formula(source_sheet_names))
     _set_grid_cell(rows, 2, ANALYSIS_HELPER_MONTH_ROLLUP_COLUMN_INDEX, _build_month_rollup_formula())
+    _set_grid_cell(rows, 2, ANALYSIS_HELPER_RECEIPT_MONTH_LOOKUP_COLUMN_INDEX, _build_receipt_month_lookup_formula())
+    _set_grid_cell(rows, 2, ANALYSIS_HELPER_ITEM_MONTHS_COLUMN_INDEX, _build_item_months_formula())
     _set_grid_cell(rows, 2, ANALYSIS_HELPER_CATEGORY_MONTH_MATRIX_COLUMN_INDEX, _build_category_month_matrix_formula())
 
     _set_grid_cell(rows, 5, 1, f'=IFERROR(COUNTA(FILTER(INDEX(${ANALYSIS_HELPER_RECEIPT_TOTALS_START_COLUMN}$2:${ANALYSIS_HELPER_RECEIPT_TOTALS_END_COLUMN},,1), LEN(INDEX(${ANALYSIS_HELPER_RECEIPT_TOTALS_START_COLUMN}$2:${ANALYSIS_HELPER_RECEIPT_TOTALS_END_COLUMN},,1)))), 0)')
@@ -2198,33 +2205,44 @@ def _build_month_trend_sparkline_formula() -> str:
     )
 
 
+def _build_receipt_month_lookup_formula() -> str:
+    latest_receipts_range = f"${ANALYSIS_HELPER_LATEST_RECEIPTS_START_COLUMN}$2:${ANALYSIS_HELPER_LATEST_RECEIPTS_END_COLUMN}"
+    return (
+        "=IFERROR(HSTACK("
+        f"INDEX({latest_receipts_range},,1), "
+        f'MAP(INDEX({latest_receipts_range},,4), LAMBDA(receiptDate, TEXT(IF(ISNUMBER(receiptDate), receiptDate, DATEVALUE(LEFT(TO_TEXT(receiptDate), 10))), "yyyy-mm")))'
+        '), {"",""})'
+    )
+
+
+def _build_item_months_formula() -> str:
+    active_line_items_range = f"${ANALYSIS_HELPER_ACTIVE_LINE_ITEMS_START_COLUMN}$2:${ANALYSIS_HELPER_ACTIVE_LINE_ITEMS_END_COLUMN}"
+    receipt_month_lookup_range = (
+        f"${ANALYSIS_HELPER_RECEIPT_MONTH_LOOKUP_START_COLUMN}$2:${ANALYSIS_HELPER_RECEIPT_MONTH_LOOKUP_END_COLUMN}"
+    )
+    return (
+        "=IFERROR(MAP("
+        f"INDEX({active_line_items_range},,4), "
+        "LAMBDA(attachmentName, "
+        f'IFNA(XLOOKUP(attachmentName, INDEX({receipt_month_lookup_range},,1), INDEX({receipt_month_lookup_range},,2)), "")))'
+        ', {""})'
+    )
+
+
 def _build_category_month_matrix_formula() -> str:
     active_line_items_range = f"${ANALYSIS_HELPER_ACTIVE_LINE_ITEMS_START_COLUMN}$2:${ANALYSIS_HELPER_ACTIVE_LINE_ITEMS_END_COLUMN}"
-    receipt_totals_range = f"${ANALYSIS_HELPER_RECEIPT_TOTALS_START_COLUMN}$2:${ANALYSIS_HELPER_RECEIPT_TOTALS_END_COLUMN}"
-    month_reference_range = f"${ANALYSIS_HELPER_MONTH_REFERENCE_START_COLUMN}$2:${ANALYSIS_HELPER_MONTH_REFERENCE_START_COLUMN}"
-    category_reference_range = f"${ANALYSIS_HELPER_CATEGORY_REFERENCE_START_COLUMN}$2:${ANALYSIS_HELPER_CATEGORY_REFERENCE_START_COLUMN}"
-    receipt_date_value_formula = _build_sheet_date_value_formula(receipt_totals_range, 3)
+    item_months_range = f"${ANALYSIS_HELPER_ITEM_MONTHS_START_COLUMN}$2:${ANALYSIS_HELPER_ITEM_MONTHS_START_COLUMN}"
     return (
-        "=IFERROR(LET("
-        f"months, FILTER({month_reference_range}, LEN({month_reference_range})),"
-        f"categories, FILTER({category_reference_range}, LEN({category_reference_range})),"
-        f"itemCategories, INDEX({active_line_items_range},,1),"
-        f"itemAmounts, N(INDEX({active_line_items_range},,2)),"
-        f"itemKeys, INDEX({active_line_items_range},,3),"
-        f'receiptMonthLookup, {{INDEX({receipt_totals_range},,1), TEXT({receipt_date_value_formula}, "yyyy-mm")}},'
-        'itemMonths, IFNA(VLOOKUP(itemKeys, receiptMonthLookup, 2, FALSE), ""),'
-        f'headerRow, HSTACK("{ANALYSIS_MONTH_HEADER_LABEL}", TRANSPOSE(categories)),'
-        "valueMatrix, MAKEARRAY(ROWS(months), ROWS(categories), "
-        "LAMBDA(row_index, column_index, "
-        "IFERROR(SUM(FILTER("
-        "itemAmounts, "
-        "itemMonths=INDEX(months, row_index), "
-        "itemCategories=INDEX(categories, column_index)"
-        ")), 0)"
-        ")),"
-        "VSTACK(headerRow, HSTACK(months, valueMatrix))"
-        "), "
-        f'{{"{ANALYSIS_MONTH_HEADER_LABEL}","{ANALYSIS_NONE_LABEL}";"{ANALYSIS_NO_MONTH_DATA_LABEL}",0}})'
+        "=IFERROR(QUERY(FILTER({"
+        f"{item_months_range},"
+        f"INDEX({active_line_items_range},,1),"
+        f"N(INDEX({active_line_items_range},,2))"
+        "}, LEN("
+        f"{item_months_range}),"
+        f"LEN(INDEX({active_line_items_range},,1))), "
+        "\"select Col1, sum(Col3) where Col1 is not null group by Col1 pivot Col2 "
+        "label sum(Col3) ''\", 0), "
+        f'{{"{ANALYSIS_MONTH_HEADER_LABEL}",0}})'
     )
 
 

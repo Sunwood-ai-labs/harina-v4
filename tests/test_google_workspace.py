@@ -374,8 +374,10 @@ def test_build_analysis_sheet_rows_uses_sheet_formulas_for_all_years_scope() -> 
     assert "VLOOKUP(" in str(_cell(analysis_rows, 2, 75))
     assert "'Categories'!A2:A" in str(_cell(analysis_rows, 2, 80))
     assert '{"2025-01";"2025-02"' in str(_cell(analysis_rows, 2, 88))
-    assert "MAKEARRAY(" in str(_cell(analysis_rows, 2, 96))
-    assert "itemMonths=INDEX(months, row_index)" in str(_cell(analysis_rows, 2, 96))
+    assert 'HSTACK(INDEX($BK$2:$BP,,1)' in str(_cell(analysis_rows, 2, 180))
+    assert 'XLOOKUP(attachmentName, INDEX($FX$2:$FY,,1), INDEX($FX$2:$FY,,2))' in str(_cell(analysis_rows, 2, 182))
+    assert "QUERY(FILTER({" in str(_cell(analysis_rows, 2, 96))
+    assert 'pivot Col2' in str(_cell(analysis_rows, 2, 96))
     assert str(_cell(analysis_rows, 5, 1)).startswith("=IFERROR(COUNTA(FILTER(")
     assert _cell(analysis_rows, 8, 1) == "カテゴリ分析"
     assert _cell(analysis_rows, 8, 8) == "店舗分析"
@@ -403,7 +405,9 @@ def test_build_analysis_sheet_rows_uses_single_year_source_formula() -> None:
     assert _cell(analysis_rows, 3, 1) == "カテゴリ・店舗・月次のリズムを、一枚で眺めるレシートビュー"
     assert _cell(analysis_rows, 2, 24) == '=QUERY(\'2025\'!A2:AL, "select * where Col11 is not null", 0)'
     assert '"2025-01"' in str(_cell(analysis_rows, 2, 88))
-    assert "MAKEARRAY(" in str(_cell(analysis_rows, 2, 96))
+    assert 'HSTACK(INDEX($BK$2:$BP,,1)' in str(_cell(analysis_rows, 2, 180))
+    assert 'XLOOKUP(attachmentName, INDEX($FX$2:$FY,,1), INDEX($FX$2:$FY,,2))' in str(_cell(analysis_rows, 2, 182))
+    assert "QUERY(FILTER({" in str(_cell(analysis_rows, 2, 96))
 
 
 def test_build_analysis_sheet_rows_creates_empty_template_without_year_sources() -> None:
@@ -441,8 +445,11 @@ def test_build_analysis_sheet_rows_includes_formula_paths_for_rescan_and_total_f
     assert "COUNTUNIQUE(" in str(_cell(analysis_rows, 2, 90))
     assert "FILTER(amounts" in str(_cell(analysis_rows, 2, 90))
     assert "ISNUMBER(" in str(_cell(analysis_rows, 2, 90))
-    assert "VSTACK(headerRow" in str(_cell(analysis_rows, 2, 96))
-    assert 'TEXT(IF(ISNUMBER(INDEX($BW$2:$BZ,,3))' in str(_cell(analysis_rows, 2, 96))
+    assert 'HSTACK(INDEX($BK$2:$BP,,1)' in str(_cell(analysis_rows, 2, 180))
+    assert 'XLOOKUP(attachmentName, INDEX($FX$2:$FY,,1), INDEX($FX$2:$FY,,2))' in str(_cell(analysis_rows, 2, 182))
+    assert '$FZ$2:$FZ' in str(_cell(analysis_rows, 2, 96))
+    assert "QUERY(FILTER({" in str(_cell(analysis_rows, 2, 96))
+    assert 'pivot Col2' in str(_cell(analysis_rows, 2, 96))
     assert "ISNUMBER(" in str(_cell(analysis_rows, 7, 5))
     assert "count distinct" not in str(_cell(analysis_rows, 2, 83)).lower()
     assert "count distinct" not in str(_cell(analysis_rows, 2, 90)).lower()

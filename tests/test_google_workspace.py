@@ -1,5 +1,5 @@
 from app.formatters import RECEIPT_SHEET_HEADERS, ReceiptRecordContext, build_receipt_rows
-from app.google_workspace import GoogleWorkspaceClient
+from app.google_workspace import GoogleWorkspaceClient, build_analysis_sheet_rows
 from app.models import ReceiptExtraction, ReceiptLineItem
 
 
@@ -14,6 +14,9 @@ class _Execute:
 class _FakeSheetsValues:
     def __init__(self) -> None:
         self.append_calls: list[dict[str, object]] = []
+        self.update_calls: list[dict[str, object]] = []
+        self.clear_calls: list[dict[str, object]] = []
+        self.values_by_range: dict[str, list[list[str]]] = {}
 
     def append(
         self,
@@ -35,16 +38,57 @@ class _FakeSheetsValues:
         )
         return _Execute()
 
+    def update(
+        self,
+        *,
+        spreadsheetId: str,
+        range: str,
+        valueInputOption: str,
+        body: dict[str, object],
+    ) -> _Execute:
+        self.update_calls.append(
+            {
+                "spreadsheetId": spreadsheetId,
+                "range": range,
+                "valueInputOption": valueInputOption,
+                "body": body,
+            }
+        )
+        return _Execute()
+
+    def clear(self, *, spreadsheetId: str, range: str, body: dict[str, object]) -> _Execute:
+        self.clear_calls.append({"spreadsheetId": spreadsheetId, "range": range, "body": body})
+        return _Execute()
+
+    def get(self, *, spreadsheetId: str, range: str) -> _Execute:
+        del spreadsheetId
+        return _Execute({"values": self.values_by_range.get(range, [])})
+
 
 class _FakeSheetsService:
     def __init__(self) -> None:
         self.values_service = _FakeSheetsValues()
+        self.sheet_names: list[str] = ["Receipts", "Categories"]
+        self.batch_update_calls: list[dict[str, object]] = []
 
     def spreadsheets(self) -> "_FakeSheetsService":
         return self
 
     def values(self) -> _FakeSheetsValues:
         return self.values_service
+
+    def get(self, *, spreadsheetId: str, fields: str) -> _Execute:
+        del spreadsheetId, fields
+        return _Execute({"sheets": [{"properties": {"title": sheet_name}} for sheet_name in self.sheet_names]})
+
+    def batchUpdate(self, *, spreadsheetId: str, body: dict[str, object]) -> _Execute:
+        del spreadsheetId
+        self.batch_update_calls.append(body)
+        for request in body.get("requests", []):
+            add_sheet = request.get("addSheet")
+            if add_sheet is not None:
+                self.sheet_names.append(str(add_sheet["properties"]["title"]))
+        return _Execute()
 
 
 class _FakeDriveFiles:
@@ -123,26 +167,47 @@ def _build_workspace_client(
         spreadsheet_id="spreadsheet-1",
         sheet_name=sheet_name,
     )
+    monkeypatch.setattr(
+        client,
+        "_sync_analysis_sheets_sync",
+        lambda *args, **kwargs: {"updated_analysis_sheets": [], "years": [], "source_sheet_names": []},
+    )
     return client, fake_sheets, fake_drive
 
 
-def _build_rows(*, processed_at: str, purchase_date: str | None) -> list[list[str]]:
+def _build_rows(
+    *,
+    processed_at: str,
+    purchase_date: str | None,
+    attachment_name: str = "receipt.jpg",
+    total: float | None = 120,
+    category: str | None = "Tea",
+    item_total_price: float | None = 120,
+) -> list[list[str]]:
     return build_receipt_rows(
         context=ReceiptRecordContext(
             processed_at=processed_at,
             channel_name="cli",
             author_tag="tester",
-            attachment_name="receipt.jpg",
-            attachment_url="D:/Prj/harina-v3/tests/fixtures/receipt.jpg",
+            attachment_name=attachment_name,
+            attachment_url=f"D:/Prj/harina-v3/tests/fixtures/{attachment_name}",
         ),
         extraction=ReceiptExtraction(
             merchant_name="Cafe Harina",
             purchase_date=purchase_date,
-            line_items=[ReceiptLineItem(name="Tea", quantity=1, total_price=120)],
+            total=total,
+            line_items=[ReceiptLineItem(name="Tea", category=category, quantity=1, total_price=item_total_price)],
         ),
         drive_file_id="drive-file-1",
         drive_file_url="https://drive.example/file/drive-file-1",
     )
+
+
+def _cell(rows: list[list[object]], row_number: int, column_number: int) -> object:
+    row = rows[row_number - 1]
+    if column_number - 1 >= len(row):
+        return ""
+    return row[column_number - 1]
 
 
 def test_append_receipt_rows_uses_purchase_year_sheet(monkeypatch) -> None:
@@ -207,6 +272,24 @@ def test_append_receipt_rows_groups_mixed_year_batches(monkeypatch) -> None:
     assert fake_sheets.values_service.append_calls[1]["body"] == {"values": rows_2026}
 
 
+def test_append_receipt_rows_refreshes_formula_analysis_for_touched_year(monkeypatch) -> None:
+    client, fake_sheets, _fake_drive = _build_workspace_client(monkeypatch)
+    client._sync_analysis_sheets_sync = GoogleWorkspaceClient._sync_analysis_sheets_sync.__get__(client, GoogleWorkspaceClient)  # type: ignore[method-assign]
+    analysis_write_calls: list[tuple[str, list[list[object]]]] = []
+
+    def fake_write(*, sheet_name: str, rows: list[list[object]]) -> None:
+        analysis_write_calls.append((sheet_name, rows))
+
+    monkeypatch.setattr(client, "_replace_sheet_values_sync", fake_write)
+
+    rows = _build_rows(processed_at="2026-03-15T09:30:00+00:00", purchase_date="2025-12-31")
+    client._append_receipt_rows_sync(rows)
+
+    assert "2025" in fake_sheets.sheet_names
+    assert [sheet_name for sheet_name, _rows in analysis_write_calls] == ["Analysis 2025", "Analysis All Years"]
+    assert _cell(analysis_write_calls[0][1], 2, 24) == '=QUERY(\'2025\'!A2:AL, "select * where Col11 is not null", 0)'
+
+
 def test_resolve_receipt_sheet_name_uses_configured_year_when_row_dates_are_missing(monkeypatch) -> None:
     client, _fake_sheets, _fake_drive = _build_workspace_client(monkeypatch, sheet_name="2031")
 
@@ -265,3 +348,222 @@ def test_upload_receipt_image_reuses_existing_year_and_month_folders(monkeypatch
         "parents": ["month-03"],
     }
     assert uploaded.file_id == "file-1"
+
+
+def test_build_analysis_sheet_rows_uses_sheet_formulas_for_all_years_scope() -> None:
+    analysis_rows = build_analysis_sheet_rows(
+        scope_label="All Years",
+        source_sheet_names=["2025", "2026"],
+    )
+
+    assert analysis_rows[0] == ["HARINA 分析ダッシュボード"]
+    assert analysis_rows[1][:6] == ["対象範囲", "全年度", "", "", "対象シート", "2025, 2026"]
+    assert _cell(analysis_rows, 2, 14) == "更新日時"
+    assert _cell(analysis_rows, 2, 15) == "=NOW()"
+    assert _cell(analysis_rows, 2, 24) == '=QUERY({\'2025\'!A2:AL;\'2026\'!A2:AL}, "select * where Col11 is not null", 0)'
+    assert "SORTN(" in str(_cell(analysis_rows, 2, 63))
+    assert "MATCH(" in str(_cell(analysis_rows, 2, 70))
+    assert "VLOOKUP(" in str(_cell(analysis_rows, 2, 75))
+    assert "'Categories'!A2:A" in str(_cell(analysis_rows, 2, 80))
+    assert '{"2025-01";"2025-02"' in str(_cell(analysis_rows, 2, 88))
+    assert str(_cell(analysis_rows, 5, 1)).startswith("=IFERROR(COUNTA(FILTER(")
+    assert _cell(analysis_rows, 8, 1) == "カテゴリ分析"
+    assert _cell(analysis_rows, 8, 8) == "店舗分析"
+    assert _cell(analysis_rows, 8, 12) == "月次推移"
+    assert _cell(analysis_rows, 8, 18) == "トレンド"
+    assert _cell(analysis_rows, 9, 1) == "カテゴリ"
+    assert _cell(analysis_rows, 9, 8) == "店舗"
+    assert _cell(analysis_rows, 9, 12) == "年月"
+    assert str(_cell(analysis_rows, 10, 1)).startswith("=IFERROR(SORT(FILTER({INDEX($CB$2:$CC")
+    assert ' 4, FALSE), 0)>0, "使用中", "未使用"' in str(_cell(analysis_rows, 10, 1))
+    assert str(_cell(analysis_rows, 10, 8)).startswith("=IFERROR(QUERY(FILTER({INDEX($BW$2:$BZ")
+    assert str(_cell(analysis_rows, 10, 12)).startswith("=IFERROR(FILTER({$CJ$2:$CJ")
+    assert str(_cell(analysis_rows, 10, 18)).startswith("=IFERROR(SPARKLINE(")
+
+
+def test_build_analysis_sheet_rows_uses_single_year_source_formula() -> None:
+    analysis_rows = build_analysis_sheet_rows(
+        scope_label="2025",
+        source_sheet_names=["2025"],
+    )
+
+    assert analysis_rows[0] == ["HARINA 分析ダッシュボード"]
+    assert analysis_rows[1][:6] == ["対象範囲", "2025", "", "", "対象シート", "2025"]
+    assert _cell(analysis_rows, 2, 14) == "更新日時"
+    assert _cell(analysis_rows, 2, 24) == '=QUERY(\'2025\'!A2:AL, "select * where Col11 is not null", 0)'
+    assert '"2025-01"' in str(_cell(analysis_rows, 2, 88))
+
+
+def test_build_analysis_sheet_rows_creates_empty_template_without_year_sources() -> None:
+    analysis_rows = build_analysis_sheet_rows(
+        scope_label="All Years",
+        source_sheet_names=[],
+    )
+
+    assert analysis_rows[1][:6] == ["対象範囲", "全年度", "", "", "対象シート", "(なし)"]
+    assert _cell(analysis_rows, 5, 1) == 0
+    assert _cell(analysis_rows, 5, 5) == 0
+    assert _cell(analysis_rows, 7, 5) == "(なし)"
+    assert _cell(analysis_rows, 10, 1) == "(カテゴリデータなし)"
+    assert _cell(analysis_rows, 10, 3) == 0
+    assert _cell(analysis_rows, 10, 6) == "未使用"
+    assert _cell(analysis_rows, 10, 8) == "(店舗データなし)"
+    assert _cell(analysis_rows, 10, 9) == 0
+    assert _cell(analysis_rows, 10, 12) == "(月次データなし)"
+    assert _cell(analysis_rows, 10, 13) == 0
+
+
+def test_build_analysis_sheet_rows_includes_formula_paths_for_rescan_and_total_fallback() -> None:
+    analysis_rows = build_analysis_sheet_rows(
+        scope_label="2025",
+        source_sheet_names=["2025"],
+    )
+
+    assert "SORTN(" in str(_cell(analysis_rows, 2, 63))
+    assert "MATCH(" in str(_cell(analysis_rows, 2, 70))
+    assert "VLOOKUP(" in str(_cell(analysis_rows, 2, 75))
+    assert "'Categories'!A2:A" in str(_cell(analysis_rows, 2, 80))
+    assert '"2025-01"' in str(_cell(analysis_rows, 2, 88))
+    assert "COUNTUNIQUE(" in str(_cell(analysis_rows, 2, 83))
+    assert "COUNTUNIQUE(" in str(_cell(analysis_rows, 2, 90))
+    assert "FILTER(amounts" in str(_cell(analysis_rows, 2, 90))
+    assert "ISNUMBER(" in str(_cell(analysis_rows, 2, 90))
+    assert "ISNUMBER(" in str(_cell(analysis_rows, 7, 5))
+    assert "count distinct" not in str(_cell(analysis_rows, 2, 83)).lower()
+    assert "count distinct" not in str(_cell(analysis_rows, 2, 90)).lower()
+
+
+def test_apply_analysis_dashboard_charts_creates_category_merchant_and_monthly_charts(monkeypatch) -> None:
+    client, fake_sheets, _fake_drive = _build_workspace_client(monkeypatch)
+
+    client._apply_analysis_dashboard_charts_sync(sheet_id=321)
+
+    chart_requests = fake_sheets.batch_update_calls[-1]["requests"]
+    assert len(chart_requests) == 3
+
+    category_chart = chart_requests[0]["addChart"]["chart"]
+    merchant_chart = chart_requests[1]["addChart"]["chart"]
+    monthly_chart = chart_requests[2]["addChart"]["chart"]
+
+    assert category_chart["spec"]["title"] == "カテゴリ別支出"
+    assert category_chart["spec"]["basicChart"]["chartType"] == "BAR"
+    assert category_chart["position"]["overlayPosition"]["anchorCell"] == {"sheetId": 321, "rowIndex": 12, "columnIndex": 0}
+
+    assert merchant_chart["spec"]["title"] == "店舗別支出"
+    assert merchant_chart["spec"]["basicChart"]["chartType"] == "BAR"
+    assert merchant_chart["position"]["overlayPosition"]["anchorCell"] == {"sheetId": 321, "rowIndex": 12, "columnIndex": 10}
+
+    assert monthly_chart["spec"]["title"] == "月次支出推移"
+    assert monthly_chart["spec"]["basicChart"]["chartType"] == "COLUMN"
+    assert monthly_chart["position"]["overlayPosition"]["anchorCell"] == {"sheetId": 321, "rowIndex": 32, "columnIndex": 0}
+    assert monthly_chart["spec"]["basicChart"]["domains"][0]["domain"]["sourceRange"]["sources"][0]["startColumnIndex"] == 11
+    assert monthly_chart["spec"]["basicChart"]["series"][0]["series"]["sourceRange"]["sources"][0]["startColumnIndex"] == 12
+
+
+def test_replace_sheet_values_sync_recreates_chart_requests(monkeypatch) -> None:
+    client, fake_sheets, _fake_drive = _build_workspace_client(monkeypatch)
+    monkeypatch.setattr(client, "_recreate_analysis_sheet_sync", lambda **kwargs: 777)
+
+    client._replace_sheet_values_sync(sheet_name="Analysis 2025", rows=[["HARINA 分析ダッシュボード"]])
+
+    assert fake_sheets.values_service.update_calls[0]["range"] == "'Analysis 2025'!A1"
+    chart_requests = fake_sheets.batch_update_calls[-1]["requests"]
+    assert [request["addChart"]["chart"]["spec"]["title"] for request in chart_requests] == [
+        "カテゴリ別支出",
+        "店舗別支出",
+        "月次支出推移",
+    ]
+
+
+def test_sync_analysis_sheets_updates_year_and_all_years_tabs(monkeypatch) -> None:
+    client, _fake_sheets, _fake_drive = _build_workspace_client(monkeypatch)
+    client._sync_analysis_sheets_sync = GoogleWorkspaceClient._sync_analysis_sheets_sync.__get__(client, GoogleWorkspaceClient)  # type: ignore[method-assign]
+    monkeypatch.setattr(client, "_list_receipt_sheet_names_sync", lambda: ["2025", "2026", "Receipts"])
+
+    write_calls: list[tuple[str, list[list[object]]]] = []
+
+    def fake_write(*, sheet_name: str, rows: list[list[object]]) -> None:
+        write_calls.append((sheet_name, rows))
+
+    monkeypatch.setattr(client, "_replace_sheet_values_sync", fake_write)
+
+    summary = client._sync_analysis_sheets_sync(["2025"], include_all_years=True)
+
+    assert summary["updated_analysis_sheets"] == ["Analysis 2025", "Analysis All Years"]
+    assert summary["source_sheet_names"] == ["2025", "2026"]
+    assert summary["missing_years"] == []
+    assert write_calls[0][0] == "Analysis 2025"
+    assert write_calls[0][1][0] == ["HARINA 分析ダッシュボード"]
+    assert _cell(write_calls[0][1], 2, 24) == '=QUERY(\'2025\'!A2:AL, "select * where Col11 is not null", 0)'
+    assert write_calls[1][0] == "Analysis All Years"
+    assert write_calls[1][1][0] == ["HARINA 分析ダッシュボード"]
+    assert _cell(write_calls[1][1], 2, 24) == '=QUERY({\'2025\'!A2:AL;\'2026\'!A2:AL}, "select * where Col11 is not null", 0)'
+
+
+def test_sync_analysis_sheets_reports_missing_years_without_creating_empty_analysis(monkeypatch) -> None:
+    client, _fake_sheets, _fake_drive = _build_workspace_client(monkeypatch)
+    client._sync_analysis_sheets_sync = GoogleWorkspaceClient._sync_analysis_sheets_sync.__get__(client, GoogleWorkspaceClient)  # type: ignore[method-assign]
+    monkeypatch.setattr(client, "_list_receipt_sheet_names_sync", lambda: ["2025", "Receipts"])
+
+    write_calls: list[str] = []
+
+    def fake_write(*, sheet_name: str, rows: list[list[object]]) -> None:
+        del rows
+        write_calls.append(sheet_name)
+
+    monkeypatch.setattr(client, "_replace_sheet_values_sync", fake_write)
+
+    summary = client._sync_analysis_sheets_sync(["2025", "2027"], include_all_years=False)
+
+    assert summary["years"] == ["2025"]
+    assert summary["missing_years"] == ["2027"]
+    assert summary["updated_analysis_sheets"] == ["Analysis 2025"]
+    assert write_calls == ["Analysis 2025"]
+
+
+def test_sync_analysis_sheets_creates_empty_all_years_when_no_year_tabs_exist(monkeypatch) -> None:
+    client, _fake_sheets, _fake_drive = _build_workspace_client(monkeypatch)
+    client._sync_analysis_sheets_sync = GoogleWorkspaceClient._sync_analysis_sheets_sync.__get__(client, GoogleWorkspaceClient)  # type: ignore[method-assign]
+    monkeypatch.setattr(client, "_list_receipt_sheet_names_sync", lambda: ["Receipts"])
+
+    write_calls: list[tuple[str, list[list[object]]]] = []
+
+    def fake_write(*, sheet_name: str, rows: list[list[object]]) -> None:
+        write_calls.append((sheet_name, rows))
+
+    monkeypatch.setattr(client, "_replace_sheet_values_sync", fake_write)
+
+    summary = client._sync_analysis_sheets_sync(include_all_years=True)
+
+    assert summary["years"] == []
+    assert summary["source_sheet_names"] == []
+    assert summary["updated_analysis_sheets"] == ["Analysis All Years"]
+    assert write_calls[0][0] == "Analysis All Years"
+    assert write_calls[0][1][1][:6] == ["対象範囲", "全年度", "", "", "対象シート", "(なし)"]
+
+
+def test_sync_analysis_sheets_all_years_excludes_legacy_receipts_when_year_tabs_exist(monkeypatch) -> None:
+    client, _fake_sheets, _fake_drive = _build_workspace_client(monkeypatch)
+    client._sync_analysis_sheets_sync = GoogleWorkspaceClient._sync_analysis_sheets_sync.__get__(client, GoogleWorkspaceClient)  # type: ignore[method-assign]
+    monkeypatch.setattr(client, "_list_receipt_sheet_names_sync", lambda: ["2025", "Receipts"])
+
+    write_calls: list[tuple[str, list[list[object]]]] = []
+
+    def fake_write(*, sheet_name: str, rows: list[list[object]]) -> None:
+        write_calls.append((sheet_name, rows))
+
+    monkeypatch.setattr(client, "_replace_sheet_values_sync", fake_write)
+
+    summary = client._sync_analysis_sheets_sync(["2025"], include_all_years=True)
+
+    assert summary["source_sheet_names"] == ["2025"]
+    assert write_calls[1][0] == "Analysis All Years"
+    assert write_calls[1][1][1][:6] == ["対象範囲", "全年度", "", "", "対象シート", "2025"]
+    assert _cell(write_calls[1][1], 2, 24) == '=QUERY(\'2025\'!A2:AL, "select * where Col11 is not null", 0)'
+
+
+def test_list_receipt_sheet_names_excludes_analysis_tabs(monkeypatch) -> None:
+    client, fake_sheets, _fake_drive = _build_workspace_client(monkeypatch)
+    fake_sheets.sheet_names = ["Categories", "2025", "Analysis 2025", "Analysis All Years", "Receipts"]
+
+    assert client._list_receipt_sheet_names_sync() == ["2025", "Receipts"]

@@ -4,6 +4,7 @@ import asyncio
 from datetime import UTC, datetime
 from dataclasses import dataclass
 import re
+import time
 from typing import Any
 
 from googleapiclient.discovery import build
@@ -49,7 +50,9 @@ ANALYSIS_HELPER_CATEGORY_REFERENCE_COLUMN_INDEX = 80  # CB
 ANALYSIS_HELPER_CATEGORY_ROLLUP_COLUMN_INDEX = 83  # CE
 ANALYSIS_HELPER_MONTH_REFERENCE_COLUMN_INDEX = 88  # CJ
 ANALYSIS_HELPER_MONTH_ROLLUP_COLUMN_INDEX = 90  # CL
-ANALYSIS_MAX_COLUMN_INDEX = 95  # CQ
+ANALYSIS_HELPER_CATEGORY_MONTH_MATRIX_COLUMN_INDEX = 96  # CR
+ANALYSIS_HELPER_CATEGORY_MONTH_CHART_SOURCE_COLUMN_INDEX = 140  # EJ
+ANALYSIS_MAX_COLUMN_INDEX = 260  # IZ
 ANALYSIS_HELPER_SOURCE_START_COLUMN = _column_letter(ANALYSIS_HELPER_SOURCE_COLUMN_INDEX)
 ANALYSIS_HELPER_SOURCE_END_COLUMN = _column_letter(ANALYSIS_HELPER_SOURCE_END_COLUMN_INDEX)
 ANALYSIS_HELPER_LATEST_RECEIPTS_START_COLUMN = _column_letter(ANALYSIS_HELPER_LATEST_RECEIPTS_COLUMN_INDEX)
@@ -65,6 +68,8 @@ ANALYSIS_HELPER_CATEGORY_ROLLUP_END_COLUMN = _column_letter(ANALYSIS_HELPER_CATE
 ANALYSIS_HELPER_MONTH_REFERENCE_START_COLUMN = _column_letter(ANALYSIS_HELPER_MONTH_REFERENCE_COLUMN_INDEX)
 ANALYSIS_HELPER_MONTH_ROLLUP_START_COLUMN = _column_letter(ANALYSIS_HELPER_MONTH_ROLLUP_COLUMN_INDEX)
 ANALYSIS_HELPER_MONTH_ROLLUP_END_COLUMN = _column_letter(ANALYSIS_HELPER_MONTH_ROLLUP_COLUMN_INDEX + 4)
+ANALYSIS_HELPER_CATEGORY_MONTH_MATRIX_START_COLUMN = _column_letter(ANALYSIS_HELPER_CATEGORY_MONTH_MATRIX_COLUMN_INDEX)
+ANALYSIS_HELPER_CATEGORY_MONTH_CHART_SOURCE_START_COLUMN = _column_letter(ANALYSIS_HELPER_CATEGORY_MONTH_CHART_SOURCE_COLUMN_INDEX)
 ANALYSIS_DASHBOARD_TITLE = "HARINA 分析ダッシュボード"
 ANALYSIS_SCOPE_LABEL = "対象範囲"
 ANALYSIS_SCOPE_ALL_YEARS_LABEL = "全年度"
@@ -103,6 +108,7 @@ ANALYSIS_NONE_LABEL = "(なし)"
 ANALYSIS_CATEGORY_CHART_TITLE = "カテゴリ別支出"
 ANALYSIS_MERCHANT_CHART_TITLE = "店舗別支出"
 ANALYSIS_MONTHLY_CHART_TITLE = "月次支出推移"
+ANALYSIS_CATEGORY_TIMELINE_CHART_TITLE = "月次カテゴリ別支出"
 
 
 @dataclass(slots=True)
@@ -986,10 +992,26 @@ class GoogleWorkspaceClient:
             .execute()
         )
         self._apply_analysis_dashboard_layout_sync(sheet_id=sheet_id)
-        self._apply_analysis_dashboard_charts_sync(sheet_id=sheet_id)
+        self._apply_analysis_dashboard_charts_sync(sheet_id=sheet_id, sheet_name=sheet_name)
 
-    def _apply_analysis_dashboard_charts_sync(self, *, sheet_id: int) -> None:
-        requests = _build_analysis_dashboard_chart_requests(sheet_id=sheet_id)
+    def _apply_analysis_dashboard_charts_sync(self, *, sheet_id: int, sheet_name: str) -> None:
+        category_timeline_column_count, category_timeline_row_count = self._resolve_category_timeline_shape_sync(
+            sheet_name=sheet_name
+        )
+        self._sync_category_timeline_chart_source_sync(
+            sheet_name=sheet_name,
+            column_count=category_timeline_column_count,
+            row_count=category_timeline_row_count,
+        )
+        self._wait_for_category_timeline_chart_source_sync(
+            sheet_name=sheet_name,
+            column_count=category_timeline_column_count,
+        )
+        requests = _build_analysis_dashboard_chart_requests(
+            sheet_id=sheet_id,
+            category_timeline_series_count=max(category_timeline_column_count - 1, 1),
+            category_timeline_row_count=max(category_timeline_row_count, 2),
+        )
         if not requests:
             return
         (
@@ -1000,6 +1022,67 @@ class GoogleWorkspaceClient:
             )
             .execute()
         )
+
+    def _resolve_category_timeline_shape_sync(self, *, sheet_name: str) -> tuple[int, int]:
+        fallback_column_count = max(len(self._list_receipt_categories_sync()) + 1, 2)
+        helper_end_column = _column_letter(ANALYSIS_HELPER_CATEGORY_MONTH_MATRIX_COLUMN_INDEX + fallback_column_count - 1)
+        helper_range = f"'{sheet_name}'!{ANALYSIS_HELPER_CATEGORY_MONTH_MATRIX_START_COLUMN}2:{helper_end_column}200"
+        for _ in range(10):
+            response = (
+                self._sheets.spreadsheets()
+                .values()
+                .get(
+                    spreadsheetId=self._spreadsheet_id,
+                    range=helper_range,
+                    valueRenderOption="UNFORMATTED_VALUE",
+                )
+                .execute()
+            )
+            values = response.get("values", [])
+            if len(values) > 1 and len(values[0]) > 1 and len(values[1]) > 1:
+                return len(values[0]), len(values)
+            time.sleep(0.5)
+        return fallback_column_count, 2
+
+    def _sync_category_timeline_chart_source_sync(self, *, sheet_name: str, column_count: int, row_count: int) -> None:
+        target_end_column = _column_letter(ANALYSIS_HELPER_CATEGORY_MONTH_CHART_SOURCE_COLUMN_INDEX + column_count - 1)
+        source_rows = [
+            [
+                f"={_column_letter(ANALYSIS_HELPER_CATEGORY_MONTH_MATRIX_COLUMN_INDEX + column_offset)}{row_number}"
+                for column_offset in range(column_count)
+            ]
+            for row_number in range(2, 2 + row_count)
+        ]
+        (
+            self._sheets.spreadsheets()
+            .values()
+            .update(
+                spreadsheetId=self._spreadsheet_id,
+                range=f"'{sheet_name}'!{ANALYSIS_HELPER_CATEGORY_MONTH_CHART_SOURCE_START_COLUMN}2:{target_end_column}{row_count + 1}",
+                valueInputOption="USER_ENTERED",
+                body={"values": source_rows},
+            )
+            .execute()
+        )
+
+    def _wait_for_category_timeline_chart_source_sync(self, *, sheet_name: str, column_count: int) -> None:
+        target_end_column = _column_letter(ANALYSIS_HELPER_CATEGORY_MONTH_CHART_SOURCE_COLUMN_INDEX + column_count - 1)
+        target_range = f"'{sheet_name}'!{ANALYSIS_HELPER_CATEGORY_MONTH_CHART_SOURCE_START_COLUMN}2:{target_end_column}3"
+        for _ in range(10):
+            response = (
+                self._sheets.spreadsheets()
+                .values()
+                .get(
+                    spreadsheetId=self._spreadsheet_id,
+                    range=target_range,
+                    valueRenderOption="UNFORMATTED_VALUE",
+                )
+                .execute()
+            )
+            values = response.get("values", [])
+            if len(values) > 1 and len(values[0]) > 1 and len(values[1]) > 1:
+                return
+            time.sleep(0.5)
 
     def _resolve_receipt_sheet_name(self, row: list[str]) -> str:
         for column_index in (RECEIPT_PURCHASE_DATE_INDEX, RECEIPT_PROCESSED_AT_INDEX):
@@ -1161,6 +1244,7 @@ def build_analysis_sheet_rows(
     _set_grid_cell(rows, 2, ANALYSIS_HELPER_CATEGORY_ROLLUP_COLUMN_INDEX, _build_category_rollup_formula())
     _set_grid_cell(rows, 2, ANALYSIS_HELPER_MONTH_REFERENCE_COLUMN_INDEX, _build_month_reference_formula(source_sheet_names))
     _set_grid_cell(rows, 2, ANALYSIS_HELPER_MONTH_ROLLUP_COLUMN_INDEX, _build_month_rollup_formula())
+    _set_grid_cell(rows, 2, ANALYSIS_HELPER_CATEGORY_MONTH_MATRIX_COLUMN_INDEX, _build_category_month_matrix_formula())
 
     _set_grid_cell(rows, 5, 1, f'=IFERROR(COUNTA(FILTER(INDEX(${ANALYSIS_HELPER_RECEIPT_TOTALS_START_COLUMN}$2:${ANALYSIS_HELPER_RECEIPT_TOTALS_END_COLUMN},,1), LEN(INDEX(${ANALYSIS_HELPER_RECEIPT_TOTALS_START_COLUMN}$2:${ANALYSIS_HELPER_RECEIPT_TOTALS_END_COLUMN},,1)))), 0)')
     _set_grid_cell(rows, 5, 5, f'=IFERROR(SUM(FILTER(INDEX(${ANALYSIS_HELPER_RECEIPT_TOTALS_START_COLUMN}$2:${ANALYSIS_HELPER_RECEIPT_TOTALS_END_COLUMN},,4), LEN(INDEX(${ANALYSIS_HELPER_RECEIPT_TOTALS_START_COLUMN}$2:${ANALYSIS_HELPER_RECEIPT_TOTALS_END_COLUMN},,1)))), 0)')
@@ -1423,7 +1507,42 @@ def _build_month_trend_sparkline_formula() -> str:
     )
 
 
-def _build_analysis_dashboard_chart_requests(*, sheet_id: int) -> list[dict[str, object]]:
+def _build_category_month_matrix_formula() -> str:
+    active_line_items_range = f"${ANALYSIS_HELPER_ACTIVE_LINE_ITEMS_START_COLUMN}$2:${ANALYSIS_HELPER_ACTIVE_LINE_ITEMS_END_COLUMN}"
+    receipt_totals_range = f"${ANALYSIS_HELPER_RECEIPT_TOTALS_START_COLUMN}$2:${ANALYSIS_HELPER_RECEIPT_TOTALS_END_COLUMN}"
+    month_reference_range = f"${ANALYSIS_HELPER_MONTH_REFERENCE_START_COLUMN}$2:${ANALYSIS_HELPER_MONTH_REFERENCE_START_COLUMN}"
+    category_reference_range = f"${ANALYSIS_HELPER_CATEGORY_REFERENCE_START_COLUMN}$2:${ANALYSIS_HELPER_CATEGORY_REFERENCE_START_COLUMN}"
+    receipt_date_value_formula = _build_sheet_date_value_formula(receipt_totals_range, 3)
+    return (
+        "=IFERROR(LET("
+        f"months, FILTER({month_reference_range}, LEN({month_reference_range})),"
+        f"categories, FILTER({category_reference_range}, LEN({category_reference_range})),"
+        f"itemCategories, INDEX({active_line_items_range},,1),"
+        f"itemAmounts, N(INDEX({active_line_items_range},,2)),"
+        f"itemKeys, INDEX({active_line_items_range},,3),"
+        f'receiptMonthLookup, {{INDEX({receipt_totals_range},,1), TEXT({receipt_date_value_formula}, "yyyy-mm")}},'
+        'itemMonths, IFNA(VLOOKUP(itemKeys, receiptMonthLookup, 2, FALSE), ""),'
+        f'headerRow, HSTACK("{ANALYSIS_MONTH_HEADER_LABEL}", TRANSPOSE(categories)),'
+        "valueMatrix, MAKEARRAY(ROWS(months), ROWS(categories), "
+        "LAMBDA(row_index, column_index, "
+        "IFERROR(SUM(FILTER("
+        "itemAmounts, "
+        "itemMonths=INDEX(months, row_index), "
+        "itemCategories=INDEX(categories, column_index)"
+        ")), 0)"
+        ")),"
+        "VSTACK(headerRow, HSTACK(months, valueMatrix))"
+        "), "
+        f'{{"{ANALYSIS_MONTH_HEADER_LABEL}","{ANALYSIS_NONE_LABEL}";"{ANALYSIS_NO_MONTH_DATA_LABEL}",0}})'
+    )
+
+
+def _build_analysis_dashboard_chart_requests(
+    *,
+    sheet_id: int,
+    category_timeline_series_count: int,
+    category_timeline_row_count: int,
+) -> list[dict[str, object]]:
     return [
         _build_basic_chart_request(
             sheet_id=sheet_id,
@@ -1468,13 +1587,40 @@ def _build_analysis_dashboard_chart_requests(*, sheet_id: int) -> list[dict[str,
             series_start_column=12,
             series_end_column=13,
             start_row_index=9,
-            end_row_index=85,
+            end_row_index=200,
             anchor_row_index=32,
             anchor_column_index=0,
             width_pixels=1040,
             height_pixels=320,
             bottom_axis_title=ANALYSIS_MONTH_HEADER_LABEL,
             left_axis_title=ANALYSIS_RECEIPT_TOTAL_LABEL,
+        ),
+        _build_basic_chart_request(
+            sheet_id=sheet_id,
+            title=ANALYSIS_CATEGORY_TIMELINE_CHART_TITLE,
+            chart_type="COLUMN",
+            domain_start_column=ANALYSIS_HELPER_CATEGORY_MONTH_CHART_SOURCE_COLUMN_INDEX - 1,
+            domain_end_column=ANALYSIS_HELPER_CATEGORY_MONTH_CHART_SOURCE_COLUMN_INDEX,
+            series_start_column=ANALYSIS_HELPER_CATEGORY_MONTH_CHART_SOURCE_COLUMN_INDEX,
+            series_end_column=ANALYSIS_HELPER_CATEGORY_MONTH_CHART_SOURCE_COLUMN_INDEX + 1,
+            series_column_ranges=[
+                (
+                    ANALYSIS_HELPER_CATEGORY_MONTH_CHART_SOURCE_COLUMN_INDEX + offset,
+                    ANALYSIS_HELPER_CATEGORY_MONTH_CHART_SOURCE_COLUMN_INDEX + offset + 1,
+                )
+                for offset in range(category_timeline_series_count)
+            ],
+            start_row_index=1,
+            end_row_index=1 + category_timeline_row_count,
+            anchor_row_index=54,
+            anchor_column_index=0,
+            width_pixels=1040,
+            height_pixels=360,
+            bottom_axis_title=ANALYSIS_MONTH_HEADER_LABEL,
+            left_axis_title=ANALYSIS_TOTAL_AMOUNT_HEADER_LABEL,
+            header_count=1,
+            legend_position="RIGHT_LEGEND",
+            stacked_type="STACKED",
         ),
     ]
 
@@ -1496,56 +1642,66 @@ def _build_basic_chart_request(
     height_pixels: int,
     bottom_axis_title: str,
     left_axis_title: str,
+    header_count: int = 0,
+    legend_position: str = "NO_LEGEND",
+    stacked_type: str | None = None,
+    series_column_ranges: list[tuple[int, int]] | None = None,
 ) -> dict[str, object]:
+    resolved_series_column_ranges = series_column_ranges or [(series_start_column, series_end_column)]
+    basic_chart: dict[str, object] = {
+        "chartType": chart_type,
+        "legendPosition": legend_position,
+        "headerCount": header_count,
+        "axis": [
+            {"position": "BOTTOM_AXIS", "title": bottom_axis_title},
+            {"position": "LEFT_AXIS", "title": left_axis_title},
+        ],
+        "domains": [
+            {
+                "domain": {
+                    "sourceRange": {
+                        "sources": [
+                            {
+                                "sheetId": sheet_id,
+                                "startRowIndex": start_row_index,
+                                "endRowIndex": end_row_index,
+                                "startColumnIndex": domain_start_column,
+                                "endColumnIndex": domain_end_column,
+                            }
+                        ]
+                    }
+                }
+            }
+        ],
+        "series": [
+            {
+                "series": {
+                    "sourceRange": {
+                        "sources": [
+                            {
+                                "sheetId": sheet_id,
+                                "startRowIndex": start_row_index,
+                                "endRowIndex": end_row_index,
+                                "startColumnIndex": column_start,
+                                "endColumnIndex": column_end,
+                            }
+                        ]
+                    }
+                },
+                "targetAxis": "BOTTOM_AXIS" if chart_type == "BAR" else "LEFT_AXIS",
+            }
+            for column_start, column_end in resolved_series_column_ranges
+        ],
+    }
+    if stacked_type is not None:
+        basic_chart["stackedType"] = stacked_type
+
     return {
         "addChart": {
             "chart": {
                 "spec": {
                     "title": title,
-                    "basicChart": {
-                        "chartType": chart_type,
-                        "legendPosition": "NO_LEGEND",
-                        "headerCount": 0,
-                        "axis": [
-                            {"position": "BOTTOM_AXIS", "title": bottom_axis_title},
-                            {"position": "LEFT_AXIS", "title": left_axis_title},
-                        ],
-                        "domains": [
-                            {
-                                "domain": {
-                                    "sourceRange": {
-                                        "sources": [
-                                            {
-                                                "sheetId": sheet_id,
-                                                "startRowIndex": start_row_index,
-                                                "endRowIndex": end_row_index,
-                                                "startColumnIndex": domain_start_column,
-                                                "endColumnIndex": domain_end_column,
-                                            }
-                                        ]
-                                    }
-                                }
-                            }
-                        ],
-                        "series": [
-                            {
-                                "series": {
-                                    "sourceRange": {
-                                        "sources": [
-                                            {
-                                                "sheetId": sheet_id,
-                                                "startRowIndex": start_row_index,
-                                                "endRowIndex": end_row_index,
-                                                "startColumnIndex": series_start_column,
-                                                "endColumnIndex": series_end_column,
-                                            }
-                                        ]
-                                    }
-                                },
-                                "targetAxis": "BOTTOM_AXIS" if chart_type == "BAR" else "LEFT_AXIS",
-                            }
-                        ],
-                    },
+                    "basicChart": basic_chart,
                 },
                 "position": {
                     "overlayPosition": {

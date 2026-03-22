@@ -60,8 +60,8 @@ class _FakeSheetsValues:
         self.clear_calls.append({"spreadsheetId": spreadsheetId, "range": range, "body": body})
         return _Execute()
 
-    def get(self, *, spreadsheetId: str, range: str) -> _Execute:
-        del spreadsheetId
+    def get(self, *, spreadsheetId: str, range: str, valueRenderOption: str | None = None) -> _Execute:
+        del spreadsheetId, valueRenderOption
         return _Execute({"values": self.values_by_range.get(range, [])})
 
 
@@ -152,6 +152,13 @@ def _build_workspace_client(
 ) -> tuple[GoogleWorkspaceClient, _FakeSheetsService, _FakeDriveService]:
     fake_sheets = _FakeSheetsService()
     fake_drive = _FakeDriveService(existing_folders=existing_folders)
+    category_rows = [
+        ["Food", "Meals", "TRUE"],
+        ["Daily", "Supplies", "TRUE"],
+        ["Pets", "Unused", "TRUE"],
+    ]
+    fake_sheets.values_service.values_by_range["'Categories'!A2:C"] = category_rows
+    fake_sheets.values_service.values_by_range["'Categories'!A2:F"] = [row + ["", "", ""] for row in category_rows]
 
     def _fake_build(service_name: str, version: str, credentials, cache_discovery: bool):
         del version, credentials, cache_discovery
@@ -366,6 +373,8 @@ def test_build_analysis_sheet_rows_uses_sheet_formulas_for_all_years_scope() -> 
     assert "VLOOKUP(" in str(_cell(analysis_rows, 2, 75))
     assert "'Categories'!A2:A" in str(_cell(analysis_rows, 2, 80))
     assert '{"2025-01";"2025-02"' in str(_cell(analysis_rows, 2, 88))
+    assert "MAKEARRAY(" in str(_cell(analysis_rows, 2, 96))
+    assert "itemMonths=INDEX(months, row_index)" in str(_cell(analysis_rows, 2, 96))
     assert str(_cell(analysis_rows, 5, 1)).startswith("=IFERROR(COUNTA(FILTER(")
     assert _cell(analysis_rows, 8, 1) == "カテゴリ分析"
     assert _cell(analysis_rows, 8, 8) == "店舗分析"
@@ -392,6 +401,7 @@ def test_build_analysis_sheet_rows_uses_single_year_source_formula() -> None:
     assert _cell(analysis_rows, 2, 14) == "更新日時"
     assert _cell(analysis_rows, 2, 24) == '=QUERY(\'2025\'!A2:AL, "select * where Col11 is not null", 0)'
     assert '"2025-01"' in str(_cell(analysis_rows, 2, 88))
+    assert "MAKEARRAY(" in str(_cell(analysis_rows, 2, 96))
 
 
 def test_build_analysis_sheet_rows_creates_empty_template_without_year_sources() -> None:
@@ -428,22 +438,62 @@ def test_build_analysis_sheet_rows_includes_formula_paths_for_rescan_and_total_f
     assert "COUNTUNIQUE(" in str(_cell(analysis_rows, 2, 90))
     assert "FILTER(amounts" in str(_cell(analysis_rows, 2, 90))
     assert "ISNUMBER(" in str(_cell(analysis_rows, 2, 90))
+    assert "VSTACK(headerRow" in str(_cell(analysis_rows, 2, 96))
+    assert 'TEXT(IF(ISNUMBER(INDEX($BW$2:$BZ,,3))' in str(_cell(analysis_rows, 2, 96))
     assert "ISNUMBER(" in str(_cell(analysis_rows, 7, 5))
     assert "count distinct" not in str(_cell(analysis_rows, 2, 83)).lower()
     assert "count distinct" not in str(_cell(analysis_rows, 2, 90)).lower()
 
 
-def test_apply_analysis_dashboard_charts_creates_category_merchant_and_monthly_charts(monkeypatch) -> None:
+def test_resolve_category_timeline_shape_uses_spilled_matrix(monkeypatch) -> None:
+    client, fake_sheets, _fake_drive = _build_workspace_client(monkeypatch)
+    fake_sheets.values_service.values_by_range["'Analysis 2025'!CR2:CU3"] = [
+        ["年月", "Food", "Daily", "Pets"],
+        ["2025-01", 10, 0, 0],
+    ]
+
+    assert client._resolve_category_timeline_shape_sync(sheet_name="Analysis 2025") == (4, 2)
+
+
+def test_sync_category_timeline_chart_source_copies_spilled_matrix(monkeypatch) -> None:
     client, fake_sheets, _fake_drive = _build_workspace_client(monkeypatch)
 
-    client._apply_analysis_dashboard_charts_sync(sheet_id=321)
+    client._sync_category_timeline_chart_source_sync(
+        sheet_name="Analysis 2025",
+        column_count=4,
+        row_count=3,
+    )
+
+    assert fake_sheets.values_service.update_calls[0]["range"] == "'Analysis 2025'!EJ2:EM4"
+    assert fake_sheets.values_service.update_calls[0]["body"]["values"][0] == ["=CR2", "=CS2", "=CT2", "=CU2"]
+    assert fake_sheets.values_service.update_calls[0]["body"]["values"][1] == ["=CR3", "=CS3", "=CT3", "=CU3"]
+
+
+def test_wait_for_category_timeline_chart_source_sync_accepts_ready_values(monkeypatch) -> None:
+    client, fake_sheets, _fake_drive = _build_workspace_client(monkeypatch)
+    fake_sheets.values_service.values_by_range["'Analysis 2025'!EJ2:EM3"] = [
+        ["年月", "Food", "Daily", "Pets"],
+        ["2025-01", 10, 0, 0],
+    ]
+
+    client._wait_for_category_timeline_chart_source_sync(sheet_name="Analysis 2025", column_count=4)
+
+
+def test_apply_analysis_dashboard_charts_creates_category_merchant_monthly_and_stacked_charts(monkeypatch) -> None:
+    client, fake_sheets, _fake_drive = _build_workspace_client(monkeypatch)
+    monkeypatch.setattr(client, "_resolve_category_timeline_shape_sync", lambda **kwargs: (4, 13))
+    monkeypatch.setattr(client, "_sync_category_timeline_chart_source_sync", lambda **kwargs: None)
+    monkeypatch.setattr(client, "_wait_for_category_timeline_chart_source_sync", lambda **kwargs: None)
+
+    client._apply_analysis_dashboard_charts_sync(sheet_id=321, sheet_name="Analysis 2025")
 
     chart_requests = fake_sheets.batch_update_calls[-1]["requests"]
-    assert len(chart_requests) == 3
+    assert len(chart_requests) == 4
 
     category_chart = chart_requests[0]["addChart"]["chart"]
     merchant_chart = chart_requests[1]["addChart"]["chart"]
     monthly_chart = chart_requests[2]["addChart"]["chart"]
+    stacked_chart = chart_requests[3]["addChart"]["chart"]
 
     assert category_chart["spec"]["title"] == "カテゴリ別支出"
     assert category_chart["spec"]["basicChart"]["chartType"] == "BAR"
@@ -458,11 +508,26 @@ def test_apply_analysis_dashboard_charts_creates_category_merchant_and_monthly_c
     assert monthly_chart["position"]["overlayPosition"]["anchorCell"] == {"sheetId": 321, "rowIndex": 32, "columnIndex": 0}
     assert monthly_chart["spec"]["basicChart"]["domains"][0]["domain"]["sourceRange"]["sources"][0]["startColumnIndex"] == 11
     assert monthly_chart["spec"]["basicChart"]["series"][0]["series"]["sourceRange"]["sources"][0]["startColumnIndex"] == 12
+    assert monthly_chart["spec"]["basicChart"]["headerCount"] == 0
+
+    assert stacked_chart["spec"]["title"] == "月次カテゴリ別支出"
+    assert stacked_chart["spec"]["basicChart"]["chartType"] == "COLUMN"
+    assert stacked_chart["spec"]["basicChart"]["stackedType"] == "STACKED"
+    assert stacked_chart["spec"]["basicChart"]["legendPosition"] == "RIGHT_LEGEND"
+    assert stacked_chart["spec"]["basicChart"]["headerCount"] == 1
+    assert stacked_chart["position"]["overlayPosition"]["anchorCell"] == {"sheetId": 321, "rowIndex": 54, "columnIndex": 0}
+    assert stacked_chart["spec"]["basicChart"]["domains"][0]["domain"]["sourceRange"]["sources"][0]["startColumnIndex"] == 139
+    assert len(stacked_chart["spec"]["basicChart"]["series"]) == 3
+    assert stacked_chart["spec"]["basicChart"]["series"][0]["series"]["sourceRange"]["sources"][0]["startColumnIndex"] == 140
+    assert stacked_chart["spec"]["basicChart"]["series"][0]["series"]["sourceRange"]["sources"][0]["endColumnIndex"] == 141
 
 
 def test_replace_sheet_values_sync_recreates_chart_requests(monkeypatch) -> None:
     client, fake_sheets, _fake_drive = _build_workspace_client(monkeypatch)
     monkeypatch.setattr(client, "_recreate_analysis_sheet_sync", lambda **kwargs: 777)
+    monkeypatch.setattr(client, "_resolve_category_timeline_shape_sync", lambda **kwargs: (4, 13))
+    monkeypatch.setattr(client, "_sync_category_timeline_chart_source_sync", lambda **kwargs: None)
+    monkeypatch.setattr(client, "_wait_for_category_timeline_chart_source_sync", lambda **kwargs: None)
 
     client._replace_sheet_values_sync(sheet_name="Analysis 2025", rows=[["HARINA 分析ダッシュボード"]])
 
@@ -472,6 +537,7 @@ def test_replace_sheet_values_sync_recreates_chart_requests(monkeypatch) -> None
         "カテゴリ別支出",
         "店舗別支出",
         "月次支出推移",
+        "月次カテゴリ別支出",
     ]
 
 

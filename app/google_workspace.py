@@ -30,6 +30,149 @@ def _column_letter(column_number: int) -> str:
     return "".join(reversed(letters))
 
 
+def _hex_color_style(hex_code: str) -> dict[str, dict[str, float]]:
+    normalized = hex_code.removeprefix("#")
+    if len(normalized) != 6:
+        raise ValueError(f"Expected 6-digit hex color, got: {hex_code}")
+    return {
+        "rgbColor": {
+            "red": int(normalized[0:2], 16) / 255,
+            "green": int(normalized[2:4], 16) / 255,
+            "blue": int(normalized[4:6], 16) / 255,
+        }
+    }
+
+
+def _sheet_range(
+    *,
+    sheet_id: int,
+    start_row_index: int,
+    end_row_index: int,
+    start_column_index: int,
+    end_column_index: int,
+) -> dict[str, int]:
+    return {
+        "sheetId": sheet_id,
+        "startRowIndex": start_row_index,
+        "endRowIndex": end_row_index,
+        "startColumnIndex": start_column_index,
+        "endColumnIndex": end_column_index,
+    }
+
+
+def _border_style(style: str, hex_code: str) -> dict[str, object]:
+    return {
+        "style": style,
+        "colorStyle": _hex_color_style(hex_code),
+    }
+
+
+def _build_analysis_merge_request(
+    *,
+    sheet_id: int,
+    start_row_index: int,
+    end_row_index: int,
+    start_column_index: int,
+    end_column_index: int,
+) -> dict[str, object]:
+    return {
+        "mergeCells": {
+            "range": _sheet_range(
+                sheet_id=sheet_id,
+                start_row_index=start_row_index,
+                end_row_index=end_row_index,
+                start_column_index=start_column_index,
+                end_column_index=end_column_index,
+            ),
+            "mergeType": "MERGE_ALL",
+        }
+    }
+
+
+def _build_analysis_repeat_cell_request(
+    *,
+    sheet_id: int,
+    start_row_index: int,
+    end_row_index: int,
+    start_column_index: int,
+    end_column_index: int,
+    user_entered_format: dict[str, object],
+    fields: str,
+) -> dict[str, object]:
+    return {
+        "repeatCell": {
+            "range": _sheet_range(
+                sheet_id=sheet_id,
+                start_row_index=start_row_index,
+                end_row_index=end_row_index,
+                start_column_index=start_column_index,
+                end_column_index=end_column_index,
+            ),
+            "cell": {"userEnteredFormat": user_entered_format},
+            "fields": fields,
+        }
+    }
+
+
+def _build_analysis_dimension_request(
+    *,
+    sheet_id: int,
+    dimension: str,
+    start_index: int,
+    end_index: int,
+    pixel_size: int | None = None,
+    hidden_by_user: bool | None = None,
+) -> dict[str, object]:
+    properties: dict[str, object] = {}
+    fields: list[str] = []
+    if pixel_size is not None:
+        properties["pixelSize"] = pixel_size
+        fields.append("pixelSize")
+    if hidden_by_user is not None:
+        properties["hiddenByUser"] = hidden_by_user
+        fields.append("hiddenByUser")
+    return {
+        "updateDimensionProperties": {
+            "range": {
+                "sheetId": sheet_id,
+                "dimension": dimension,
+                "startIndex": start_index,
+                "endIndex": end_index,
+            },
+            "properties": properties,
+            "fields": ",".join(fields),
+        }
+    }
+
+
+def _build_analysis_outlined_range_request(
+    *,
+    sheet_id: int,
+    start_row_index: int,
+    end_row_index: int,
+    start_column_index: int,
+    end_column_index: int,
+    color: str | None = None,
+    style: str = "SOLID_MEDIUM",
+) -> dict[str, object]:
+    border = _border_style(style, color or ANALYSIS_THEME_BORDER)
+    return {
+        "updateBorders": {
+            "range": _sheet_range(
+                sheet_id=sheet_id,
+                start_row_index=start_row_index,
+                end_row_index=end_row_index,
+                start_column_index=start_column_index,
+                end_column_index=end_column_index,
+            ),
+            "top": border,
+            "bottom": border,
+            "left": border,
+            "right": border,
+        }
+    }
+
+
 RECEIPT_PROCESSED_AT_INDEX = RECEIPT_SHEET_HEADERS.index("processedAt")
 RECEIPT_PURCHASE_DATE_INDEX = RECEIPT_SHEET_HEADERS.index("purchaseDate")
 RECEIPT_ATTACHMENT_NAME_COLUMN = chr(ord("A") + RECEIPT_SHEET_HEADERS.index("attachmentName"))
@@ -70,7 +213,25 @@ ANALYSIS_HELPER_MONTH_ROLLUP_START_COLUMN = _column_letter(ANALYSIS_HELPER_MONTH
 ANALYSIS_HELPER_MONTH_ROLLUP_END_COLUMN = _column_letter(ANALYSIS_HELPER_MONTH_ROLLUP_COLUMN_INDEX + 4)
 ANALYSIS_HELPER_CATEGORY_MONTH_MATRIX_START_COLUMN = _column_letter(ANALYSIS_HELPER_CATEGORY_MONTH_MATRIX_COLUMN_INDEX)
 ANALYSIS_HELPER_CATEGORY_MONTH_CHART_SOURCE_START_COLUMN = _column_letter(ANALYSIS_HELPER_CATEGORY_MONTH_CHART_SOURCE_COLUMN_INDEX)
+ANALYSIS_THEME_INK = "#1D2A24"
+ANALYSIS_THEME_FOREST = "#234437"
+ANALYSIS_THEME_MOSS = "#456A58"
+ANALYSIS_THEME_PARCHMENT = "#F7F1E3"
+ANALYSIS_THEME_SAND = "#E9DFC8"
+ANALYSIS_THEME_SAGE = "#D8E4D8"
+ANALYSIS_THEME_TEAL_MIST = "#D9E8E5"
+ANALYSIS_THEME_SKY_MIST = "#DCE8F1"
+ANALYSIS_THEME_NAVY = "#3C5A6B"
+ANALYSIS_THEME_NAVY_MIST = "#D9E2EA"
+ANALYSIS_THEME_TERRACOTTA = "#C86D4A"
+ANALYSIS_THEME_TERRACOTTA_MIST = "#F2DED5"
+ANALYSIS_THEME_AMBER = "#C9942F"
+ANALYSIS_THEME_AMBER_MIST = "#F3E5C4"
+ANALYSIS_THEME_IVORY = "#FFFDF8"
+ANALYSIS_THEME_SLATE = "#6A756F"
+ANALYSIS_THEME_BORDER = "#C9B89B"
 ANALYSIS_DASHBOARD_TITLE = "HARINA 分析ダッシュボード"
+ANALYSIS_DASHBOARD_SUBTITLE = "カテゴリ・店舗・月次のリズムを、一枚で眺めるレシートビュー"
 ANALYSIS_SCOPE_LABEL = "対象範囲"
 ANALYSIS_SCOPE_ALL_YEARS_LABEL = "全年度"
 ANALYSIS_SOURCE_SHEETS_LABEL = "対象シート"
@@ -109,6 +270,512 @@ ANALYSIS_CATEGORY_CHART_TITLE = "カテゴリ別支出"
 ANALYSIS_MERCHANT_CHART_TITLE = "店舗別支出"
 ANALYSIS_MONTHLY_CHART_TITLE = "月次支出推移"
 ANALYSIS_CATEGORY_TIMELINE_CHART_TITLE = "月次カテゴリ別支出"
+ANALYSIS_CHART_SERIES_PALETTE = [
+    ANALYSIS_THEME_FOREST,
+    ANALYSIS_THEME_TERRACOTTA,
+    ANALYSIS_THEME_NAVY,
+    ANALYSIS_THEME_AMBER,
+    ANALYSIS_THEME_MOSS,
+]
+
+
+def _build_analysis_dashboard_layout_requests(*, sheet_id: int) -> list[dict[str, object]]:
+    requests: list[dict[str, object]] = [
+        _build_analysis_merge_request(
+            sheet_id=sheet_id,
+            start_row_index=0,
+            end_row_index=1,
+            start_column_index=0,
+            end_column_index=ANALYSIS_VISIBLE_COLUMN_COUNT,
+        ),
+        _build_analysis_merge_request(
+            sheet_id=sheet_id,
+            start_row_index=1,
+            end_row_index=2,
+            start_column_index=1,
+            end_column_index=3,
+        ),
+        _build_analysis_merge_request(
+            sheet_id=sheet_id,
+            start_row_index=1,
+            end_row_index=2,
+            start_column_index=5,
+            end_column_index=12,
+        ),
+        _build_analysis_merge_request(
+            sheet_id=sheet_id,
+            start_row_index=1,
+            end_row_index=2,
+            start_column_index=14,
+            end_column_index=17,
+        ),
+        _build_analysis_merge_request(
+            sheet_id=sheet_id,
+            start_row_index=2,
+            end_row_index=3,
+            start_column_index=0,
+            end_column_index=ANALYSIS_VISIBLE_COLUMN_COUNT,
+        ),
+        _build_analysis_merge_request(
+            sheet_id=sheet_id,
+            start_row_index=6,
+            end_row_index=7,
+            start_column_index=0,
+            end_column_index=4,
+        ),
+        _build_analysis_merge_request(
+            sheet_id=sheet_id,
+            start_row_index=6,
+            end_row_index=7,
+            start_column_index=4,
+            end_column_index=ANALYSIS_VISIBLE_COLUMN_COUNT,
+        ),
+        _build_analysis_merge_request(
+            sheet_id=sheet_id,
+            start_row_index=9,
+            end_row_index=12,
+            start_column_index=17,
+            end_column_index=20,
+        ),
+        _build_analysis_repeat_cell_request(
+            sheet_id=sheet_id,
+            start_row_index=0,
+            end_row_index=200,
+            start_column_index=0,
+            end_column_index=ANALYSIS_VISIBLE_COLUMN_COUNT,
+            user_entered_format={
+                "backgroundColorStyle": _hex_color_style(ANALYSIS_THEME_PARCHMENT),
+                "textFormat": {"foregroundColorStyle": _hex_color_style(ANALYSIS_THEME_INK)},
+                "verticalAlignment": "MIDDLE",
+                "wrapStrategy": "WRAP",
+            },
+            fields="userEnteredFormat(backgroundColorStyle,textFormat,verticalAlignment,wrapStrategy)",
+        ),
+        _build_analysis_repeat_cell_request(
+            sheet_id=sheet_id,
+            start_row_index=0,
+            end_row_index=1,
+            start_column_index=0,
+            end_column_index=ANALYSIS_VISIBLE_COLUMN_COUNT,
+            user_entered_format={
+                "backgroundColorStyle": _hex_color_style(ANALYSIS_THEME_FOREST),
+                "horizontalAlignment": "CENTER",
+                "verticalAlignment": "MIDDLE",
+                "textFormat": {
+                    "foregroundColorStyle": _hex_color_style(ANALYSIS_THEME_IVORY),
+                    "fontSize": 20,
+                    "bold": True,
+                    "fontFamily": "Georgia",
+                },
+            },
+            fields="userEnteredFormat(backgroundColorStyle,textFormat,horizontalAlignment,verticalAlignment)",
+        ),
+        _build_analysis_repeat_cell_request(
+            sheet_id=sheet_id,
+            start_row_index=2,
+            end_row_index=3,
+            start_column_index=0,
+            end_column_index=ANALYSIS_VISIBLE_COLUMN_COUNT,
+            user_entered_format={
+                "backgroundColorStyle": _hex_color_style(ANALYSIS_THEME_PARCHMENT),
+                "horizontalAlignment": "CENTER",
+                "verticalAlignment": "MIDDLE",
+                "textFormat": {
+                    "foregroundColorStyle": _hex_color_style(ANALYSIS_THEME_SLATE),
+                    "fontSize": 11,
+                    "italic": True,
+                },
+            },
+            fields="userEnteredFormat(backgroundColorStyle,textFormat,horizontalAlignment,verticalAlignment)",
+        ),
+        _build_analysis_repeat_cell_request(
+            sheet_id=sheet_id,
+            start_row_index=3,
+            end_row_index=4,
+            start_column_index=0,
+            end_column_index=ANALYSIS_VISIBLE_COLUMN_COUNT,
+            user_entered_format={
+                "backgroundColorStyle": _hex_color_style(ANALYSIS_THEME_PARCHMENT),
+                "horizontalAlignment": "CENTER",
+                "verticalAlignment": "MIDDLE",
+                "textFormat": {
+                    "foregroundColorStyle": _hex_color_style(ANALYSIS_THEME_MOSS),
+                    "fontSize": 9,
+                    "bold": True,
+                },
+            },
+            fields="userEnteredFormat(backgroundColorStyle,textFormat,horizontalAlignment,verticalAlignment)",
+        ),
+    ]
+
+    for start_column in (0, 4, 8, 12, 16):
+        requests.append(
+            _build_analysis_merge_request(
+                sheet_id=sheet_id,
+                start_row_index=4,
+                end_row_index=6,
+                start_column_index=start_column,
+                end_column_index=start_column + 4,
+            )
+        )
+
+    for start_column, end_column in ((0, 6), (7, 10), (11, 16), (17, 20)):
+        requests.append(
+            _build_analysis_merge_request(
+                sheet_id=sheet_id,
+                start_row_index=7,
+                end_row_index=8,
+                start_column_index=start_column,
+                end_column_index=end_column,
+            )
+        )
+
+    for label_column in (0, 4, 13):
+        requests.append(
+            _build_analysis_repeat_cell_request(
+                sheet_id=sheet_id,
+                start_row_index=1,
+                end_row_index=2,
+                start_column_index=label_column,
+                end_column_index=label_column + 1,
+                user_entered_format={
+                    "backgroundColorStyle": _hex_color_style(ANALYSIS_THEME_FOREST),
+                    "horizontalAlignment": "CENTER",
+                    "verticalAlignment": "MIDDLE",
+                    "textFormat": {
+                        "foregroundColorStyle": _hex_color_style(ANALYSIS_THEME_IVORY),
+                        "fontSize": 10,
+                        "bold": True,
+                    },
+                },
+                fields="userEnteredFormat(backgroundColorStyle,textFormat,horizontalAlignment,verticalAlignment)",
+            )
+        )
+
+    for start_column, end_column, alignment in ((1, 3, "CENTER"), (5, 12, "LEFT"), (14, 17, "CENTER")):
+        requests.append(
+            _build_analysis_repeat_cell_request(
+                sheet_id=sheet_id,
+                start_row_index=1,
+                end_row_index=2,
+                start_column_index=start_column,
+                end_column_index=end_column,
+                user_entered_format={
+                    "backgroundColorStyle": _hex_color_style(ANALYSIS_THEME_SAND),
+                    "horizontalAlignment": alignment,
+                    "verticalAlignment": "MIDDLE",
+                    "textFormat": {
+                        "foregroundColorStyle": _hex_color_style(ANALYSIS_THEME_INK),
+                        "fontSize": 10,
+                        "bold": True,
+                    },
+                    "wrapStrategy": "WRAP",
+                },
+                fields="userEnteredFormat(backgroundColorStyle,textFormat,horizontalAlignment,verticalAlignment,wrapStrategy)",
+            )
+        )
+
+    for label_column in (0, 4, 8, 12, 16):
+        requests.append(
+            _build_analysis_repeat_cell_request(
+                sheet_id=sheet_id,
+                start_row_index=3,
+                end_row_index=4,
+                start_column_index=label_column,
+                end_column_index=label_column + 1,
+                user_entered_format={
+                    "backgroundColorStyle": _hex_color_style(ANALYSIS_THEME_PARCHMENT),
+                    "horizontalAlignment": "LEFT",
+                    "verticalAlignment": "BOTTOM",
+                    "textFormat": {
+                        "foregroundColorStyle": _hex_color_style(ANALYSIS_THEME_MOSS),
+                        "fontSize": 9,
+                        "bold": True,
+                    },
+                },
+                fields="userEnteredFormat(backgroundColorStyle,textFormat,horizontalAlignment,verticalAlignment)",
+            )
+        )
+
+    for start_column, background_color, text_color in (
+        (0, ANALYSIS_THEME_SAGE, ANALYSIS_THEME_FOREST),
+        (4, ANALYSIS_THEME_AMBER_MIST, ANALYSIS_THEME_AMBER),
+        (8, ANALYSIS_THEME_TERRACOTTA_MIST, ANALYSIS_THEME_TERRACOTTA),
+        (12, ANALYSIS_THEME_NAVY_MIST, ANALYSIS_THEME_NAVY),
+        (16, ANALYSIS_THEME_TEAL_MIST, ANALYSIS_THEME_MOSS),
+    ):
+        requests.append(
+            _build_analysis_repeat_cell_request(
+                sheet_id=sheet_id,
+                start_row_index=4,
+                end_row_index=6,
+                start_column_index=start_column,
+                end_column_index=start_column + 4,
+                user_entered_format={
+                    "backgroundColorStyle": _hex_color_style(background_color),
+                    "horizontalAlignment": "CENTER",
+                    "verticalAlignment": "MIDDLE",
+                    "textFormat": {
+                        "foregroundColorStyle": _hex_color_style(text_color),
+                        "fontSize": 18,
+                        "bold": True,
+                    },
+                    "numberFormat": {"type": "NUMBER", "pattern": "#,##0"},
+                },
+                fields="userEnteredFormat(backgroundColorStyle,textFormat,horizontalAlignment,verticalAlignment,numberFormat)",
+            )
+        )
+
+    for start_column, end_column, background_color, text_color in (
+        (0, 4, ANALYSIS_THEME_FOREST, ANALYSIS_THEME_IVORY),
+        (4, 20, ANALYSIS_THEME_SAND, ANALYSIS_THEME_INK),
+        (0, 6, ANALYSIS_THEME_FOREST, ANALYSIS_THEME_IVORY),
+        (7, 10, ANALYSIS_THEME_TERRACOTTA, ANALYSIS_THEME_IVORY),
+        (11, 16, ANALYSIS_THEME_NAVY, ANALYSIS_THEME_IVORY),
+        (17, 20, ANALYSIS_THEME_AMBER, ANALYSIS_THEME_INK),
+    ):
+        start_row_index = 6 if start_column in (0, 4) and end_column in (4, 20) else 7
+        end_row_index = 7 if start_column in (0, 4) and end_column in (4, 20) else 8
+        requests.append(
+            _build_analysis_repeat_cell_request(
+                sheet_id=sheet_id,
+                start_row_index=start_row_index,
+                end_row_index=end_row_index,
+                start_column_index=start_column,
+                end_column_index=end_column,
+                user_entered_format={
+                    "backgroundColorStyle": _hex_color_style(background_color),
+                    "horizontalAlignment": "CENTER" if start_row_index == 7 else ("LEFT" if start_column == 4 else "CENTER"),
+                    "verticalAlignment": "MIDDLE",
+                    "textFormat": {
+                        "foregroundColorStyle": _hex_color_style(text_color),
+                        "fontSize": 11 if start_row_index == 7 else 10,
+                        "bold": True,
+                    },
+                    **({"wrapStrategy": "WRAP"} if start_column == 4 and start_row_index == 6 else {}),
+                },
+                fields="userEnteredFormat(backgroundColorStyle,textFormat,horizontalAlignment,verticalAlignment,wrapStrategy)",
+            )
+        )
+
+    for start_column, end_column, background_color in (
+        (0, 6, ANALYSIS_THEME_SAGE),
+        (7, 10, ANALYSIS_THEME_TERRACOTTA_MIST),
+        (11, 16, ANALYSIS_THEME_NAVY_MIST),
+        (17, 20, ANALYSIS_THEME_AMBER_MIST),
+    ):
+        requests.append(
+            _build_analysis_repeat_cell_request(
+                sheet_id=sheet_id,
+                start_row_index=8,
+                end_row_index=9,
+                start_column_index=start_column,
+                end_column_index=end_column,
+                user_entered_format={
+                    "backgroundColorStyle": _hex_color_style(background_color),
+                    "horizontalAlignment": "CENTER",
+                    "verticalAlignment": "MIDDLE",
+                    "textFormat": {
+                        "foregroundColorStyle": _hex_color_style(ANALYSIS_THEME_INK),
+                        "fontSize": 10,
+                        "bold": True,
+                    },
+                },
+                fields="userEnteredFormat(backgroundColorStyle,textFormat,horizontalAlignment,verticalAlignment)",
+            )
+        )
+
+    requests.extend(
+        [
+            _build_analysis_repeat_cell_request(
+                sheet_id=sheet_id,
+                start_row_index=9,
+                end_row_index=200,
+                start_column_index=1,
+                end_column_index=2,
+                user_entered_format={
+                    "backgroundColorStyle": _hex_color_style(ANALYSIS_THEME_IVORY),
+                    "verticalAlignment": "TOP",
+                    "wrapStrategy": "WRAP",
+                },
+                fields="userEnteredFormat(backgroundColorStyle,verticalAlignment,wrapStrategy)",
+            ),
+            _build_analysis_repeat_cell_request(
+                sheet_id=sheet_id,
+                start_row_index=9,
+                end_row_index=200,
+                start_column_index=7,
+                end_column_index=8,
+                user_entered_format={
+                    "backgroundColorStyle": _hex_color_style(ANALYSIS_THEME_IVORY),
+                    "verticalAlignment": "TOP",
+                    "wrapStrategy": "WRAP",
+                },
+                fields="userEnteredFormat(backgroundColorStyle,verticalAlignment,wrapStrategy)",
+            ),
+            _build_analysis_repeat_cell_request(
+                sheet_id=sheet_id,
+                start_row_index=9,
+                end_row_index=200,
+                start_column_index=2,
+                end_column_index=5,
+                user_entered_format={"horizontalAlignment": "RIGHT", "verticalAlignment": "TOP"},
+                fields="userEnteredFormat(horizontalAlignment,verticalAlignment)",
+            ),
+            _build_analysis_repeat_cell_request(
+                sheet_id=sheet_id,
+                start_row_index=9,
+                end_row_index=200,
+                start_column_index=8,
+                end_column_index=10,
+                user_entered_format={"horizontalAlignment": "RIGHT", "verticalAlignment": "TOP"},
+                fields="userEnteredFormat(horizontalAlignment,verticalAlignment)",
+            ),
+            _build_analysis_repeat_cell_request(
+                sheet_id=sheet_id,
+                start_row_index=9,
+                end_row_index=200,
+                start_column_index=12,
+                end_column_index=16,
+                user_entered_format={"horizontalAlignment": "RIGHT", "verticalAlignment": "TOP"},
+                fields="userEnteredFormat(horizontalAlignment,verticalAlignment)",
+            ),
+            _build_analysis_repeat_cell_request(
+                sheet_id=sheet_id,
+                start_row_index=9,
+                end_row_index=200,
+                start_column_index=5,
+                end_column_index=6,
+                user_entered_format={
+                    "horizontalAlignment": "CENTER",
+                    "verticalAlignment": "TOP",
+                    "textFormat": {"bold": True},
+                },
+                fields="userEnteredFormat(horizontalAlignment,verticalAlignment,textFormat)",
+            ),
+            _build_analysis_repeat_cell_request(
+                sheet_id=sheet_id,
+                start_row_index=9,
+                end_row_index=200,
+                start_column_index=11,
+                end_column_index=12,
+                user_entered_format={"horizontalAlignment": "CENTER", "verticalAlignment": "TOP"},
+                fields="userEnteredFormat(horizontalAlignment,verticalAlignment)",
+            ),
+        ]
+    )
+
+    requests.extend(
+        [
+            _build_analysis_repeat_cell_request(
+                sheet_id=sheet_id,
+                start_row_index=1,
+                end_row_index=2,
+                start_column_index=14,
+                end_column_index=17,
+                user_entered_format={
+                    "numberFormat": {"type": "DATE_TIME", "pattern": "yyyy-mm-dd hh:mm"},
+                    "horizontalAlignment": "CENTER",
+                },
+                fields="userEnteredFormat(numberFormat,horizontalAlignment)",
+            ),
+            _build_analysis_repeat_cell_request(
+                sheet_id=sheet_id,
+                start_row_index=9,
+                end_row_index=200,
+                start_column_index=2,
+                end_column_index=3,
+                user_entered_format={"numberFormat": {"type": "NUMBER", "pattern": "#,##0"}},
+                fields="userEnteredFormat(numberFormat)",
+            ),
+            _build_analysis_repeat_cell_request(
+                sheet_id=sheet_id,
+                start_row_index=9,
+                end_row_index=200,
+                start_column_index=3,
+                end_column_index=5,
+                user_entered_format={"numberFormat": {"type": "NUMBER", "pattern": "#,##0"}},
+                fields="userEnteredFormat(numberFormat)",
+            ),
+            _build_analysis_repeat_cell_request(
+                sheet_id=sheet_id,
+                start_row_index=9,
+                end_row_index=200,
+                start_column_index=8,
+                end_column_index=10,
+                user_entered_format={"numberFormat": {"type": "NUMBER", "pattern": "#,##0"}},
+                fields="userEnteredFormat(numberFormat)",
+            ),
+            _build_analysis_repeat_cell_request(
+                sheet_id=sheet_id,
+                start_row_index=9,
+                end_row_index=200,
+                start_column_index=12,
+                end_column_index=16,
+                user_entered_format={"numberFormat": {"type": "NUMBER", "pattern": "#,##0"}},
+                fields="userEnteredFormat(numberFormat)",
+            ),
+            _build_analysis_dimension_request(sheet_id=sheet_id, dimension="ROWS", start_index=0, end_index=1, pixel_size=54),
+            _build_analysis_dimension_request(sheet_id=sheet_id, dimension="ROWS", start_index=1, end_index=2, pixel_size=34),
+            _build_analysis_dimension_request(sheet_id=sheet_id, dimension="ROWS", start_index=2, end_index=3, pixel_size=28),
+            _build_analysis_dimension_request(sheet_id=sheet_id, dimension="ROWS", start_index=3, end_index=4, pixel_size=22),
+            _build_analysis_dimension_request(sheet_id=sheet_id, dimension="ROWS", start_index=4, end_index=6, pixel_size=36),
+            _build_analysis_dimension_request(sheet_id=sheet_id, dimension="ROWS", start_index=6, end_index=7, pixel_size=34),
+            _build_analysis_dimension_request(sheet_id=sheet_id, dimension="ROWS", start_index=7, end_index=8, pixel_size=28),
+            _build_analysis_dimension_request(sheet_id=sheet_id, dimension="ROWS", start_index=8, end_index=9, pixel_size=26),
+            _build_analysis_dimension_request(
+                sheet_id=sheet_id,
+                dimension="COLUMNS",
+                start_index=0,
+                end_index=ANALYSIS_VISIBLE_COLUMN_COUNT,
+                pixel_size=104,
+            ),
+            _build_analysis_dimension_request(sheet_id=sheet_id, dimension="COLUMNS", start_index=1, end_index=2, pixel_size=220),
+            _build_analysis_dimension_request(sheet_id=sheet_id, dimension="COLUMNS", start_index=6, end_index=7, pixel_size=28),
+            _build_analysis_dimension_request(sheet_id=sheet_id, dimension="COLUMNS", start_index=7, end_index=8, pixel_size=200),
+            _build_analysis_dimension_request(sheet_id=sheet_id, dimension="COLUMNS", start_index=10, end_index=11, pixel_size=28),
+            _build_analysis_dimension_request(sheet_id=sheet_id, dimension="COLUMNS", start_index=11, end_index=12, pixel_size=118),
+            _build_analysis_dimension_request(sheet_id=sheet_id, dimension="COLUMNS", start_index=16, end_index=17, pixel_size=28),
+            _build_analysis_dimension_request(sheet_id=sheet_id, dimension="COLUMNS", start_index=17, end_index=20, pixel_size=122),
+            _build_analysis_dimension_request(
+                sheet_id=sheet_id,
+                dimension="COLUMNS",
+                start_index=ANALYSIS_VISIBLE_COLUMN_COUNT,
+                end_index=ANALYSIS_MAX_COLUMN_INDEX,
+                hidden_by_user=True,
+            ),
+        ]
+    )
+
+    for start_row_index, end_row_index, start_column_index, end_column_index, style in (
+        (1, 2, 0, 3, "SOLID_MEDIUM"),
+        (1, 2, 4, 12, "SOLID_MEDIUM"),
+        (1, 2, 13, 17, "SOLID_MEDIUM"),
+        (2, 3, 0, ANALYSIS_VISIBLE_COLUMN_COUNT, "SOLID"),
+        (4, 6, 0, 4, "SOLID_MEDIUM"),
+        (4, 6, 4, 8, "SOLID_MEDIUM"),
+        (4, 6, 8, 12, "SOLID_MEDIUM"),
+        (4, 6, 12, 16, "SOLID_MEDIUM"),
+        (4, 6, 16, 20, "SOLID_MEDIUM"),
+        (6, 7, 0, 4, "SOLID_MEDIUM"),
+        (6, 7, 4, 20, "SOLID_MEDIUM"),
+        (7, 9, 0, 6, "SOLID_MEDIUM"),
+        (7, 9, 7, 10, "SOLID_MEDIUM"),
+        (7, 9, 11, 16, "SOLID_MEDIUM"),
+        (7, 12, 17, 20, "SOLID_MEDIUM"),
+    ):
+        requests.append(
+            _build_analysis_outlined_range_request(
+                sheet_id=sheet_id,
+                start_row_index=start_row_index,
+                end_row_index=end_row_index,
+                start_column_index=start_column_index,
+                end_column_index=end_column_index,
+                style=style,
+            )
+        )
+
+    return requests
 
 
 @dataclass(slots=True)
@@ -569,6 +1236,17 @@ class GoogleWorkspaceClient:
         return int(created_properties["sheetId"])
 
     def _apply_analysis_dashboard_layout_sync(self, *, sheet_id: int) -> None:
+        requests = _build_analysis_dashboard_layout_requests(sheet_id=sheet_id)
+        (
+            self._sheets.spreadsheets()
+            .batchUpdate(
+                spreadsheetId=self._spreadsheet_id,
+                body={"requests": requests},
+            )
+            .execute()
+        )
+        return
+
         requests: list[dict[str, object]] = [
             {
                 "mergeCells": {
@@ -614,6 +1292,18 @@ class GoogleWorkspaceClient:
                         "endRowIndex": 2,
                         "startColumnIndex": 14,
                         "endColumnIndex": 17,
+                    },
+                    "mergeType": "MERGE_ALL",
+                }
+            },
+            {
+                "mergeCells": {
+                    "range": {
+                        "sheetId": sheet_id,
+                        "startRowIndex": 2,
+                        "endRowIndex": 3,
+                        "startColumnIndex": 0,
+                        "endColumnIndex": ANALYSIS_VISIBLE_COLUMN_COUNT,
                     },
                     "mergeType": "MERGE_ALL",
                 }
@@ -1183,6 +1873,7 @@ def build_analysis_sheet_rows(
     _set_grid_cell(rows, 2, 6, source_sheet_text)
     _set_grid_cell(rows, 2, 14, ANALYSIS_GENERATED_AT_LABEL)
     _set_grid_cell(rows, 2, 15, "=NOW()")
+    _set_grid_cell(rows, 3, 1, ANALYSIS_DASHBOARD_SUBTITLE)
 
     _set_grid_cell(rows, 4, 1, ANALYSIS_UNIQUE_RECEIPTS_LABEL)
     _set_grid_cell(rows, 4, 5, ANALYSIS_RECEIPT_TOTAL_LABEL)
@@ -1560,6 +2251,7 @@ def _build_analysis_dashboard_chart_requests(
             height_pixels=280,
             bottom_axis_title=ANALYSIS_TOTAL_AMOUNT_HEADER_LABEL,
             left_axis_title=ANALYSIS_CATEGORY_HEADER_LABEL,
+            series_palette=[ANALYSIS_THEME_FOREST],
         ),
         _build_basic_chart_request(
             sheet_id=sheet_id,
@@ -1577,6 +2269,7 @@ def _build_analysis_dashboard_chart_requests(
             height_pixels=280,
             bottom_axis_title=ANALYSIS_RECEIPT_TOTAL_LABEL,
             left_axis_title=ANALYSIS_MERCHANT_HEADER_LABEL,
+            series_palette=[ANALYSIS_THEME_TERRACOTTA],
         ),
         _build_basic_chart_request(
             sheet_id=sheet_id,
@@ -1594,6 +2287,7 @@ def _build_analysis_dashboard_chart_requests(
             height_pixels=320,
             bottom_axis_title=ANALYSIS_MONTH_HEADER_LABEL,
             left_axis_title=ANALYSIS_RECEIPT_TOTAL_LABEL,
+            series_palette=[ANALYSIS_THEME_AMBER],
         ),
         _build_basic_chart_request(
             sheet_id=sheet_id,
@@ -1621,6 +2315,7 @@ def _build_analysis_dashboard_chart_requests(
             header_count=1,
             legend_position="RIGHT_LEGEND",
             stacked_type="STACKED",
+            series_palette=ANALYSIS_CHART_SERIES_PALETTE,
         ),
     ]
 
@@ -1646,8 +2341,10 @@ def _build_basic_chart_request(
     legend_position: str = "NO_LEGEND",
     stacked_type: str | None = None,
     series_column_ranges: list[tuple[int, int]] | None = None,
+    series_palette: list[str] | None = None,
 ) -> dict[str, object]:
     resolved_series_column_ranges = series_column_ranges or [(series_start_column, series_end_column)]
+    resolved_palette = series_palette or ANALYSIS_CHART_SERIES_PALETTE
     basic_chart: dict[str, object] = {
         "chartType": chart_type,
         "legendPosition": legend_position,
@@ -1689,8 +2386,9 @@ def _build_basic_chart_request(
                     }
                 },
                 "targetAxis": "BOTTOM_AXIS" if chart_type == "BAR" else "LEFT_AXIS",
+                "colorStyle": _hex_color_style(resolved_palette[series_index % len(resolved_palette)]),
             }
-            for column_start, column_end in resolved_series_column_ranges
+            for series_index, (column_start, column_end) in enumerate(resolved_series_column_ranges)
         ],
     }
     if stacked_type is not None:
@@ -1701,6 +2399,14 @@ def _build_basic_chart_request(
             "chart": {
                 "spec": {
                     "title": title,
+                    "altText": title,
+                    "fontName": "Noto Sans JP",
+                    "backgroundColorStyle": _hex_color_style(ANALYSIS_THEME_IVORY),
+                    "titleTextFormat": {
+                        "foregroundColorStyle": _hex_color_style(ANALYSIS_THEME_FOREST),
+                        "fontSize": 16,
+                        "bold": True,
+                    },
                     "basicChart": basic_chart,
                 },
                 "position": {

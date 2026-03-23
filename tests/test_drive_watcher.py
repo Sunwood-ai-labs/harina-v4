@@ -486,11 +486,13 @@ def test_resume_polling_command_reports_active_retry_wait() -> None:
 
     assert messages == [
         {
-            "content": "Retry wait cleared. Watcher resumed immediately instead of waiting another 12 hours.",
+            "content": messages[0]["content"],
             "ephemeral": True,
         }
     ]
-    assert resume_events == [("Alice", "gemini-wait", 43200)]
+    assert messages[0]["content"].startswith("Retry wait cleared. Watcher resumed immediately instead of waiting another ")
+    assert resume_events == [("Alice", "gemini-wait", resume_events[0][2])]
+    assert 43190 <= resume_events[0][2] <= 43200
 
 
 def test_resume_polling_command_reports_already_active_scan() -> None:

@@ -1,7 +1,13 @@
 import asyncio
 from types import SimpleNamespace
 
-from app.drive_watcher import DriveReceiptWatcher, DriveWatchCycleSummaryState, DriveWatchScanSummary, DriveWatcherClient
+from app.drive_watcher import (
+    DriveReceiptWatcher,
+    DriveWatchCycleSummaryState,
+    DriveWatchResumeController,
+    DriveWatchScanSummary,
+    DriveWatcherClient,
+)
 from app.google_workspace import DriveImageFile
 from app.models import ReceiptExtraction, ReceiptLineItem
 from app.team_intake import DriveWatchRoute
@@ -129,6 +135,24 @@ class _FakeNotifier:
                 "error_message": error_message,
             }
         )
+
+
+class _FakeInteractionResponse:
+    def __init__(self) -> None:
+        self.messages: list[dict[str, object]] = []
+
+    async def send_message(self, content: str, *, ephemeral: bool) -> None:
+        self.messages.append({"content": content, "ephemeral": ephemeral})
+
+
+class _FakeInteraction:
+    def __init__(self, *, manage_guild: bool, channel_id: int, display_name: str = "Operator") -> None:
+        self.user = SimpleNamespace(
+            display_name=display_name,
+            guild_permissions=SimpleNamespace(manage_guild=manage_guild),
+        )
+        self.channel_id = channel_id
+        self.response = _FakeInteractionResponse()
 
 
 def test_drive_watcher_processes_files_and_moves_them() -> None:
@@ -382,3 +406,120 @@ def test_drive_watcher_sends_cycle_summary_when_backlog_changes() -> None:
 
     assert len(sent_embeds) == 1
     assert sent_embeds[0].title == "HARINA Scan Summary"
+
+
+def test_resume_controller_interrupts_active_wait_without_skipping_the_next_one() -> None:
+    async def scenario() -> tuple[bool, str | None, bool, bool]:
+        controller = DriveWatchResumeController()
+        wait_task = asyncio.create_task(controller.sleep(60, reason="gemini-wait"))
+        await asyncio.sleep(0)
+        result = controller.request_resume()
+        interrupted = await wait_task
+        next_wait_interrupted = await controller.sleep(0.01, reason="poll-interval")
+        return interrupted, result.reason, result.will_skip_next_wait, next_wait_interrupted
+
+    interrupted, reason, will_skip_next_wait, next_wait_interrupted = asyncio.run(scenario())
+
+    assert interrupted is True
+    assert reason == "gemini-wait"
+    assert will_skip_next_wait is False
+    assert next_wait_interrupted is False
+
+
+def test_resume_controller_skips_the_next_wait_when_requested_while_not_waiting() -> None:
+    async def scenario() -> tuple[bool, bool]:
+        controller = DriveWatchResumeController()
+        result = controller.request_resume()
+        interrupted = await controller.sleep(60, reason="poll-interval")
+        return result.will_skip_next_wait, interrupted
+
+    will_skip_next_wait, interrupted = asyncio.run(scenario())
+
+    assert will_skip_next_wait is True
+    assert interrupted is True
+
+
+def test_resume_polling_command_requires_system_log_channel_when_configured() -> None:
+    client = DriveWatcherClient.__new__(DriveWatcherClient)
+    client.settings = SimpleNamespace(discord_system_log_channel_id=999)
+    client._resume_controller = DriveWatchResumeController()
+    client._scan_lock = asyncio.Lock()
+
+    async def fake_send_system_resume(*, requested_by: str, result) -> None:
+        raise AssertionError("send_system_resume should not run when the command is rejected")
+
+    client.send_system_resume = fake_send_system_resume  # type: ignore[method-assign]
+
+    interaction = _FakeInteraction(manage_guild=True, channel_id=123)
+
+    asyncio.run(DriveWatcherClient._handle_resume_polling_command(client, interaction))
+
+    assert interaction.response.messages == [
+        {
+            "content": "Use this command in the system log channel <#999>.",
+            "ephemeral": True,
+        }
+    ]
+
+
+def test_resume_polling_command_reports_active_retry_wait() -> None:
+    client = DriveWatcherClient.__new__(DriveWatcherClient)
+    client.settings = SimpleNamespace(discord_system_log_channel_id=None)
+    client._resume_controller = DriveWatchResumeController()
+    client._scan_lock = asyncio.Lock()
+    resume_events: list[tuple[str, str | None, int]] = []
+
+    async def fake_send_system_resume(*, requested_by: str, result) -> None:
+        resume_events.append((requested_by, result.reason, result.remaining_seconds))
+
+    client.send_system_resume = fake_send_system_resume  # type: ignore[method-assign]
+
+    async def scenario() -> tuple[list[dict[str, object]], list[tuple[str, str | None, int]]]:
+        wait_task = asyncio.create_task(client._resume_controller.sleep(12 * 60 * 60, reason="gemini-wait"))
+        await asyncio.sleep(0)
+        interaction = _FakeInteraction(manage_guild=True, channel_id=123, display_name="Alice")
+        await DriveWatcherClient._handle_resume_polling_command(client, interaction)
+        await wait_task
+        return interaction.response.messages, resume_events
+
+    messages, resume_events = asyncio.run(scenario())
+
+    assert messages == [
+        {
+            "content": "Retry wait cleared. Watcher resumed immediately instead of waiting another 12 hours.",
+            "ephemeral": True,
+        }
+    ]
+    assert resume_events == [("Alice", "gemini-wait", 43200)]
+
+
+def test_resume_polling_command_reports_already_active_scan() -> None:
+    client = DriveWatcherClient.__new__(DriveWatcherClient)
+    client.settings = SimpleNamespace(discord_system_log_channel_id=None)
+    client._resume_controller = DriveWatchResumeController()
+    client._scan_lock = asyncio.Lock()
+
+    async def fake_send_system_resume(*, requested_by: str, result) -> None:
+        return None
+
+    client.send_system_resume = fake_send_system_resume  # type: ignore[method-assign]
+
+    async def scenario() -> list[dict[str, object]]:
+        await client._scan_lock.acquire()
+        try:
+            interaction = _FakeInteraction(manage_guild=True, channel_id=123)
+            await DriveWatcherClient._handle_resume_polling_command(client, interaction)
+            return interaction.response.messages
+        finally:
+            client._scan_lock.release()
+
+    messages = asyncio.run(scenario())
+
+    assert messages == [
+        {
+            "content": (
+                "Watcher is already active. Queued an immediate resume so the next wait is skipped after the current scan."
+            ),
+            "ephemeral": True,
+        }
+    ]

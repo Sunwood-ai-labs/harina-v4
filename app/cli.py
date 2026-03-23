@@ -25,6 +25,7 @@ from app.google_setup import (
     build_google_env_updates,
     upsert_env_file,
 )
+from app.google_workspace import GoogleWorkspaceClient
 from app.local_receipt_runner import run_local_receipt_process
 from app.team_setup import run_team_intake_setup
 from app.test_asset_runner import DEFAULT_TEST_ASSET_DIR, run_test_asset_suite
@@ -381,6 +382,23 @@ def build_parser() -> argparse.ArgumentParser:
         help="Optional .env file to update with the created watch folder IDs.",
     )
     google_drive_watch_init_parser.set_defaults(handler=handle_google_init_drive_watch)
+
+    google_sync_analysis_parser = google_subparsers.add_parser(
+        "sync-analysis",
+        help="Create or refresh yearly analysis tabs and the all-years analysis tab.",
+    )
+    google_sync_analysis_parser.add_argument(
+        "--year",
+        action="append",
+        default=None,
+        help="Refresh a specific year tab such as 2025. Repeatable.",
+    )
+    google_sync_analysis_parser.add_argument(
+        "--skip-all-years",
+        action="store_true",
+        help="Skip refreshing the all-years analysis tab.",
+    )
+    google_sync_analysis_parser.set_defaults(handler=handle_google_sync_analysis)
 
     google_oauth_parser = google_subparsers.add_parser(
         "oauth-login",
@@ -743,6 +761,40 @@ def handle_google_init_drive_watch(args: Namespace, settings: Settings | None) -
     print(json.dumps(summary, ensure_ascii=True, indent=2))
 
 
+def handle_google_sync_analysis(args: Namespace, settings: Settings | None) -> None:
+    if settings is None:
+        raise RuntimeError("Google Sheets settings were not loaded.")
+    if not settings.has_google_auth():
+        raise RuntimeError(
+            "Configure either GOOGLE_SERVICE_ACCOUNT_JSON / GOOGLE_SERVICE_ACCOUNT_KEY_FILE or "
+            "GOOGLE_OAUTH_CLIENT_JSON / GOOGLE_OAUTH_CLIENT_SECRET_FILE plus GOOGLE_OAUTH_REFRESH_TOKEN."
+        )
+    if not settings.google_sheets_spreadsheet_id:
+        raise RuntimeError(
+            "Set GOOGLE_SHEETS_SPREADSHEET_ID in your environment or .env before syncing analysis sheets."
+        )
+    requested_years = args.year
+    invalid_years = [year for year in (requested_years or []) if len(year) != 4 or not year.isdigit()]
+    if invalid_years:
+        invalid_years_text = ", ".join(invalid_years)
+        raise RuntimeError(f"--year must be four digits like 2025. Invalid values: {invalid_years_text}")
+
+    workspace = GoogleWorkspaceClient(
+        credentials=settings.google_credentials,
+        drive_folder_id=settings.google_drive_folder_id or "",
+        spreadsheet_id=settings.google_sheets_spreadsheet_id,
+        sheet_name=settings.google_sheets_sheet_name,
+        category_sheet_name=settings.google_sheets_category_sheet_name,
+    )
+    summary = asyncio.run(
+        workspace.sync_analysis_sheets(
+            years=requested_years,
+            include_all_years=not args.skip_all_years,
+        )
+    )
+    print(json.dumps(summary, ensure_ascii=True, indent=2))
+
+
 def handle_google_oauth_login(args: Namespace, settings: Settings | None) -> None:
     del settings
     oauth_client_secret_file = args.oauth_client_secret_file or os.getenv("GOOGLE_OAUTH_CLIENT_SECRET_FILE")
@@ -845,6 +897,8 @@ def main() -> None:
         )
     elif args.command == "drive":
         settings = load_settings(require_discord=True, require_gemini=True)
+    elif args.command == "google" and args.google_command == "sync-analysis":
+        settings = load_settings()
     elif args.command == "setup":
         settings = load_settings(require_discord=True)
     args.handler(args, settings)

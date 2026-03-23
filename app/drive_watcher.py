@@ -6,6 +6,7 @@ from dataclasses import asdict, dataclass
 from io import BytesIO
 
 import discord
+from discord import app_commands
 
 from app.config import Settings
 from app.formatters import (
@@ -24,6 +25,91 @@ from app.team_intake import DriveWatchRoute
 logger = logging.getLogger(__name__)
 WATCHER_EXHAUSTED_KEYS_RETRY_DELAY_SECONDS = 60 * 60 * 12
 WATCHER_EXHAUSTED_KEYS_RETRY_COUNT = 1
+
+
+@dataclass(slots=True)
+class DriveWatchWaitState:
+    reason: str
+    started_at: float
+    ends_at: float
+
+    @property
+    def remaining_seconds(self) -> int:
+        return max(int(self.ends_at - self.started_at), 0)
+
+
+@dataclass(slots=True)
+class DriveWatchResumeResult:
+    was_waiting: bool
+    reason: str | None
+    remaining_seconds: int
+    will_skip_next_wait: bool
+
+
+class DriveWatchResumeController:
+    def __init__(self) -> None:
+        self._resume_pending = False
+        self._wait_event: asyncio.Event | None = None
+        self._wait_state: DriveWatchWaitState | None = None
+
+    async def sleep(self, delay_seconds: float, *, reason: str) -> bool:
+        if delay_seconds <= 0:
+            return False
+
+        if self._resume_pending:
+            self._resume_pending = False
+            return True
+
+        loop = asyncio.get_running_loop()
+        wait_event = asyncio.Event()
+        self._wait_event = wait_event
+        self._wait_state = DriveWatchWaitState(
+            reason=reason,
+            started_at=loop.time(),
+            ends_at=loop.time() + delay_seconds,
+        )
+
+        if self._resume_pending:
+            self._resume_pending = False
+            wait_event.set()
+
+        try:
+            try:
+                await asyncio.wait_for(wait_event.wait(), timeout=delay_seconds)
+                return True
+            except asyncio.TimeoutError:
+                return False
+        finally:
+            if self._wait_event is wait_event:
+                self._wait_event = None
+                self._wait_state = None
+
+    def request_resume(self) -> DriveWatchResumeResult:
+        snapshot = self.snapshot()
+        if self._wait_event is not None:
+            self._wait_event.set()
+            will_skip_next_wait = False
+        else:
+            self._resume_pending = True
+            will_skip_next_wait = True
+        return DriveWatchResumeResult(
+            was_waiting=snapshot is not None,
+            reason=snapshot.reason if snapshot is not None else None,
+            remaining_seconds=snapshot.remaining_seconds if snapshot is not None else 0,
+            will_skip_next_wait=will_skip_next_wait,
+        )
+
+    def snapshot(self) -> DriveWatchWaitState | None:
+        state = self._wait_state
+        if state is None:
+            return None
+
+        loop = asyncio.get_running_loop()
+        return DriveWatchWaitState(
+            reason=state.reason,
+            started_at=loop.time(),
+            ends_at=state.ends_at,
+        )
 
 
 @dataclass(slots=True)
@@ -266,6 +352,7 @@ class DriveWatcherClient(discord.Client):
         intents.guilds = True
 
         super().__init__(intents=intents)
+        self.tree = app_commands.CommandTree(self)
 
         settings.require_drive_watch()
         self.settings = settings
@@ -274,7 +361,10 @@ class DriveWatcherClient(discord.Client):
         self.run_error: Exception | None = None
         self.last_summary: DriveWatchScanSummary | None = None
         self._watch_task: asyncio.Task[None] | None = None
+        self._commands_synced = False
         self._cycle_summary_state = DriveWatchCycleSummaryState()
+        self._resume_controller = DriveWatchResumeController()
+        self._scan_lock = asyncio.Lock()
         self._routes = settings.drive_watch_routes or [
             DriveWatchRoute(
                 key="default",
@@ -302,6 +392,7 @@ class DriveWatcherClient(discord.Client):
                 model=settings.production_gemini_model,
                 exhausted_keys_retry_delay_seconds=WATCHER_EXHAUSTED_KEYS_RETRY_DELAY_SECONDS,
                 exhausted_keys_retry_count=WATCHER_EXHAUSTED_KEYS_RETRY_COUNT,
+                sleep_func=self._sleep_for_watcher_wait,
                 exhausted_keys_wait_callback=self.send_system_wait,
             ),
             google_workspace=workspace,
@@ -309,11 +400,15 @@ class DriveWatcherClient(discord.Client):
             routes=self._routes,
             rescan_existing=rescan_existing,
         )
+        self._register_app_commands()
 
     async def setup_hook(self) -> None:
         await self.watcher.ensure_receipt_sheet()
 
     async def on_ready(self) -> None:
+        if not self._commands_synced:
+            await self._sync_app_commands()
+            self._commands_synced = True
         if self._watch_task is None:
             await self.send_system_startup()
             self._watch_task = asyncio.create_task(self._run_watch_loop())
@@ -509,6 +604,30 @@ class DriveWatcherClient(discord.Client):
             embed.add_field(name="Current Backlog", value="\n".join(backlog_lines), inline=False)
         await self._send_system_log_embed(embed)
 
+    async def send_system_resume(
+        self,
+        *,
+        requested_by: str,
+        result: DriveWatchResumeResult,
+    ) -> None:
+        if self.settings.discord_system_log_channel_id is None:
+            return
+
+        description = (
+            "A slash command interrupted the current watcher wait and resumed polling immediately."
+            if result.was_waiting
+            else "A slash command queued an immediate resume. The next watcher wait will be skipped."
+        )
+        embed = discord.Embed(
+            title="HARINA Watch Resume",
+            description=description,
+            color=discord.Color.green(),
+        )
+        embed.add_field(name="Requested By", value=requested_by, inline=True)
+        embed.add_field(name="Wait Reason", value=_describe_wait_reason(result.reason), inline=True)
+        embed.add_field(name="Remaining", value=_format_wait_window(result.remaining_seconds), inline=True)
+        await self._send_system_log_embed(embed)
+
     async def _build_backlog_snapshot(self) -> tuple[int, list[str]]:
         backlog_lines: list[str] = []
         backlog_total = 0
@@ -534,19 +653,119 @@ class DriveWatcherClient(discord.Client):
             raise RuntimeError(f"Channel {channel_id} is not messageable.")
         return channel
 
+    async def _sleep_for_watcher_wait(self, delay_seconds: float) -> None:
+        await self._resume_controller.sleep(delay_seconds, reason="gemini-wait")
+
     async def _run_watch_loop(self) -> None:
         try:
             while True:
-                self.last_summary = await self.watcher.scan_once()
+                async with self._scan_lock:
+                    self.last_summary = await self.watcher.scan_once()
                 await self.send_system_cycle_summary(self.last_summary)
                 if self.run_once:
                     return
-                await asyncio.sleep(self.settings.drive_poll_interval_seconds)
+                await self._resume_controller.sleep(
+                    self.settings.drive_poll_interval_seconds,
+                    reason="poll-interval",
+                )
         except Exception as exc:  # noqa: BLE001
             self.run_error = exc
             await self.send_system_error(exc)
         finally:
             await self.close()
+
+    def request_polling_resume(self) -> DriveWatchResumeResult:
+        return self._resume_controller.request_resume()
+
+    def _register_app_commands(self) -> None:
+        @self.tree.command(
+            name="resume_polling",
+            description="Interrupt the current wait and resume the drive watcher now.",
+        )
+        @app_commands.guild_only()
+        @app_commands.default_permissions(manage_guild=True)
+        async def resume_polling(interaction: discord.Interaction) -> None:
+            await self._handle_resume_polling_command(interaction)
+
+    async def _handle_resume_polling_command(self, interaction: discord.Interaction) -> None:
+        member = interaction.user
+        permissions = getattr(member, "guild_permissions", None)
+        if permissions is None or not permissions.manage_guild:
+            await interaction.response.send_message(
+                "You need the Manage Server permission to resume the drive watcher.",
+                ephemeral=True,
+            )
+            return
+
+        if (
+            self.settings.discord_system_log_channel_id is not None
+            and interaction.channel_id != self.settings.discord_system_log_channel_id
+        ):
+            await interaction.response.send_message(
+                f"Use this command in the system log channel <#{self.settings.discord_system_log_channel_id}>.",
+                ephemeral=True,
+            )
+            return
+
+        scan_in_progress = self._scan_lock.locked()
+        result = self.request_polling_resume()
+        requester_name = getattr(member, "display_name", str(member))
+        await self.send_system_resume(requested_by=requester_name, result=result)
+
+        if result.reason == "poll-interval":
+            message = (
+                "Poll interval cleared. "
+                f"Running a scan now instead of waiting another {_format_wait_window(result.remaining_seconds)}."
+            )
+        elif result.reason == "gemini-wait":
+            message = (
+                "Retry wait cleared. "
+                f"Watcher resumed immediately instead of waiting another {_format_wait_window(result.remaining_seconds)}."
+            )
+        elif scan_in_progress:
+            message = (
+                "Watcher is already active. "
+                "Queued an immediate resume so the next wait is skipped after the current scan."
+            )
+        else:
+            message = (
+                "No retry wait was active. "
+                "Queued an immediate resume so the next scheduled wait is skipped."
+            )
+
+        await interaction.response.send_message(message, ephemeral=True)
+
+    async def _sync_app_commands(self) -> None:
+        guild_ids = await self._discover_command_guild_ids()
+        if not guild_ids:
+            synced = await self.tree.sync()
+            logger.info("Synced %s global app command(s) for the drive watcher.", len(synced))
+            return
+
+        for guild_id in sorted(guild_ids):
+            guild = discord.Object(id=guild_id)
+            self.tree.copy_global_to(guild=guild)
+            synced = await self.tree.sync(guild=guild)
+            logger.info("Synced %s guild app command(s) for guild %s.", len(synced), guild_id)
+
+    async def _discover_command_guild_ids(self) -> set[int]:
+        channel_ids = {route.discord_channel_id for route in self._routes}
+        if self.settings.discord_system_log_channel_id is not None:
+            channel_ids.add(self.settings.discord_system_log_channel_id)
+
+        guild_ids: set[int] = set()
+        for channel_id in channel_ids:
+            try:
+                channel = await self._resolve_messageable_channel(channel_id)
+            except Exception:  # noqa: BLE001
+                logger.exception("Could not resolve channel %s while syncing app commands.", channel_id)
+                continue
+
+            guild = getattr(channel, "guild", None)
+            guild_id = getattr(guild, "id", None) or getattr(channel, "guild_id", None)
+            if guild_id is not None:
+                guild_ids.add(int(guild_id))
+        return guild_ids
 
 
 async def run_drive_watch(*, settings: Settings, run_once: bool, rescan_existing: bool = False) -> dict[str, int]:
@@ -563,3 +782,23 @@ async def run_drive_watch(*, settings: Settings, run_once: bool, rescan_existing
 
 def _normalize_attachment_name(value: str) -> str:
     return value.strip().casefold()
+
+
+def _describe_wait_reason(reason: str | None) -> str:
+    if reason == "poll-interval":
+        return "poll interval"
+    if reason == "gemini-wait":
+        return "Gemini retry window"
+    return "no active wait"
+
+
+def _format_wait_window(seconds: int) -> str:
+    if seconds <= 0:
+        return "0 sec"
+    if seconds % 3600 == 0:
+        hours = seconds // 3600
+        return f"{hours} hour" if hours == 1 else f"{hours} hours"
+    if seconds % 60 == 0:
+        minutes = seconds // 60
+        return f"{minutes} min"
+    return f"{seconds} sec"

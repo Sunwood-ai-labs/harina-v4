@@ -235,8 +235,8 @@ Compose では 2 サービスが動きます。
 - [デプロイ](./docs/ja/guide/deployment.md)
 - [データセットダウンローダー](./docs/ja/guide/dataset-downloader.md)
 - [Gemini スモークテスト](./docs/ja/guide/gemini-smoke-test.md)
-- [リリースノート v4.3.0](./docs/ja/guide/release-notes-v4.3.0.md)
-- [Harina v4.3.0 解説](./docs/ja/guide/whats-new-v4.3.0.md)
+- [リリースノート v4.4.0](./docs/ja/guide/release-notes-v4.4.0.md)
+- [Harina v4.4.0 解説](./docs/ja/guide/whats-new-v4.4.0.md)
 
 ## 開発
 

@@ -69,6 +69,7 @@ The command will:
 - ensure the bootstrap `Receipts` and `Categories` sheet tabs and headers exist
 - auto-create year-based receipt tabs such as `2025` when rows are appended later
 - seed `Categories` with short single-word labels when the sheet is empty
+- support rebuilding `Analysis YYYY`, `Analysis All Years`, and the `重複確認` duplicate-control sheet later through `google sync-analysis`
 - optionally write IDs and URLs into `.env`
 
 `Categories` is the live category catalog used by Gemini on every write-enabled run.
@@ -108,6 +109,9 @@ The watcher creates `YYYY/MM` subfolders inside `GOOGLE_DRIVE_WATCH_PROCESSED_FO
 - `itemCategory` is written into those year-based receipt tabs for every categorized line item
 - Gemini reads `Categories` before categorization and can append a short new category when no approved option fits
 - Duplicate checks for `attachmentName` scan every receipt tab except `Categories`
+- Analysis dashboards are rebuilt as separate `Analysis ...` tabs so the raw yearly receipt tabs stay untouched
+- `重複確認` stores spreadsheet-side duplicate review state with checkboxes; checked receipts are excluded from analysis dashboards only
+- Existing year tabs recalculate analysis formulas automatically when HARINA appends new rows, but manually introduced new year tabs should be followed by `uv run harina-v4 google sync-analysis`
 - Personal Google Drive accounts often reject service-account-owned uploads because service accounts do not have Drive storage quota there
 - For personal Gmail environments, prefer OAuth refresh tokens instead of pure service-account uploads
 - After rotating `GOOGLE_OAUTH_REFRESH_TOKEN` in `.env`, recreate Docker Compose services so the new environment value reaches the running containers

@@ -111,6 +111,7 @@ Notes:
 - The Drive result embed can include `Gemini Model` and `API Cost (est.)` when Gemini usage metadata is available
 - If every rotation key is exhausted, the watcher posts `HARINA Watch Status` and waits 12 hours once before retrying from the first key again
 - Active scan cycles and backlog changes still produce system-log updates
+- `/resume_polling` can clear the current poll wait or Gemini retry wait from Discord when the watcher is running as the long-lived service
 
 ## Google commands
 
@@ -158,11 +159,24 @@ Useful flags for watcher setup:
 - `--parent-folder-id <folder_id>`
 - `--poll-interval-seconds 60`
 
+Rebuild yearly and all-years analysis dashboards:
+
+```bash
+uv run harina-v4 google sync-analysis
+```
+
+Useful flags for dashboard rebuilds:
+
+- `--year 2025`
+- `--year 2026`
+- `--skip-all-years`
+
 Google auth notes:
 
 - Use `google oauth-start` plus `google oauth-finish` when you want to pair HARINA with an existing logged-in Chrome session instead of opening a fresh browser
 - The [logged-in-google-chrome-skill](https://github.com/Sunwood-ai-labs/logged-in-google-chrome-skill) helper is a good fit for that recovery flow in Codex
 - After rotating `GOOGLE_OAUTH_REFRESH_TOKEN` in `.env`, recreate Docker Compose services so the new token reaches the running containers
+- `google sync-analysis` rebuilds `Analysis YYYY`, `Analysis All Years`, and the persistent duplicate-control sheet wiring without editing the raw yearly receipt tabs
 
 ## Dataset commands
 

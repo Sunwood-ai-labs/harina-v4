@@ -26,6 +26,12 @@ Drive watcher path:
 uv run harina-v4 drive watch --once
 ```
 
+Analysis rebuild path:
+
+```bash
+uv run harina-v4 google sync-analysis
+```
+
 Gemini smoke test:
 
 ```bash
@@ -93,6 +99,7 @@ Optional verification lane:
 - The Drive result embed can include `Gemini Model` and `API Cost (est.)` when Gemini usage metadata is available
 - Gemini retries transient failures for up to 5 local attempts per key with a 60-second backoff, rotates immediately on daily quota exhaustion, and then performs one delayed retry cycle after every key is exhausted
 - In the delayed-retry case, `receipt-bot` waits 1 hour and `drive-watcher` waits 12 hours; the watcher also posts `HARINA Watch Status`
+- `/resume_polling` lets operators with `Manage Server` clear the current watcher poll wait or delayed Gemini retry wait from Discord
 - Use startup/progress system-log messages or container logs when you need a liveness check between active scans
 - If the watcher should be active but no system-log messages appear at all, verify `DISCORD_SYSTEM_LOG_CHANNEL_ID` and Discord connectivity in the container logs
 - Startup fails fast when required configuration is missing

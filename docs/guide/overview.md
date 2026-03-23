@@ -85,6 +85,20 @@ HARINA V4 is organized around a Python package CLI surface:
 - Duplicate lookup scans every non-`Categories` receipt tab, not just the fallback `Receipts` tab.
 - The duplicate guard is intentionally filename-based, so keep source filenames stable when you want idempotent re-runs.
 
+## Sheets analysis dashboards
+
+- HARINA can rebuild `Analysis YYYY` tabs and `Analysis All Years` as dashboard-style Sheets surfaces without modifying the raw year tabs.
+- These analysis sheets are formula-driven, so new rows appended into existing year tabs recalculate automatically.
+- The analysis layer includes category totals, merchant breakdowns, payer (`authorTag`) summaries, monthly category timelines, and stacked charts.
+- Duplicate review now has a persistent `重複確認` sheet with checkbox-driven auto-exclusion for analysis only; the raw receipt rows remain unchanged.
+- If you create a new year tab outside the normal HARINA append flow, run `uv run harina-v4 google sync-analysis` to refresh the all-years analysis target list.
+
+## Watcher control from Discord
+
+- The Drive watcher exposes `/resume_polling` for operators with `Manage Server`.
+- The command can clear either the normal poll-interval wait or the delayed Gemini retry wait.
+- This is an operations control for the running watcher service and does not replace the filename-based duplicate guard.
+
 ## Drive archive layout
 
 - Discord and CLI uploads are copied into the main Drive archive folder as `GOOGLE_DRIVE_FOLDER_ID/YYYY/MM`.
@@ -125,7 +139,7 @@ HARINA V4 is organized around a Python package CLI surface:
 - Read [CLI](./cli.md) for the operator commands
 - Read [Google Setup](./google-setup.md) before the live bot or Drive watcher flow
 - Read [Deployment](./deployment.md) when you are ready to run continuously
-- Read [Release Notes v4.3.0](./release-notes-v4.3.0.md) for the latest shipped changes
-- Read [What's New In Harina v4.3.0](./whats-new-v4.3.0.md) for the operator-facing walkthrough
+- Read [Release Notes v4.4.0](./release-notes-v4.4.0.md) for the latest shipped changes
+- Read [What's New In Harina v4.4.0](./whats-new-v4.4.0.md) for the operator-facing walkthrough
 - Read [Dataset Downloader](./dataset-downloader.md) if you are migrating from V1, V2, or V3
 - Read [Gemini Smoke Test](./gemini-smoke-test.md) for quick dataset verification

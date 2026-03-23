@@ -176,12 +176,22 @@ def _build_analysis_outlined_range_request(
 RECEIPT_PROCESSED_AT_INDEX = RECEIPT_SHEET_HEADERS.index("processedAt")
 RECEIPT_PURCHASE_DATE_INDEX = RECEIPT_SHEET_HEADERS.index("purchaseDate")
 RECEIPT_ATTACHMENT_NAME_COLUMN = chr(ord("A") + RECEIPT_SHEET_HEADERS.index("attachmentName"))
+RECEIPT_AUTHOR_ID_INDEX = RECEIPT_SHEET_HEADERS.index("authorId")
+RECEIPT_AUTHOR_TAG_INDEX = RECEIPT_SHEET_HEADERS.index("authorTag")
+RECEIPT_ATTACHMENT_NAME_INDEX = RECEIPT_SHEET_HEADERS.index("attachmentName")
+RECEIPT_MERCHANT_NAME_INDEX = RECEIPT_SHEET_HEADERS.index("merchantName")
+RECEIPT_CURRENCY_INDEX = RECEIPT_SHEET_HEADERS.index("currency")
+RECEIPT_RECEIPT_NUMBER_INDEX = RECEIPT_SHEET_HEADERS.index("receiptNumber")
 RECEIPT_TOTAL_INDEX = RECEIPT_SHEET_HEADERS.index("total")
+RECEIPT_ROW_TYPE_INDEX = RECEIPT_SHEET_HEADERS.index("rowType")
+RECEIPT_ITEM_CATEGORY_INDEX = RECEIPT_SHEET_HEADERS.index("itemCategory")
+RECEIPT_ITEM_TOTAL_PRICE_INDEX = RECEIPT_SHEET_HEADERS.index("itemTotalPrice")
 YEAR_PATTERN = re.compile(r"(?<!\d)((?:19|20|21)\d{2})(?!\d)")
 YEAR_MONTH_PATTERN = re.compile(r"(?<!\d)((?:19|20|21)\d{2})\D{0,3}(1[0-2]|0?[1-9])(?!\d)")
 GOOGLE_DRIVE_FOLDER_MIME_TYPE = "application/vnd.google-apps.folder"
 ANALYSIS_SHEET_PREFIX = "Analysis "
 ANALYSIS_ALL_YEARS_SHEET_NAME = "Analysis All Years"
+DUPLICATE_CONTROL_SHEET_NAME = "重複確認"
 RECEIPT_LAST_COLUMN = _column_letter(len(RECEIPT_SHEET_HEADERS))
 ANALYSIS_CATEGORY_MONTH_COLUMN_COUNT = 12
 ANALYSIS_CATEGORY_CHART_ROW_COUNT = 12
@@ -213,6 +223,7 @@ ANALYSIS_HELPER_CATEGORY_CHART_SOURCE_COLUMN_INDEX = (
 )
 ANALYSIS_HELPER_RECEIPT_MONTH_LOOKUP_COLUMN_INDEX = 256  # IV
 ANALYSIS_HELPER_ITEM_MONTHS_COLUMN_INDEX = 258  # IX
+ANALYSIS_HELPER_DUPLICATE_EXCLUSIONS_COLUMN_INDEX = 260  # IZ
 # Keep this chart source left of IV/256. Far-right helper columns can produce blank
 # chart specs even when the source matrix has values.
 ANALYSIS_HELPER_AUTHOR_CATEGORY_CHART_SOURCE_COLUMN_INDEX = (
@@ -240,6 +251,7 @@ ANALYSIS_HELPER_CATEGORY_CHART_SOURCE_START_COLUMN = _column_letter(ANALYSIS_HEL
 ANALYSIS_HELPER_RECEIPT_MONTH_LOOKUP_START_COLUMN = _column_letter(ANALYSIS_HELPER_RECEIPT_MONTH_LOOKUP_COLUMN_INDEX)
 ANALYSIS_HELPER_RECEIPT_MONTH_LOOKUP_END_COLUMN = _column_letter(ANALYSIS_HELPER_RECEIPT_MONTH_LOOKUP_COLUMN_INDEX + 1)
 ANALYSIS_HELPER_ITEM_MONTHS_START_COLUMN = _column_letter(ANALYSIS_HELPER_ITEM_MONTHS_COLUMN_INDEX)
+ANALYSIS_HELPER_DUPLICATE_EXCLUSIONS_START_COLUMN = _column_letter(ANALYSIS_HELPER_DUPLICATE_EXCLUSIONS_COLUMN_INDEX)
 ANALYSIS_HELPER_AUTHOR_CATEGORY_CHART_SOURCE_START_COLUMN = _column_letter(
     ANALYSIS_HELPER_AUTHOR_CATEGORY_CHART_SOURCE_COLUMN_INDEX
 )
@@ -295,6 +307,7 @@ ANALYSIS_MONTHLY_TOTAL_TREND_HEADER_LABEL = "月次合計推移"
 ANALYSIS_DATE_HEADER_LABEL = "日付"
 ANALYSIS_DUPLICATE_COUNT_HEADER_LABEL = "候補数"
 ANALYSIS_DUPLICATE_ATTACHMENTS_HEADER_LABEL = "添付名"
+ANALYSIS_DUPLICATE_STATUS_HEADER_LABEL = "対応状況"
 ANALYSIS_USED_LABEL = "使用中"
 ANALYSIS_UNUSED_LABEL = "未使用"
 ANALYSIS_NO_CATEGORY_DATA_LABEL = "(カテゴリデータなし)"
@@ -306,6 +319,7 @@ ANALYSIS_UNCATEGORIZED_LABEL = "(未分類)"
 ANALYSIS_UNKNOWN_MERCHANT_LABEL = "(不明)"
 ANALYSIS_UNKNOWN_AUTHOR_LABEL = "(不明)"
 ANALYSIS_NONE_LABEL = "(なし)"
+ANALYSIS_DUPLICATE_CONTROL_NOTE_LABEL = f"{DUPLICATE_CONTROL_SHEET_NAME} シートで自動除外を切り替え"
 ANALYSIS_CATEGORY_CHART_TITLE = "カテゴリ別支出"
 ANALYSIS_MERCHANT_CHART_TITLE = "店舗別支出"
 ANALYSIS_AUTHOR_CHART_TITLE = "支払者別支出"
@@ -318,6 +332,40 @@ ANALYSIS_AUTHOR_CATEGORY_MATRIX_COLUMN_INDEX = 8  # H
 ANALYSIS_AUTHOR_CATEGORY_MATRIX_COLUMN_COUNT = ANALYSIS_AUTHOR_CATEGORY_CHART_TOP_CATEGORY_COUNT + 2
 ANALYSIS_DUPLICATE_SECTION_COLUMN_INDEX = 16  # P
 ANALYSIS_DUPLICATE_SECTION_COLUMN_COUNT = 6
+DUPLICATE_CONTROL_AUTO_EXCLUDE_HEADER_LABEL = "自動除外"
+DUPLICATE_CONTROL_STATE_HEADER_LABEL = "状態"
+DUPLICATE_CONTROL_PROCESSED_AT_HEADER_LABEL = "処理日時"
+DUPLICATE_CONTROL_SOURCE_SHEET_HEADER_LABEL = "対象シート"
+DUPLICATE_CONTROL_FINGERPRINT_HEADER_LABEL = "重複キー"
+DUPLICATE_CONTROL_BASELINE_STATE_LABEL = "基準レシート"
+DUPLICATE_CONTROL_AUTO_EXCLUDED_STATE_LABEL = "自動除外中"
+DUPLICATE_CONTROL_MANUAL_KEEP_STATE_LABEL = "手動保持"
+DUPLICATE_CONTROL_MANUAL_EXCLUDED_STATE_LABEL = "手動除外"
+DUPLICATE_CONTROL_HEADERS = [
+    DUPLICATE_CONTROL_AUTO_EXCLUDE_HEADER_LABEL,
+    DUPLICATE_CONTROL_STATE_HEADER_LABEL,
+    ANALYSIS_DATE_HEADER_LABEL,
+    ANALYSIS_MERCHANT_HEADER_LABEL,
+    ANALYSIS_TOTAL_AMOUNT_HEADER_LABEL,
+    ANALYSIS_AUTHOR_HEADER_LABEL,
+    ANALYSIS_DUPLICATE_COUNT_HEADER_LABEL,
+    ANALYSIS_DUPLICATE_ATTACHMENTS_HEADER_LABEL,
+    DUPLICATE_CONTROL_PROCESSED_AT_HEADER_LABEL,
+    DUPLICATE_CONTROL_SOURCE_SHEET_HEADER_LABEL,
+    DUPLICATE_CONTROL_FINGERPRINT_HEADER_LABEL,
+]
+DUPLICATE_CONTROL_AUTO_EXCLUDE_COLUMN_INDEX = 1
+DUPLICATE_CONTROL_STATE_COLUMN_INDEX = 2
+DUPLICATE_CONTROL_DATE_COLUMN_INDEX = 3
+DUPLICATE_CONTROL_MERCHANT_COLUMN_INDEX = 4
+DUPLICATE_CONTROL_TOTAL_COLUMN_INDEX = 5
+DUPLICATE_CONTROL_AUTHOR_COLUMN_INDEX = 6
+DUPLICATE_CONTROL_COUNT_COLUMN_INDEX = 7
+DUPLICATE_CONTROL_ATTACHMENT_COLUMN_INDEX = 8
+DUPLICATE_CONTROL_PROCESSED_AT_COLUMN_INDEX = 9
+DUPLICATE_CONTROL_SOURCE_SHEET_COLUMN_INDEX = 10
+DUPLICATE_CONTROL_FINGERPRINT_COLUMN_INDEX = 11
+DUPLICATE_CONTROL_LAST_COLUMN = _column_letter(len(DUPLICATE_CONTROL_HEADERS))
 ANALYSIS_CHART_SERIES_PALETTE = [
     ANALYSIS_THEME_FOREST,
     ANALYSIS_THEME_TERRACOTTA,
@@ -1123,6 +1171,15 @@ def _build_analysis_dashboard_layout_requests(
                 sheet_id=sheet_id,
                 start_row_index=author_category_data_row_index + 1,
                 end_row_index=200,
+                start_column_index=duplicate_section_start_column_index + 1,
+                end_column_index=duplicate_section_start_column_index + 2,
+                user_entered_format={"numberFormat": {"type": "DATE", "pattern": "yyyy-mm-dd"}},
+                fields="userEnteredFormat(numberFormat)",
+            ),
+            _build_analysis_repeat_cell_request(
+                sheet_id=sheet_id,
+                start_row_index=author_category_data_row_index + 1,
+                end_row_index=200,
                 start_column_index=duplicate_section_start_column_index + 2,
                 end_column_index=duplicate_section_start_column_index + 3,
                 user_entered_format={"horizontalAlignment": "RIGHT", "verticalAlignment": "TOP"},
@@ -1474,6 +1531,7 @@ class GoogleWorkspaceClient:
     def _ensure_receipt_sheet_sync(self) -> None:
         self._ensure_sheet_with_header_sync(sheet_name=self._sheet_name, headers=RECEIPT_SHEET_HEADERS)
         self._ensure_category_sheet_sync()
+        self._ensure_duplicate_control_sheet_sync()
 
     def _ensure_category_sheet_sync(self) -> None:
         self._ensure_sheet_with_header_sync(sheet_name=self._category_sheet_name, headers=CATEGORY_SHEET_HEADERS)
@@ -1768,8 +1826,217 @@ class GoogleWorkspaceClient:
                 sheet.get("properties", {}).get("title", "")
                 for sheet in spreadsheet.get("sheets", [])
             )
-            if title and title != self._category_sheet_name and not _is_analysis_sheet_name(title)
+            if title
+            and title != self._category_sheet_name
+            and title != DUPLICATE_CONTROL_SHEET_NAME
+            and not _is_analysis_sheet_name(title)
         ]
+
+    def _ensure_duplicate_control_sheet_sync(self) -> None:
+        self._ensure_sheet_with_header_sync(
+            sheet_name=DUPLICATE_CONTROL_SHEET_NAME,
+            headers=DUPLICATE_CONTROL_HEADERS,
+        )
+        self._apply_duplicate_control_sheet_layout_sync(row_count=2)
+
+    def _read_duplicate_control_rows_sync(self) -> list[list[str]]:
+        self._ensure_sheet_with_header_sync(
+            sheet_name=DUPLICATE_CONTROL_SHEET_NAME,
+            headers=DUPLICATE_CONTROL_HEADERS,
+        )
+        response = (
+            self._sheets.spreadsheets()
+            .values()
+            .get(
+                spreadsheetId=self._spreadsheet_id,
+                range=f"'{DUPLICATE_CONTROL_SHEET_NAME}'!A2:{DUPLICATE_CONTROL_LAST_COLUMN}",
+            )
+            .execute()
+        )
+        return [list(row) for row in response.get("values", [])]
+
+    def _replace_duplicate_control_sheet_rows_sync(self, rows: list[list[object]]) -> None:
+        self._ensure_sheet_with_header_sync(
+            sheet_name=DUPLICATE_CONTROL_SHEET_NAME,
+            headers=DUPLICATE_CONTROL_HEADERS,
+        )
+        (
+            self._sheets.spreadsheets()
+            .values()
+            .clear(
+                spreadsheetId=self._spreadsheet_id,
+                range=f"'{DUPLICATE_CONTROL_SHEET_NAME}'!A2:{DUPLICATE_CONTROL_LAST_COLUMN}",
+                body={},
+            )
+            .execute()
+        )
+        values = [DUPLICATE_CONTROL_HEADERS, *rows]
+        (
+            self._sheets.spreadsheets()
+            .values()
+            .update(
+                spreadsheetId=self._spreadsheet_id,
+                range=f"'{DUPLICATE_CONTROL_SHEET_NAME}'!A1",
+                valueInputOption="RAW",
+                body={"values": values},
+            )
+            .execute()
+        )
+        self._apply_duplicate_control_sheet_layout_sync(row_count=len(values))
+
+    def _apply_duplicate_control_sheet_layout_sync(self, *, row_count: int) -> None:
+        properties = self._get_sheet_properties_by_title_sync(DUPLICATE_CONTROL_SHEET_NAME)
+        if properties is None or "sheetId" not in properties:
+            return
+        sheet_id = int(properties["sheetId"])
+        checkbox_end_row_index = max(row_count, 200)
+        requests: list[dict[str, object]] = [
+            {
+                "updateSheetProperties": {
+                    "properties": {"sheetId": sheet_id, "gridProperties": {"frozenRowCount": 1}},
+                    "fields": "gridProperties.frozenRowCount",
+                }
+            },
+            _build_analysis_repeat_cell_request(
+                sheet_id=sheet_id,
+                start_row_index=0,
+                end_row_index=1,
+                start_column_index=0,
+                end_column_index=len(DUPLICATE_CONTROL_HEADERS),
+                user_entered_format={
+                    "backgroundColorStyle": _hex_color_style(ANALYSIS_THEME_FOREST),
+                    "textFormat": {
+                        "foregroundColorStyle": _hex_color_style(ANALYSIS_THEME_IVORY),
+                        "bold": True,
+                    },
+                    "horizontalAlignment": "CENTER",
+                    "verticalAlignment": "MIDDLE",
+                },
+                fields="userEnteredFormat(backgroundColorStyle,textFormat,horizontalAlignment,verticalAlignment)",
+            ),
+            {
+                "setDataValidation": {
+                    "range": _sheet_range(
+                        sheet_id=sheet_id,
+                        start_row_index=1,
+                        end_row_index=checkbox_end_row_index,
+                        start_column_index=DUPLICATE_CONTROL_AUTO_EXCLUDE_COLUMN_INDEX - 1,
+                        end_column_index=DUPLICATE_CONTROL_AUTO_EXCLUDE_COLUMN_INDEX,
+                    ),
+                    "rule": {
+                        "condition": {"type": "BOOLEAN"},
+                        "showCustomUi": True,
+                        "strict": True,
+                        "inputMessage": "チェックで自動除外、外すと除外無効",
+                    },
+                }
+            },
+            _build_analysis_dimension_request(
+                sheet_id=sheet_id,
+                dimension="ROWS",
+                start_index=0,
+                end_index=1,
+                pixel_size=32,
+            ),
+            _build_analysis_dimension_request(
+                sheet_id=sheet_id,
+                dimension="COLUMNS",
+                start_index=0,
+                end_index=1,
+                pixel_size=76,
+            ),
+            _build_analysis_dimension_request(
+                sheet_id=sheet_id,
+                dimension="COLUMNS",
+                start_index=1,
+                end_index=2,
+                pixel_size=120,
+            ),
+            _build_analysis_dimension_request(
+                sheet_id=sheet_id,
+                dimension="COLUMNS",
+                start_index=2,
+                end_index=3,
+                pixel_size=104,
+            ),
+            _build_analysis_dimension_request(
+                sheet_id=sheet_id,
+                dimension="COLUMNS",
+                start_index=3,
+                end_index=4,
+                pixel_size=180,
+            ),
+            _build_analysis_dimension_request(
+                sheet_id=sheet_id,
+                dimension="COLUMNS",
+                start_index=4,
+                end_index=5,
+                pixel_size=104,
+            ),
+            _build_analysis_dimension_request(
+                sheet_id=sheet_id,
+                dimension="COLUMNS",
+                start_index=5,
+                end_index=6,
+                pixel_size=150,
+            ),
+            _build_analysis_dimension_request(
+                sheet_id=sheet_id,
+                dimension="COLUMNS",
+                start_index=6,
+                end_index=7,
+                pixel_size=78,
+            ),
+            _build_analysis_dimension_request(
+                sheet_id=sheet_id,
+                dimension="COLUMNS",
+                start_index=7,
+                end_index=8,
+                pixel_size=260,
+            ),
+            _build_analysis_dimension_request(
+                sheet_id=sheet_id,
+                dimension="COLUMNS",
+                start_index=8,
+                end_index=9,
+                pixel_size=168,
+            ),
+            _build_analysis_dimension_request(
+                sheet_id=sheet_id,
+                dimension="COLUMNS",
+                start_index=9,
+                end_index=10,
+                pixel_size=104,
+            ),
+            _build_analysis_dimension_request(
+                sheet_id=sheet_id,
+                dimension="COLUMNS",
+                start_index=10,
+                end_index=11,
+                pixel_size=220,
+                hidden_by_user=True,
+            ),
+        ]
+        (
+            self._sheets.spreadsheets()
+            .batchUpdate(
+                spreadsheetId=self._spreadsheet_id,
+                body={"requests": requests},
+            )
+            .execute()
+        )
+
+    def _sync_duplicate_control_sheet_sync(self, receipt_sheet_names: list[str]) -> None:
+        existing_rows = self._read_duplicate_control_rows_sync()
+        receipt_rows_by_sheet = {
+            sheet_name: self._read_receipt_sheet_rows_sync(sheet_name)
+            for sheet_name in receipt_sheet_names
+        }
+        rows = build_duplicate_control_rows(
+            receipt_rows_by_sheet=receipt_rows_by_sheet,
+            existing_rows=existing_rows,
+        )
+        self._replace_duplicate_control_sheet_rows_sync(rows)
 
     def _ensure_sheet_exists_sync(self, sheet_name: str) -> None:
         has_sheet = self._get_sheet_properties_by_title_sync(sheet_name) is not None
@@ -2206,6 +2473,7 @@ class GoogleWorkspaceClient:
         include_all_years: bool = True,
     ) -> dict[str, object]:
         available_receipt_sheet_names = self._list_receipt_sheet_names_sync()
+        self._sync_duplicate_control_sheet_sync(available_receipt_sheet_names)
         active_category_count = len(self._list_receipt_categories_sync())
         available_year_sheet_names = sorted(
             sheet_name for sheet_name in available_receipt_sheet_names if _is_year_sheet_name(sheet_name)
@@ -2269,6 +2537,7 @@ class GoogleWorkspaceClient:
             scope_label=scope_label,
             source_sheet_names=source_sheet_names,
             category_sheet_name=self._category_sheet_name,
+            duplicate_control_sheet_name=DUPLICATE_CONTROL_SHEET_NAME,
         )
 
     def _read_receipt_sheet_rows_sync(self, sheet_name: str) -> list[list[str]]:
@@ -2600,6 +2869,7 @@ def build_analysis_sheet_rows(
     scope_label: str,
     source_sheet_names: list[str],
     category_sheet_name: str = "Categories",
+    duplicate_control_sheet_name: str = DUPLICATE_CONTROL_SHEET_NAME,
     receipt_rows: list[list[str]] | None = None,
 ) -> list[list[object]]:
     del receipt_rows
@@ -2704,8 +2974,18 @@ def build_analysis_sheet_rows(
     source_formula = _build_analysis_source_formula(source_sheet_names)
     _set_grid_cell(rows, 2, ANALYSIS_HELPER_SOURCE_COLUMN_INDEX, source_formula)
     _set_grid_cell(rows, 2, ANALYSIS_HELPER_LATEST_RECEIPTS_COLUMN_INDEX, _build_latest_receipts_formula())
-    _set_grid_cell(rows, 2, ANALYSIS_HELPER_ACTIVE_LINE_ITEMS_COLUMN_INDEX, _build_active_line_items_formula())
-    _set_grid_cell(rows, 2, ANALYSIS_HELPER_RECEIPT_TOTALS_COLUMN_INDEX, _build_receipt_totals_formula())
+    _set_grid_cell(
+        rows,
+        2,
+        ANALYSIS_HELPER_ACTIVE_LINE_ITEMS_COLUMN_INDEX,
+        _build_active_line_items_formula(duplicate_control_sheet_name=duplicate_control_sheet_name),
+    )
+    _set_grid_cell(
+        rows,
+        2,
+        ANALYSIS_HELPER_RECEIPT_TOTALS_COLUMN_INDEX,
+        _build_receipt_totals_formula(duplicate_control_sheet_name=duplicate_control_sheet_name),
+    )
     _set_grid_cell(rows, 2, ANALYSIS_HELPER_CATEGORY_REFERENCE_COLUMN_INDEX, _build_active_categories_formula(category_sheet_name))
     _set_grid_cell(rows, 2, ANALYSIS_HELPER_CATEGORY_ROLLUP_COLUMN_INDEX, _build_category_rollup_formula())
     _set_grid_cell(rows, 2, ANALYSIS_HELPER_MONTH_REFERENCE_COLUMN_INDEX, _build_month_reference_formula(source_sheet_names))
@@ -2714,6 +2994,12 @@ def build_analysis_sheet_rows(
     _set_grid_cell(rows, 2, ANALYSIS_HELPER_CATEGORY_CHART_SOURCE_COLUMN_INDEX, _build_category_chart_source_formula())
     _set_grid_cell(rows, 2, ANALYSIS_HELPER_RECEIPT_MONTH_LOOKUP_COLUMN_INDEX, _build_receipt_month_lookup_formula())
     _set_grid_cell(rows, 2, ANALYSIS_HELPER_ITEM_MONTHS_COLUMN_INDEX, _build_item_months_formula())
+    _set_grid_cell(
+        rows,
+        2,
+        ANALYSIS_HELPER_DUPLICATE_EXCLUSIONS_COLUMN_INDEX,
+        _build_duplicate_control_checked_attachments_formula(duplicate_control_sheet_name=duplicate_control_sheet_name),
+    )
     _set_grid_cell(
         rows,
         2,
@@ -2785,7 +3071,10 @@ def build_analysis_sheet_rows(
         rows,
         author_category_section_data_row,
         ANALYSIS_DUPLICATE_SECTION_COLUMN_INDEX,
-        _build_duplicate_candidates_formula(),
+        _build_duplicate_candidates_formula(
+            duplicate_control_sheet_name=duplicate_control_sheet_name,
+            source_sheet_names=source_sheet_names,
+        ),
     )
 
     return [_trim_trailing_blank_cells(row) for row in rows]
@@ -2848,9 +3137,25 @@ def _build_latest_receipts_formula() -> str:
     )
 
 
-def _build_active_line_items_formula() -> str:
+def _build_duplicate_control_checked_attachments_formula(*, duplicate_control_sheet_name: str) -> str:
+    quoted_sheet_name = _quote_sheet_name(duplicate_control_sheet_name)
+    auto_exclude_column = _column_letter(DUPLICATE_CONTROL_AUTO_EXCLUDE_COLUMN_INDEX)
+    attachment_column = _column_letter(DUPLICATE_CONTROL_ATTACHMENT_COLUMN_INDEX)
+    return (
+        "=IFERROR(FILTER("
+        f"{quoted_sheet_name}!{attachment_column}2:{attachment_column}, "
+        f"{quoted_sheet_name}!{auto_exclude_column}2:{auto_exclude_column}=TRUE, "
+        f"LEN({quoted_sheet_name}!{attachment_column}2:{attachment_column})"
+        '), {"__none__"})'
+    )
+
+
+def _build_active_line_items_formula(*, duplicate_control_sheet_name: str) -> str:
     source_range = f"${ANALYSIS_HELPER_SOURCE_START_COLUMN}$2:${ANALYSIS_HELPER_SOURCE_END_COLUMN}"
     latest_receipts_range = f"${ANALYSIS_HELPER_LATEST_RECEIPTS_START_COLUMN}$2:${ANALYSIS_HELPER_LATEST_RECEIPTS_END_COLUMN}"
+    excluded_attachments_range = (
+        f"${ANALYSIS_HELPER_DUPLICATE_EXCLUSIONS_START_COLUMN}$2:${ANALYSIS_HELPER_DUPLICATE_EXCLUSIONS_START_COLUMN}"
+    )
     normalized_author_id = f'TRIM(TO_TEXT(INDEX({source_range},,8)))'
     normalized_author_tag = f'TRIM(TO_TEXT(INDEX({source_range},,9)))'
     return (
@@ -2864,16 +3169,20 @@ def _build_active_line_items_formula() -> str:
         f'IF(LEN({normalized_author_tag}), {normalized_author_tag}, IF(LEN({normalized_author_id}), {normalized_author_id}, "{ANALYSIS_UNKNOWN_AUTHOR_LABEL}"))'
         '},'
         f'INDEX({source_range},,30)="line_item",'
-        f'ISNUMBER(MATCH(INDEX({source_range},,11)&"|"&INDEX({source_range},,1), INDEX({latest_receipts_range},,6), 0))'
+        f'ISNUMBER(MATCH(INDEX({source_range},,11)&"|"&INDEX({source_range},,1), INDEX({latest_receipts_range},,6), 0)),'
+        f'ISNA(MATCH(INDEX({source_range},,11), {excluded_attachments_range}, 0))'
         '),'
         '{"",0,"","","",""}'
         ')'
     )
 
 
-def _build_receipt_totals_formula() -> str:
+def _build_receipt_totals_formula(*, duplicate_control_sheet_name: str) -> str:
     latest_receipts_range = f"${ANALYSIS_HELPER_LATEST_RECEIPTS_START_COLUMN}$2:${ANALYSIS_HELPER_LATEST_RECEIPTS_END_COLUMN}"
     active_line_items_range = f"${ANALYSIS_HELPER_ACTIVE_LINE_ITEMS_START_COLUMN}$2:${ANALYSIS_HELPER_ACTIVE_LINE_ITEMS_END_COLUMN}"
+    excluded_attachments_range = (
+        f"${ANALYSIS_HELPER_DUPLICATE_EXCLUSIONS_START_COLUMN}$2:${ANALYSIS_HELPER_DUPLICATE_EXCLUSIONS_START_COLUMN}"
+    )
     return (
         "=IFERROR("
         "FILTER({"
@@ -2895,7 +3204,7 @@ def _build_receipt_totals_formula() -> str:
         "),"
         f'IF(LEN(TRIM(TO_TEXT(INDEX({latest_receipts_range},,7)))), TRIM(TO_TEXT(INDEX({latest_receipts_range},,7))), "{ANALYSIS_UNKNOWN_AUTHOR_LABEL}"),'
         f'IF(LEN(TRIM(TO_TEXT(INDEX({latest_receipts_range},,8)))), TRIM(TO_TEXT(INDEX({latest_receipts_range},,8))), "{ANALYSIS_UNKNOWN_AUTHOR_LABEL}")'
-        f"}}, LEN(INDEX({latest_receipts_range},,1))),"
+        f"}}, LEN(INDEX({latest_receipts_range},,1)), ISNA(MATCH(INDEX({latest_receipts_range},,1), {excluded_attachments_range}, 0))),"
         f'{{"","{ANALYSIS_UNKNOWN_MERCHANT_LABEL}","",0,"{ANALYSIS_UNKNOWN_AUTHOR_LABEL}","{ANALYSIS_UNKNOWN_AUTHOR_LABEL}"}}'
         ")"
     )
@@ -3164,58 +3473,32 @@ def _build_author_category_chart_source_formula(*, author_category_breakdown_row
     )
 
 
-def _build_duplicate_candidates_formula() -> str:
-    receipt_totals_range = f"${ANALYSIS_HELPER_RECEIPT_TOTALS_START_COLUMN}$2:${ANALYSIS_HELPER_RECEIPT_TOTALS_END_COLUMN}"
-    date_value_formula = _build_sheet_date_value_formula(receipt_totals_range, 3)
-    author_display_formula = (
-        "IF("
-        f"LEN(TRIM(TO_TEXT(INDEX({receipt_totals_range},,6)))),"
-        f"TRIM(TO_TEXT(INDEX({receipt_totals_range},,6))),"
-        "IF("
-        f"LEN(TRIM(TO_TEXT(INDEX({receipt_totals_range},,5)))),"
-        f"TRIM(TO_TEXT(INDEX({receipt_totals_range},,5))),"
-        f'"{ANALYSIS_UNKNOWN_AUTHOR_LABEL}"'
-        ")"
-        ")"
-    )
+def _build_duplicate_candidates_formula(
+    *,
+    duplicate_control_sheet_name: str,
+    source_sheet_names: list[str],
+) -> str:
+    quoted_sheet_name = _quote_sheet_name(duplicate_control_sheet_name)
+    del source_sheet_names
     return (
         "=IFERROR(LET("
-        f"attachments, INDEX({receipt_totals_range},,1),"
-        f"merchants, INDEX({receipt_totals_range},,2),"
-        f'dateKeys, IFERROR(IF(LEN(INDEX({receipt_totals_range},,3)), TEXT({date_value_formula}, "yyyy-mm-dd"), ""), ""),'
-        f"amounts, ROUND(N(INDEX({receipt_totals_range},,4)), 2),"
-        f"authors, {author_display_formula},"
-        "candidateRows, FILTER({dateKeys, merchants, amounts, authors, attachments}, "
-        "LEN(attachments), LEN(dateKeys), LEN(merchants), "
-        f'merchants<>"{ANALYSIS_UNKNOWN_MERCHANT_LABEL}", '
-        "amounts<>0),"
-        "grouped, QUERY("
-        "candidateRows, "
-        "\"select Col1, Col2, Col3, Col4, count(Col5) "
-        "where Col1 is not null and Col2 is not null and Col4 is not null "
-        "group by Col1, Col2, Col3, Col4 "
-        "having count(Col5) > 1 "
-        "order by count(Col5) desc, Col1 desc, Col2 asc, Col3 desc, Col4 asc "
-        "label Col1 '', Col2 '', Col3 '', Col4 '', count(Col5) ''\", "
-        "0"
-        "),"
-        "attachmentLists, MAP("
-        "SEQUENCE(ROWS(grouped)),"
-        "LAMBDA(rowIndex, TEXTJOIN(\", \", TRUE, UNIQUE(FILTER("
-        "INDEX(candidateRows,,5),"
-        "INDEX(candidateRows,,1)=INDEX(grouped,rowIndex,1),"
-        "INDEX(candidateRows,,2)=INDEX(grouped,rowIndex,2),"
-        "INDEX(candidateRows,,3)=INDEX(grouped,rowIndex,3),"
-        "INDEX(candidateRows,,4)=INDEX(grouped,rowIndex,4)"
-        "))))"
-        "),"
+        "controlRows, FILTER({"
+        f"{quoted_sheet_name}!B2:B,"
+        f"{quoted_sheet_name}!C2:C,"
+        f"{quoted_sheet_name}!D2:D,"
+        f"{quoted_sheet_name}!E2:E,"
+        f"{quoted_sheet_name}!F2:F,"
+        f"{quoted_sheet_name}!H2:H"
+        "},"
+        f"LEN({quoted_sheet_name}!H2:H)),"
+        "sortedRows, SORT(controlRows, 2, FALSE, 3, TRUE, 4, FALSE, 5, TRUE, 6, TRUE),"
         'VSTACK({"'
-        f'{ANALYSIS_DATE_HEADER_LABEL}","{ANALYSIS_MERCHANT_HEADER_LABEL}","{ANALYSIS_TOTAL_AMOUNT_HEADER_LABEL}","{ANALYSIS_AUTHOR_HEADER_LABEL}","{ANALYSIS_DUPLICATE_COUNT_HEADER_LABEL}","{ANALYSIS_DUPLICATE_ATTACHMENTS_HEADER_LABEL}'
+        f'{ANALYSIS_DUPLICATE_STATUS_HEADER_LABEL}","{ANALYSIS_DATE_HEADER_LABEL}","{ANALYSIS_MERCHANT_HEADER_LABEL}","{ANALYSIS_TOTAL_AMOUNT_HEADER_LABEL}","{ANALYSIS_AUTHOR_HEADER_LABEL}","{ANALYSIS_DUPLICATE_ATTACHMENTS_HEADER_LABEL}'
         '"},'
-        "HSTACK(INDEX(grouped,,1), INDEX(grouped,,2), INDEX(grouped,,3), INDEX(grouped,,4), INDEX(grouped,,5), attachmentLists))"
+        "sortedRows)"
         "), "
-        f'{{"{ANALYSIS_DATE_HEADER_LABEL}","{ANALYSIS_MERCHANT_HEADER_LABEL}","{ANALYSIS_TOTAL_AMOUNT_HEADER_LABEL}","{ANALYSIS_AUTHOR_HEADER_LABEL}","{ANALYSIS_DUPLICATE_COUNT_HEADER_LABEL}","{ANALYSIS_DUPLICATE_ATTACHMENTS_HEADER_LABEL}";'
-        f'"{ANALYSIS_NO_DUPLICATE_DATA_LABEL}","","","",0,""}})'
+        f'{{"{ANALYSIS_DUPLICATE_STATUS_HEADER_LABEL}","{ANALYSIS_DATE_HEADER_LABEL}","{ANALYSIS_MERCHANT_HEADER_LABEL}","{ANALYSIS_TOTAL_AMOUNT_HEADER_LABEL}","{ANALYSIS_AUTHOR_HEADER_LABEL}","{ANALYSIS_DUPLICATE_ATTACHMENTS_HEADER_LABEL}";'
+        f'"{ANALYSIS_NO_DUPLICATE_DATA_LABEL}","","","", "{ANALYSIS_DUPLICATE_CONTROL_NOTE_LABEL}",""}})'
     )
 
 
@@ -3719,9 +4002,15 @@ def _collect_receipt_records(receipt_rows: list[list[str]]) -> dict[str, dict[st
             representative_row, RECEIPT_PROCESSED_AT_INDEX
         )
         receipt_records[receipt_key] = {
+            "attachment_name": _get_row_value(representative_row, RECEIPT_ATTACHMENT_NAME_INDEX).strip(),
             "merchant_name": _get_row_value(representative_row, RECEIPT_MERCHANT_NAME_INDEX).strip(),
             "total_amount": _resolve_receipt_total_amount(rows),
             "date_value": date_value.strip(),
+            "processed_at": _get_row_value(representative_row, RECEIPT_PROCESSED_AT_INDEX).strip(),
+            "author_id": _get_row_value(representative_row, RECEIPT_AUTHOR_ID_INDEX).strip(),
+            "author_tag": _get_row_value(representative_row, RECEIPT_AUTHOR_TAG_INDEX).strip(),
+            "currency": _get_row_value(representative_row, RECEIPT_CURRENCY_INDEX).strip(),
+            "receipt_number": _get_row_value(representative_row, RECEIPT_RECEIPT_NUMBER_INDEX).strip(),
             "rows": rows,
         }
     return receipt_records
@@ -3800,3 +4089,164 @@ def _is_year_sheet_name(sheet_name: str) -> bool:
 
 def _is_analysis_sheet_name(sheet_name: str) -> bool:
     return sheet_name == ANALYSIS_ALL_YEARS_SHEET_NAME or sheet_name.startswith(ANALYSIS_SHEET_PREFIX)
+
+
+def _parse_sheet_checkbox_value(value: str) -> bool:
+    return value.strip().lower() in {"true", "1", "yes", "y", "checked"}
+
+
+def _normalize_duplicate_text(value: str) -> str:
+    return re.sub(r"\s+", " ", value.strip().casefold())
+
+
+def _resolve_duplicate_date_key(value: str) -> str:
+    normalized_value = value.strip()
+    if not normalized_value:
+        return ""
+    if re.match(r"^\d{4}-\d{2}-\d{2}", normalized_value):
+        return normalized_value[:10]
+    try:
+        parsed_value = datetime.fromisoformat(normalized_value.replace("Z", "+00:00"))
+    except ValueError:
+        match = re.search(r"((?:19|20|21)\d{2})\D{0,3}(1[0-2]|0?[1-9])\D{0,3}(3[01]|[12]\d|0?[1-9])", normalized_value)
+        if match is None:
+            return ""
+        return f"{match.group(1)}-{int(match.group(2)):02d}-{int(match.group(3)):02d}"
+    return parsed_value.date().isoformat()
+
+
+def _build_duplicate_state_label(*, is_auto_excluded: bool, recommended_auto_exclude: bool) -> str:
+    if recommended_auto_exclude:
+        return (
+            DUPLICATE_CONTROL_AUTO_EXCLUDED_STATE_LABEL
+            if is_auto_excluded
+            else DUPLICATE_CONTROL_MANUAL_KEEP_STATE_LABEL
+        )
+    return (
+        DUPLICATE_CONTROL_MANUAL_EXCLUDED_STATE_LABEL
+        if is_auto_excluded
+        else DUPLICATE_CONTROL_BASELINE_STATE_LABEL
+    )
+
+
+def _build_duplicate_fingerprint(
+    *,
+    date_key: str,
+    merchant_name: str,
+    total_amount: float,
+    author_label: str,
+    currency: str,
+    receipt_number: str,
+) -> str:
+    fingerprint_parts = [
+        date_key,
+        _normalize_duplicate_text(merchant_name),
+        f"{round(total_amount, 2):.2f}",
+        _normalize_duplicate_text(author_label),
+        _normalize_duplicate_text(currency or "JPY"),
+        _normalize_duplicate_text(receipt_number),
+    ]
+    return "|".join(fingerprint_parts)
+
+
+def build_duplicate_control_rows(
+    *,
+    receipt_rows_by_sheet: dict[str, list[list[str]]],
+    existing_rows: list[list[str]] | None = None,
+) -> list[list[object]]:
+    existing_state_by_attachment: dict[str, bool] = {}
+    for row in existing_rows or []:
+        attachment_name = _get_row_value(row, DUPLICATE_CONTROL_ATTACHMENT_COLUMN_INDEX - 1).strip()
+        if not attachment_name:
+            continue
+        existing_state_by_attachment[attachment_name] = _parse_sheet_checkbox_value(
+            _get_row_value(row, DUPLICATE_CONTROL_AUTO_EXCLUDE_COLUMN_INDEX - 1)
+        )
+
+    candidate_groups: dict[str, list[dict[str, object]]] = {}
+    for sheet_name, receipt_rows in receipt_rows_by_sheet.items():
+        for record in _collect_receipt_records(receipt_rows).values():
+            attachment_name = str(record.get("attachment_name", "")).strip()
+            merchant_name = str(record.get("merchant_name", "")).strip()
+            total_amount = round(float(record.get("total_amount", 0.0) or 0.0), 2)
+            date_key = _resolve_duplicate_date_key(str(record.get("date_value", "")))
+            if (
+                not attachment_name
+                or not date_key
+                or not merchant_name
+                or merchant_name == ANALYSIS_UNKNOWN_MERCHANT_LABEL
+                or total_amount == 0
+            ):
+                continue
+            author_tag = str(record.get("author_tag", "")).strip()
+            author_id = str(record.get("author_id", "")).strip()
+            author_label = author_tag or author_id or ANALYSIS_UNKNOWN_AUTHOR_LABEL
+            fingerprint = _build_duplicate_fingerprint(
+                date_key=date_key,
+                merchant_name=merchant_name,
+                total_amount=total_amount,
+                author_label=author_label,
+                currency=str(record.get("currency", "")),
+                receipt_number=str(record.get("receipt_number", "")),
+            )
+            candidate_groups.setdefault(fingerprint, []).append(
+                {
+                    "fingerprint": fingerprint,
+                    "sheet_name": sheet_name,
+                    "attachment_name": attachment_name,
+                    "merchant_name": merchant_name,
+                    "total_amount": total_amount,
+                    "date_key": date_key,
+                    "author_label": author_label,
+                    "processed_at": str(record.get("processed_at", "")).strip(),
+                }
+            )
+
+    output_rows: list[list[object]] = []
+    for fingerprint, candidates in candidate_groups.items():
+        if len(candidates) <= 1:
+            continue
+        ordered_candidates = sorted(
+            candidates,
+            key=lambda item: (
+                _parse_iso_datetime(str(item["processed_at"])),
+                str(item["attachment_name"]),
+            ),
+        )
+        duplicate_count = len(ordered_candidates)
+        for index, candidate in enumerate(ordered_candidates):
+            attachment_name = str(candidate["attachment_name"])
+            recommended_auto_exclude = index > 0
+            is_auto_excluded = existing_state_by_attachment.get(attachment_name, recommended_auto_exclude)
+            output_rows.append(
+                [
+                    is_auto_excluded,
+                    _build_duplicate_state_label(
+                        is_auto_excluded=is_auto_excluded,
+                        recommended_auto_exclude=recommended_auto_exclude,
+                    ),
+                    candidate["date_key"],
+                    candidate["merchant_name"],
+                    round(float(candidate["total_amount"]), 2),
+                    candidate["author_label"],
+                    duplicate_count,
+                    attachment_name,
+                    candidate["processed_at"],
+                    candidate["sheet_name"],
+                    fingerprint,
+                ]
+            )
+
+    return sorted(
+        output_rows,
+        key=lambda row: (
+            str(row[DUPLICATE_CONTROL_DATE_COLUMN_INDEX - 1]),
+            -int(row[DUPLICATE_CONTROL_COUNT_COLUMN_INDEX - 1]),
+            str(row[DUPLICATE_CONTROL_MERCHANT_COLUMN_INDEX - 1]),
+            -float(row[DUPLICATE_CONTROL_TOTAL_COLUMN_INDEX - 1]),
+            str(row[DUPLICATE_CONTROL_AUTHOR_COLUMN_INDEX - 1]),
+            str(row[DUPLICATE_CONTROL_PROCESSED_AT_COLUMN_INDEX - 1]),
+            str(row[DUPLICATE_CONTROL_ATTACHMENT_COLUMN_INDEX - 1]),
+        ),
+        reverse=True,
+    )

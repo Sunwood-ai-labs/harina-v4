@@ -18,6 +18,7 @@ from app.google_workspace import (
     ANALYSIS_DUPLICATE_SECTION_COLUMN_COUNT,
     ANALYSIS_DUPLICATE_COUNT_HEADER_LABEL,
     ANALYSIS_DUPLICATE_ATTACHMENTS_HEADER_LABEL,
+    ANALYSIS_DUPLICATE_STATUS_HEADER_LABEL,
     ANALYSIS_HELPER_ACTIVE_LINE_ITEMS_COLUMN_INDEX,
     ANALYSIS_HELPER_AUTHOR_CATEGORY_CHART_SOURCE_COLUMN_INDEX,
     ANALYSIS_HELPER_AUTHOR_CATEGORY_CHART_SOURCE_START_COLUMN,
@@ -27,6 +28,7 @@ from app.google_workspace import (
     ANALYSIS_HELPER_CATEGORY_CHART_SOURCE_START_COLUMN,
     ANALYSIS_HELPER_CATEGORY_REFERENCE_COLUMN_INDEX,
     ANALYSIS_HELPER_CATEGORY_REFERENCE_START_COLUMN,
+    ANALYSIS_HELPER_DUPLICATE_EXCLUSIONS_COLUMN_INDEX,
     ANALYSIS_HELPER_CATEGORY_ROLLUP_COLUMN_INDEX,
     ANALYSIS_HIDDEN_START_COLUMN_INDEX,
     ANALYSIS_HELPER_ITEM_MONTHS_COLUMN_INDEX,
@@ -47,6 +49,14 @@ from app.google_workspace import (
     ANALYSIS_NO_DUPLICATE_DATA_LABEL,
     ANALYSIS_UNKNOWN_AUTHOR_LABEL,
     ANALYSIS_VISIBLE_COLUMN_COUNT,
+    DUPLICATE_CONTROL_AUTO_EXCLUDE_COLUMN_INDEX,
+    DUPLICATE_CONTROL_ATTACHMENT_COLUMN_INDEX,
+    DUPLICATE_CONTROL_HEADERS,
+    DUPLICATE_CONTROL_SHEET_NAME,
+    DUPLICATE_CONTROL_STATE_HEADER_LABEL,
+    DUPLICATE_CONTROL_AUTO_EXCLUDED_STATE_LABEL,
+    DUPLICATE_CONTROL_BASELINE_STATE_LABEL,
+    DUPLICATE_CONTROL_MANUAL_KEEP_STATE_LABEL,
     GoogleWorkspaceClient,
     _analysis_compact_chart_anchor_row,
     _analysis_author_category_section_data_row,
@@ -63,6 +73,7 @@ from app.google_workspace import (
     _resolved_analysis_hidden_start_column_index,
     _resolved_analysis_visible_column_count,
     _column_letter,
+    build_duplicate_control_rows,
     build_analysis_sheet_rows,
 )
 from app.models import ReceiptExtraction, ReceiptLineItem
@@ -134,6 +145,8 @@ class _FakeSheetsService:
     def __init__(self) -> None:
         self.values_service = _FakeSheetsValues()
         self.sheet_names: list[str] = ["Receipts", "Categories"]
+        self.sheet_ids: dict[str, int] = {"Receipts": 101, "Categories": 102}
+        self._next_sheet_id = 200
         self.batch_update_calls: list[dict[str, object]] = []
 
     def spreadsheets(self) -> "_FakeSheetsService":
@@ -144,7 +157,18 @@ class _FakeSheetsService:
 
     def get(self, *, spreadsheetId: str, fields: str) -> _Execute:
         del spreadsheetId, fields
-        return _Execute({"sheets": [{"properties": {"title": sheet_name}} for sheet_name in self.sheet_names]})
+        for sheet_name in self.sheet_names:
+            if sheet_name not in self.sheet_ids:
+                self.sheet_ids[sheet_name] = self._next_sheet_id
+                self._next_sheet_id += 1
+        return _Execute(
+            {
+                "sheets": [
+                    {"properties": {"title": sheet_name, "sheetId": self.sheet_ids[sheet_name]}}
+                    for sheet_name in self.sheet_names
+                ]
+            }
+        )
 
     def batchUpdate(self, *, spreadsheetId: str, body: dict[str, object]) -> _Execute:
         del spreadsheetId
@@ -152,7 +176,19 @@ class _FakeSheetsService:
         for request in body.get("requests", []):
             add_sheet = request.get("addSheet")
             if add_sheet is not None:
-                self.sheet_names.append(str(add_sheet["properties"]["title"]))
+                title = str(add_sheet["properties"]["title"])
+                if title not in self.sheet_names:
+                    self.sheet_names.append(title)
+                self.sheet_ids[title] = self._next_sheet_id
+                self._next_sheet_id += 1
+            delete_sheet = request.get("deleteSheet")
+            if delete_sheet is not None:
+                target_sheet_id = int(delete_sheet["sheetId"])
+                for sheet_name, sheet_id in list(self.sheet_ids.items()):
+                    if sheet_id == target_sheet_id:
+                        self.sheet_ids.pop(sheet_name, None)
+                        self.sheet_names = [name for name in self.sheet_names if name != sheet_name]
+                        break
         return _Execute()
 
 
@@ -321,6 +357,127 @@ def test_append_receipt_rows_falls_back_to_processed_year_when_purchase_date_mis
 
     assert ensured_sheets == ["2024"]
     assert fake_sheets.values_service.append_calls[0]["range"] == "'2024'!A1"
+
+
+def test_list_receipt_sheet_names_excludes_duplicate_control_sheet(monkeypatch) -> None:
+    client, fake_sheets, _fake_drive = _build_workspace_client(monkeypatch)
+    fake_sheets.sheet_names = [
+        "Receipts",
+        "Categories",
+        DUPLICATE_CONTROL_SHEET_NAME,
+        "2025",
+        "Analysis 2025",
+        "Analysis All Years",
+    ]
+    fake_sheets.sheet_ids[DUPLICATE_CONTROL_SHEET_NAME] = 203
+    fake_sheets.sheet_ids["2025"] = 204
+    fake_sheets.sheet_ids["Analysis 2025"] = 205
+    fake_sheets.sheet_ids["Analysis All Years"] = 206
+
+    assert client._list_receipt_sheet_names_sync() == ["Receipts", "2025"]
+
+
+def test_build_duplicate_control_rows_marks_later_receipts_auto_excluded_and_preserves_manual_keep() -> None:
+    receipt_rows_by_sheet = {
+        "2025": [
+            *_build_rows(
+                processed_at="2026-03-01T10:00:00+00:00",
+                purchase_date="2025-02-01",
+                attachment_name="keep.jpg",
+                total=1200,
+                item_total_price=1200,
+            ),
+            *_build_rows(
+                processed_at="2026-03-01T10:05:00+00:00",
+                purchase_date="2025-02-01",
+                attachment_name="dup.jpg",
+                total=1200,
+                item_total_price=1200,
+            ),
+        ]
+    }
+    existing_rows = [
+        [
+            "FALSE",
+            DUPLICATE_CONTROL_MANUAL_KEEP_STATE_LABEL,
+            "2025-02-01",
+            "Cafe Harina",
+            "1200",
+            "tester",
+            "2",
+            "dup.jpg",
+            "2026-03-01T10:05:00+00:00",
+            "2025",
+            "fingerprint",
+        ]
+    ]
+
+    rows = build_duplicate_control_rows(
+        receipt_rows_by_sheet=receipt_rows_by_sheet,
+        existing_rows=existing_rows,
+    )
+
+    assert len(rows) == 2
+    keep_row = next(row for row in rows if row[DUPLICATE_CONTROL_ATTACHMENT_COLUMN_INDEX - 1] == "keep.jpg")
+    dup_row = next(row for row in rows if row[DUPLICATE_CONTROL_ATTACHMENT_COLUMN_INDEX - 1] == "dup.jpg")
+    assert keep_row[DUPLICATE_CONTROL_AUTO_EXCLUDE_COLUMN_INDEX - 1] is False
+    assert keep_row[1] == DUPLICATE_CONTROL_BASELINE_STATE_LABEL
+    assert dup_row[DUPLICATE_CONTROL_AUTO_EXCLUDE_COLUMN_INDEX - 1] is False
+    assert dup_row[1] == DUPLICATE_CONTROL_MANUAL_KEEP_STATE_LABEL
+
+
+def test_sync_duplicate_control_sheet_sync_writes_checkbox_rows_and_layout(monkeypatch) -> None:
+    client, fake_sheets, _fake_drive = _build_workspace_client(monkeypatch)
+    fake_sheets.values_service.values_by_range[f"'{DUPLICATE_CONTROL_SHEET_NAME}'!1:1"] = [DUPLICATE_CONTROL_HEADERS]
+    fake_sheets.values_service.values_by_range[f"'{DUPLICATE_CONTROL_SHEET_NAME}'!A2:K"] = [
+        [
+            "FALSE",
+            DUPLICATE_CONTROL_BASELINE_STATE_LABEL,
+            "2025-02-01",
+            "Cafe Harina",
+            "1200",
+            "tester",
+            "2",
+            "keep.jpg",
+            "2026-03-01T10:00:00+00:00",
+            "2025",
+            "fingerprint",
+        ]
+    ]
+    fake_sheets.sheet_names.append("2025")
+    fake_sheets.sheet_ids["2025"] = 207
+    fake_sheets.values_service.values_by_range["'2025'!A2:ZZ"] = [
+        row
+        for row in (
+            _build_rows(
+                processed_at="2026-03-01T10:00:00+00:00",
+                purchase_date="2025-02-01",
+                attachment_name="keep.jpg",
+                total=1200,
+                item_total_price=1200,
+            )
+            + _build_rows(
+                processed_at="2026-03-01T10:05:00+00:00",
+                purchase_date="2025-02-01",
+                attachment_name="dup.jpg",
+                total=1200,
+                item_total_price=1200,
+            )
+        )
+    ]
+
+    client._sync_duplicate_control_sheet_sync(["2025"])
+
+    assert fake_sheets.values_service.clear_calls[-1]["range"] == f"'{DUPLICATE_CONTROL_SHEET_NAME}'!A2:K"
+    assert fake_sheets.values_service.update_calls[-1]["range"] == f"'{DUPLICATE_CONTROL_SHEET_NAME}'!A1"
+    written_rows = cast(list[list[object]], fake_sheets.values_service.update_calls[-1]["body"]["values"])
+    assert written_rows[0] == DUPLICATE_CONTROL_HEADERS
+    assert any(row[DUPLICATE_CONTROL_ATTACHMENT_COLUMN_INDEX - 1] == "dup.jpg" for row in written_rows[1:])
+    assert any(
+        request.get("setDataValidation", {}).get("range", {}).get("startColumnIndex")
+        == DUPLICATE_CONTROL_AUTO_EXCLUDE_COLUMN_INDEX - 1
+        for request in fake_sheets.batch_update_calls[-1]["requests"]
+    )
 
 
 def test_append_receipt_rows_groups_mixed_year_batches(monkeypatch) -> None:
@@ -528,8 +685,14 @@ def test_build_analysis_sheet_rows_includes_formula_paths_for_rescan_and_total_f
     )
 
     assert "SORTN(" in str(_cell(analysis_rows, 2, ANALYSIS_HELPER_LATEST_RECEIPTS_COLUMN_INDEX))
-    assert "MATCH(" in str(_cell(analysis_rows, 2, ANALYSIS_HELPER_ACTIVE_LINE_ITEMS_COLUMN_INDEX))
-    assert "VLOOKUP(" in str(_cell(analysis_rows, 2, ANALYSIS_HELPER_RECEIPT_TOTALS_COLUMN_INDEX))
+    active_line_items_formula = str(_cell(analysis_rows, 2, ANALYSIS_HELPER_ACTIVE_LINE_ITEMS_COLUMN_INDEX))
+    assert "MATCH(" in active_line_items_formula
+    assert "ISNA(MATCH(INDEX(" in active_line_items_formula
+    receipt_totals_formula = str(_cell(analysis_rows, 2, ANALYSIS_HELPER_RECEIPT_TOTALS_COLUMN_INDEX))
+    assert "VLOOKUP(" in receipt_totals_formula
+    duplicate_exclusions_formula = str(_cell(analysis_rows, 2, ANALYSIS_HELPER_DUPLICATE_EXCLUSIONS_COLUMN_INDEX))
+    assert DUPLICATE_CONTROL_SHEET_NAME in duplicate_exclusions_formula
+    assert "FILTER(" in duplicate_exclusions_formula
     assert f'"{ANALYSIS_UNKNOWN_AUTHOR_LABEL}"' in str(_cell(analysis_rows, 2, ANALYSIS_HELPER_RECEIPT_TOTALS_COLUMN_INDEX))
     assert "'Categories'!A2:A" in str(_cell(analysis_rows, 2, ANALYSIS_HELPER_CATEGORY_REFERENCE_COLUMN_INDEX))
     assert '"2025-01"' in str(_cell(analysis_rows, 2, ANALYSIS_HELPER_MONTH_REFERENCE_COLUMN_INDEX))
@@ -580,11 +743,9 @@ def test_build_analysis_sheet_rows_includes_formula_paths_for_rescan_and_total_f
     assert "order by Col1 asc" in str(_cell(analysis_rows, author_category_data_row, 1))
     duplicate_candidates_formula = str(_cell(analysis_rows, author_category_data_row, ANALYSIS_DUPLICATE_SECTION_COLUMN_INDEX))
     assert duplicate_candidates_formula.startswith("=IFERROR(LET(")
-    assert "candidateRows" in duplicate_candidates_formula
-    assert "grouped, QUERY(" in duplicate_candidates_formula
-    assert "having count(Col5) > 1" in duplicate_candidates_formula
-    assert "attachmentLists" in duplicate_candidates_formula
-    assert ANALYSIS_DUPLICATE_COUNT_HEADER_LABEL in duplicate_candidates_formula
+    assert "controlRows" in duplicate_candidates_formula
+    assert DUPLICATE_CONTROL_SHEET_NAME in duplicate_candidates_formula
+    assert ANALYSIS_DUPLICATE_STATUS_HEADER_LABEL in duplicate_candidates_formula
     assert ANALYSIS_DUPLICATE_ATTACHMENTS_HEADER_LABEL in duplicate_candidates_formula
     assert ANALYSIS_NO_DUPLICATE_DATA_LABEL in duplicate_candidates_formula
     assert '$' in str(_cell(analysis_rows, ANALYSIS_MONTHLY_CATEGORY_TIMELINE_START_ROW_NUMBER, ANALYSIS_MONTHLY_CATEGORY_TIMELINE_COLUMN_INDEX))

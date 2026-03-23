@@ -34,10 +34,12 @@ Each receipt goes through a two-stage Gemini pipeline:
 - Store Discord-uploaded images in the main Google Drive archive under `YYYY/MM`
 - Move Drive watcher source files into `YYYY/MM` folders inside each processed folder
 - Append one bookkeeping row per line item into Google Sheets, including `itemCategory`
+- Build formula-driven `Analysis YYYY`, `Analysis All Years`, and `重複確認` Sheets surfaces for dashboards and duplicate review
 - Skip duplicate receipts when the same `attachmentName` is already recorded in Google Sheets, with `--rescan` available for intentional reprocessing
 - Forward new Google Drive images into a Discord notification channel
 - Reply in Discord with category summary, per-item categories, and priced line items
 - Move processed Google Drive files into `processed/YYYY/MM` after success
+- Resume watcher waits from Discord with `/resume_polling` when the long-running service is paused between scans
 - Run locally with `uv` or continuously with Docker Compose
 
 ## Typical workflows
@@ -110,6 +112,7 @@ uv run harina-v4 receipt process ./sample-receipt.jpg --rescan
 uv run harina-v4 google oauth-login --oauth-client-secret-file ./secrets/harina-oauth-client.json --env-file .env
 uv run harina-v4 google init-resources --env-file .env
 uv run harina-v4 google init-drive-watch --env-file .env
+uv run harina-v4 google sync-analysis
 uv run harina-v4 drive watch --once
 uv run harina-v4 drive watch --once --rescan
 uv run harina-v4 dataset download "https://discord.com/channels/<guild_id>/<channel_id>" --limit 50
@@ -161,6 +164,8 @@ Useful flags:
 - `Receipts` as the fallback/bootstrap receipt tab name stored in `.env`
 - `Categories` for the approved category catalog that Gemini reads on every write-enabled run
 
+HARINA can also rebuild analysis-only tabs such as `Analysis 2025`, `Analysis 2026`, `Analysis All Years`, and the persistent duplicate-control sheet `重複確認`. Use `uv run harina-v4 google sync-analysis` when you want to refresh those analysis surfaces manually.
+
 When HARINA appends receipt rows, it auto-creates year-based tabs such as `2025` and `2026`. It chooses the purchase year when available, falls back to the processed timestamp when needed, and still uses `attachmentName` dedup checks across all receipt tabs except `Categories`.
 
 The default category seed uses short single-word labels such as `野菜`, `肉`, `惣菜`, `飲料`, and `手数料`.
@@ -194,6 +199,7 @@ If Gemini returns a category that is not already in `Categories`, HARINA can app
 
 When `DISCORD_SYSTEM_LOG_CHANNEL_ID` is configured, repeated `HARINA Scan Summary` posts are suppressed for idle scan cycles when both the scan counters and backlog snapshot are unchanged. Summaries still post when files are processed, skipped, or failed, or when the backlog changes.
 When Gemini usage metadata is available, the Drive watcher's `Drive Receipt // ...` embed also includes `Gemini Model` and `API Cost (est.)`. If every rotation key is exhausted, the watcher posts `HARINA Watch Status` before its delayed retry window.
+The watcher also exposes `/resume_polling`, which lets operators with `Manage Server` permission clear the current poll wait or delayed Gemini retry wait from Discord without restarting the containers.
 
 ## Docker Compose
 
@@ -233,8 +239,8 @@ For long-running watcher deployments, do not expect a heartbeat-style `HARINA Sc
 - [Deployment](./docs/guide/deployment.md)
 - [Dataset Downloader](./docs/guide/dataset-downloader.md)
 - [Gemini Smoke Test](./docs/guide/gemini-smoke-test.md)
-- [Release Notes v4.3.0](./docs/guide/release-notes-v4.3.0.md)
-- [What's New In Harina v4.3.0](./docs/guide/whats-new-v4.3.0.md)
+- [Release Notes v4.4.0](./docs/guide/release-notes-v4.4.0.md)
+- [What's New In Harina v4.4.0](./docs/guide/whats-new-v4.4.0.md)
 
 ## Development
 

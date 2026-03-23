@@ -14,6 +14,10 @@ from app.google_workspace import (
     ANALYSIS_CATEGORY_SUMMARY_SECTION_COLUMN_INDEX,
     ANALYSIS_CATEGORY_STATUS_COLUMN_INDEX,
     ANALYSIS_CATEGORY_TOTAL_COLUMN_INDEX,
+    ANALYSIS_DUPLICATE_SECTION_COLUMN_INDEX,
+    ANALYSIS_DUPLICATE_SECTION_COLUMN_COUNT,
+    ANALYSIS_DUPLICATE_COUNT_HEADER_LABEL,
+    ANALYSIS_DUPLICATE_ATTACHMENTS_HEADER_LABEL,
     ANALYSIS_HELPER_ACTIVE_LINE_ITEMS_COLUMN_INDEX,
     ANALYSIS_HELPER_AUTHOR_CATEGORY_CHART_SOURCE_COLUMN_INDEX,
     ANALYSIS_HELPER_AUTHOR_CATEGORY_CHART_SOURCE_START_COLUMN,
@@ -40,6 +44,7 @@ from app.google_workspace import (
     ANALYSIS_MONTHLY_SECTION_COLUMN_INDEX,
     ANALYSIS_NO_CATEGORY_DATA_LABEL,
     ANALYSIS_NO_AUTHOR_DATA_LABEL,
+    ANALYSIS_NO_DUPLICATE_DATA_LABEL,
     ANALYSIS_UNKNOWN_AUTHOR_LABEL,
     ANALYSIS_VISIBLE_COLUMN_COUNT,
     GoogleWorkspaceClient,
@@ -507,6 +512,7 @@ def test_build_analysis_sheet_rows_creates_empty_template_without_year_sources()
     assert _cell(analysis_rows, ANALYSIS_MONTHLY_CATEGORY_TIMELINE_START_ROW_NUMBER, 1) == "(月次データなし)"
     assert _cell(analysis_rows, author_category_title_row, 1) == ANALYSIS_AUTHOR_CATEGORY_BREAKDOWN_LABEL
     assert _cell(analysis_rows, author_category_data_row, 1) == "(支払者データなし)"
+    assert _cell(analysis_rows, author_category_data_row, ANALYSIS_DUPLICATE_SECTION_COLUMN_INDEX) == ANALYSIS_NO_DUPLICATE_DATA_LABEL
 
 
 def test_build_analysis_sheet_rows_includes_formula_paths_for_rescan_and_total_fallback() -> None:
@@ -572,6 +578,15 @@ def test_build_analysis_sheet_rows_includes_formula_paths_for_rescan_and_total_f
     assert "sum(Col3)" in str(_cell(analysis_rows, author_category_data_row, 1))
     assert "count(Col3)" in str(_cell(analysis_rows, author_category_data_row, 1))
     assert "order by Col1 asc" in str(_cell(analysis_rows, author_category_data_row, 1))
+    duplicate_candidates_formula = str(_cell(analysis_rows, author_category_data_row, ANALYSIS_DUPLICATE_SECTION_COLUMN_INDEX))
+    assert duplicate_candidates_formula.startswith("=IFERROR(LET(")
+    assert "candidateRows" in duplicate_candidates_formula
+    assert "grouped, QUERY(" in duplicate_candidates_formula
+    assert "having count(Col5) > 1" in duplicate_candidates_formula
+    assert "attachmentLists" in duplicate_candidates_formula
+    assert ANALYSIS_DUPLICATE_COUNT_HEADER_LABEL in duplicate_candidates_formula
+    assert ANALYSIS_DUPLICATE_ATTACHMENTS_HEADER_LABEL in duplicate_candidates_formula
+    assert ANALYSIS_NO_DUPLICATE_DATA_LABEL in duplicate_candidates_formula
     assert '$' in str(_cell(analysis_rows, ANALYSIS_MONTHLY_CATEGORY_TIMELINE_START_ROW_NUMBER, ANALYSIS_MONTHLY_CATEGORY_TIMELINE_COLUMN_INDEX))
     assert "MAKEARRAY(" in str(_cell(analysis_rows, ANALYSIS_MONTHLY_CATEGORY_TIMELINE_START_ROW_NUMBER, ANALYSIS_MONTHLY_CATEGORY_TIMELINE_COLUMN_INDEX))
     assert f'INDEX(${ANALYSIS_HELPER_CATEGORY_REFERENCE_START_COLUMN}$2:' in str(_cell(analysis_rows, ANALYSIS_MONTHLY_CATEGORY_TIMELINE_START_ROW_NUMBER, ANALYSIS_MONTHLY_CATEGORY_TIMELINE_COLUMN_INDEX))
@@ -711,6 +726,30 @@ def test_resolve_author_category_chart_shape_waits_past_placeholder(monkeypatch)
     ) == (3, 3)
 
 
+def test_resolve_duplicate_candidates_shape_uses_contiguous_visible_rows(monkeypatch) -> None:
+    client, fake_sheets, _fake_drive = _build_workspace_client(monkeypatch)
+    category_timeline_row_count = 13
+    section_start_row = _analysis_author_category_section_data_row(
+        category_timeline_row_count=category_timeline_row_count
+    )
+    end_column = _column_letter(
+        ANALYSIS_DUPLICATE_SECTION_COLUMN_INDEX + ANALYSIS_DUPLICATE_SECTION_COLUMN_COUNT - 1
+    )
+    fake_sheets.values_service.values_by_range[
+        f"'Analysis 2025'!{_column_letter(ANALYSIS_DUPLICATE_SECTION_COLUMN_INDEX)}{section_start_row}:{end_column}200"
+    ] = [
+        ["日付", "店舗", "合計金額", "支払者(authorTag)", "候補数", "添付名"],
+        ["2025-05-01", "Store", 1200, "Alice", 2, "a.jpg, b.jpg"],
+        [],
+        ["ignored", "row", 0, "", 0, ""],
+    ]
+
+    assert client._resolve_duplicate_candidates_shape_sync(
+        sheet_name="Analysis 2025",
+        category_timeline_row_count=category_timeline_row_count,
+    ) == (6, 2)
+
+
 def _disabled_test_wait_for_category_timeline_chart_source_sync_accepts_ready_values(monkeypatch) -> None:
     client, fake_sheets, _fake_drive = _build_workspace_client(monkeypatch)
     fake_sheets.values_service.values_by_range["'Analysis 2025'!EJ2:EM3"] = [
@@ -812,6 +851,19 @@ def test_apply_analysis_dashboard_layout_sync_styles_subtitle_hides_helper_colum
         if "repeatCell" in request
     )
     assert any(
+        request.get("repeatCell", {}).get("range")
+        == {
+            "sheetId": 321,
+            "startRowIndex": _analysis_author_category_section_data_row(category_timeline_row_count=13) - 1,
+            "endRowIndex": _analysis_author_category_section_data_row(category_timeline_row_count=13),
+            "startColumnIndex": ANALYSIS_DUPLICATE_SECTION_COLUMN_INDEX - 1,
+            "endColumnIndex": ANALYSIS_DUPLICATE_SECTION_COLUMN_INDEX - 1 + ANALYSIS_DUPLICATE_SECTION_COLUMN_COUNT,
+        }
+        and "backgroundColorStyle" in request["repeatCell"]["cell"]["userEnteredFormat"]
+        for request in layout_requests
+        if "repeatCell" in request
+    )
+    assert any(
         request.get("updateBorders", {}).get("range")
         == {
             "sheetId": 321,
@@ -819,6 +871,17 @@ def test_apply_analysis_dashboard_layout_sync_styles_subtitle_hides_helper_colum
             "endRowIndex": 200,
             "startColumnIndex": 0,
             "endColumnIndex": 4,
+        }
+        for request in layout_requests
+    )
+    assert any(
+        request.get("updateBorders", {}).get("range")
+        == {
+            "sheetId": 321,
+            "startRowIndex": _analysis_author_category_section_title_row(category_timeline_row_count=13) - 1,
+            "endRowIndex": 200,
+            "startColumnIndex": ANALYSIS_DUPLICATE_SECTION_COLUMN_INDEX - 1,
+            "endColumnIndex": ANALYSIS_DUPLICATE_SECTION_COLUMN_INDEX - 1 + ANALYSIS_DUPLICATE_SECTION_COLUMN_COUNT,
         }
         for request in layout_requests
     )
@@ -839,12 +902,13 @@ def test_apply_analysis_dashboard_charts_creates_category_merchant_monthly_and_s
     client, fake_sheets, _fake_drive = _build_workspace_client(monkeypatch)
     monkeypatch.setattr(client, "_resolve_category_timeline_shape_sync", lambda **kwargs: (4, 13))
     monkeypatch.setattr(client, "_resolve_author_category_chart_shape_sync", lambda **kwargs: (4, 3))
+    monkeypatch.setattr(client, "_resolve_duplicate_candidates_shape_sync", lambda **kwargs: (6, 5))
     compact_chart_anchor_row = _analysis_compact_chart_anchor_row(category_timeline_row_count=13) - 1
     monthly_chart_anchor_row = _analysis_monthly_chart_anchor_row(category_timeline_row_count=13) - 1
     stacked_chart_anchor_row = _analysis_stacked_chart_anchor_row(category_timeline_row_count=13) - 1
     author_category_chart_anchor_row = _analysis_author_category_chart_anchor_row(
         category_timeline_row_count=13,
-        author_category_row_count=3,
+        author_category_row_count=5,
     ) - 1
 
     client._apply_analysis_dashboard_charts_sync(
@@ -938,6 +1002,7 @@ def test_replace_sheet_values_sync_recreates_chart_requests(monkeypatch) -> None
     monkeypatch.setattr(client, "_recreate_analysis_sheet_sync", lambda **kwargs: 777)
     monkeypatch.setattr(client, "_resolve_category_timeline_shape_sync", lambda **kwargs: (4, 13))
     monkeypatch.setattr(client, "_resolve_author_category_chart_shape_sync", lambda **kwargs: (4, 3))
+    monkeypatch.setattr(client, "_resolve_duplicate_candidates_shape_sync", lambda **kwargs: (6, 5))
     monkeypatch.setattr(client, "_resolve_category_dashboard_row_count_sync", lambda **kwargs: 5)
 
     client._replace_sheet_values_sync(sheet_name="Analysis 2025", rows=[["HARINA 分析ダッシュボード"]])

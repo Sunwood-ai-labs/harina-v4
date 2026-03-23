@@ -278,7 +278,7 @@ ANALYSIS_MERCHANT_SECTION_LABEL = "店舗分析"
 ANALYSIS_AUTHOR_SECTION_LABEL = "支払者分析"
 ANALYSIS_MONTHLY_SECTION_LABEL = "月次推移"
 ANALYSIS_TREND_SECTION_LABEL = "カテゴリ別月次"
-ANALYSIS_AUTHOR_CATEGORY_BREAKDOWN_LABEL = "支払者(authorTag)別カテゴリ内訳"
+ANALYSIS_AUTHOR_CATEGORY_BREAKDOWN_LABEL = "支払者(authorTag)別カテゴリ内訳・重複候補"
 ANALYSIS_CATEGORY_HEADER_LABEL = "カテゴリ"
 ANALYSIS_DESCRIPTION_HEADER_LABEL = "説明"
 ANALYSIS_TOTAL_AMOUNT_HEADER_LABEL = "合計金額"
@@ -292,12 +292,16 @@ ANALYSIS_MONTH_HEADER_LABEL = "年月"
 ANALYSIS_AVG_RECEIPT_HEADER_LABEL = "平均レシート額"
 ANALYSIS_MERCHANTS_HEADER_LABEL = "店舗数"
 ANALYSIS_MONTHLY_TOTAL_TREND_HEADER_LABEL = "月次合計推移"
+ANALYSIS_DATE_HEADER_LABEL = "日付"
+ANALYSIS_DUPLICATE_COUNT_HEADER_LABEL = "候補数"
+ANALYSIS_DUPLICATE_ATTACHMENTS_HEADER_LABEL = "添付名"
 ANALYSIS_USED_LABEL = "使用中"
 ANALYSIS_UNUSED_LABEL = "未使用"
 ANALYSIS_NO_CATEGORY_DATA_LABEL = "(カテゴリデータなし)"
 ANALYSIS_NO_MERCHANT_DATA_LABEL = "(店舗データなし)"
 ANALYSIS_NO_AUTHOR_DATA_LABEL = "(支払者データなし)"
 ANALYSIS_NO_MONTH_DATA_LABEL = "(月次データなし)"
+ANALYSIS_NO_DUPLICATE_DATA_LABEL = "(重複候補なし)"
 ANALYSIS_UNCATEGORIZED_LABEL = "(未分類)"
 ANALYSIS_UNKNOWN_MERCHANT_LABEL = "(不明)"
 ANALYSIS_UNKNOWN_AUTHOR_LABEL = "(不明)"
@@ -312,6 +316,8 @@ ANALYSIS_AUTHOR_CHART_ANCHOR_COLUMN_INDEX = 22
 ANALYSIS_AUTHOR_CATEGORY_CHART_ANCHOR_COLUMN_INDEX = 7
 ANALYSIS_AUTHOR_CATEGORY_MATRIX_COLUMN_INDEX = 8  # H
 ANALYSIS_AUTHOR_CATEGORY_MATRIX_COLUMN_COUNT = ANALYSIS_AUTHOR_CATEGORY_CHART_TOP_CATEGORY_COUNT + 2
+ANALYSIS_DUPLICATE_SECTION_COLUMN_INDEX = 16  # P
+ANALYSIS_DUPLICATE_SECTION_COLUMN_COUNT = 6
 ANALYSIS_CHART_SERIES_PALETTE = [
     ANALYSIS_THEME_FOREST,
     ANALYSIS_THEME_TERRACOTTA,
@@ -408,6 +414,10 @@ def _build_analysis_dashboard_layout_requests(
     author_category_matrix_start_column_index = ANALYSIS_AUTHOR_CATEGORY_MATRIX_COLUMN_INDEX - 1
     author_category_matrix_end_column_index = (
         author_category_matrix_start_column_index + ANALYSIS_AUTHOR_CATEGORY_MATRIX_COLUMN_COUNT
+    )
+    duplicate_section_start_column_index = ANALYSIS_DUPLICATE_SECTION_COLUMN_INDEX - 1
+    duplicate_section_end_column_index = (
+        duplicate_section_start_column_index + ANALYSIS_DUPLICATE_SECTION_COLUMN_COUNT
     )
     month_data_row_count = max(category_timeline_row_count - 1, 1)
     monthly_block_end_row_index = support_data_row_index + month_data_row_count
@@ -816,6 +826,12 @@ def _build_analysis_dashboard_layout_requests(
             author_category_matrix_end_column_index,
             ANALYSIS_THEME_TEAL_MIST,
         ),
+        (
+            author_category_data_row_index,
+            duplicate_section_start_column_index,
+            duplicate_section_end_column_index,
+            ANALYSIS_THEME_NAVY_MIST,
+        ),
     ):
         requests.append(
             _build_analysis_repeat_cell_request(
@@ -1081,6 +1097,64 @@ def _build_analysis_dashboard_layout_requests(
                 user_entered_format={"numberFormat": {"type": "NUMBER", "pattern": "#,##0"}},
                 fields="userEnteredFormat(numberFormat)",
             ),
+            _build_analysis_repeat_cell_request(
+                sheet_id=sheet_id,
+                start_row_index=author_category_data_row_index + 1,
+                end_row_index=200,
+                start_column_index=duplicate_section_start_column_index,
+                end_column_index=duplicate_section_end_column_index,
+                user_entered_format={
+                    "backgroundColorStyle": _hex_color_style(ANALYSIS_THEME_IVORY),
+                    "verticalAlignment": "TOP",
+                    "wrapStrategy": "WRAP",
+                },
+                fields="userEnteredFormat(backgroundColorStyle,verticalAlignment,wrapStrategy)",
+            ),
+            _build_analysis_repeat_cell_request(
+                sheet_id=sheet_id,
+                start_row_index=author_category_data_row_index + 1,
+                end_row_index=200,
+                start_column_index=duplicate_section_start_column_index,
+                end_column_index=duplicate_section_start_column_index + 2,
+                user_entered_format={"horizontalAlignment": "LEFT", "verticalAlignment": "TOP"},
+                fields="userEnteredFormat(horizontalAlignment,verticalAlignment)",
+            ),
+            _build_analysis_repeat_cell_request(
+                sheet_id=sheet_id,
+                start_row_index=author_category_data_row_index + 1,
+                end_row_index=200,
+                start_column_index=duplicate_section_start_column_index + 2,
+                end_column_index=duplicate_section_start_column_index + 3,
+                user_entered_format={"horizontalAlignment": "RIGHT", "verticalAlignment": "TOP"},
+                fields="userEnteredFormat(horizontalAlignment,verticalAlignment)",
+            ),
+            _build_analysis_repeat_cell_request(
+                sheet_id=sheet_id,
+                start_row_index=author_category_data_row_index + 1,
+                end_row_index=200,
+                start_column_index=duplicate_section_start_column_index + 3,
+                end_column_index=duplicate_section_start_column_index + 4,
+                user_entered_format={"horizontalAlignment": "CENTER", "verticalAlignment": "TOP"},
+                fields="userEnteredFormat(horizontalAlignment,verticalAlignment)",
+            ),
+            _build_analysis_repeat_cell_request(
+                sheet_id=sheet_id,
+                start_row_index=author_category_data_row_index + 1,
+                end_row_index=200,
+                start_column_index=duplicate_section_start_column_index + 4,
+                end_column_index=duplicate_section_end_column_index,
+                user_entered_format={"horizontalAlignment": "LEFT", "verticalAlignment": "TOP"},
+                fields="userEnteredFormat(horizontalAlignment,verticalAlignment)",
+            ),
+            _build_analysis_repeat_cell_request(
+                sheet_id=sheet_id,
+                start_row_index=author_category_data_row_index + 1,
+                end_row_index=200,
+                start_column_index=duplicate_section_start_column_index + 2,
+                end_column_index=duplicate_section_start_column_index + 4,
+                user_entered_format={"numberFormat": {"type": "NUMBER", "pattern": "#,##0"}},
+                fields="userEnteredFormat(numberFormat)",
+            ),
             _build_analysis_dimension_request(sheet_id=sheet_id, dimension="ROWS", start_index=0, end_index=1, pixel_size=54),
             _build_analysis_dimension_request(sheet_id=sheet_id, dimension="ROWS", start_index=1, end_index=2, pixel_size=34),
             _build_analysis_dimension_request(sheet_id=sheet_id, dimension="ROWS", start_index=2, end_index=3, pixel_size=28),
@@ -1173,6 +1247,41 @@ def _build_analysis_dashboard_layout_requests(
             _build_analysis_dimension_request(
                 sheet_id=sheet_id,
                 dimension="COLUMNS",
+                start_index=duplicate_section_start_column_index,
+                end_index=duplicate_section_start_column_index + 1,
+                pixel_size=108,
+            ),
+            _build_analysis_dimension_request(
+                sheet_id=sheet_id,
+                dimension="COLUMNS",
+                start_index=duplicate_section_start_column_index + 1,
+                end_index=duplicate_section_start_column_index + 2,
+                pixel_size=160,
+            ),
+            _build_analysis_dimension_request(
+                sheet_id=sheet_id,
+                dimension="COLUMNS",
+                start_index=duplicate_section_start_column_index + 2,
+                end_index=duplicate_section_start_column_index + 4,
+                pixel_size=92,
+            ),
+            _build_analysis_dimension_request(
+                sheet_id=sheet_id,
+                dimension="COLUMNS",
+                start_index=duplicate_section_start_column_index + 4,
+                end_index=duplicate_section_start_column_index + 5,
+                pixel_size=156,
+            ),
+            _build_analysis_dimension_request(
+                sheet_id=sheet_id,
+                dimension="COLUMNS",
+                start_index=duplicate_section_start_column_index + 5,
+                end_index=duplicate_section_end_column_index,
+                pixel_size=240,
+            ),
+            _build_analysis_dimension_request(
+                sheet_id=sheet_id,
+                dimension="COLUMNS",
                 start_index=hidden_start_column_index,
                 end_index=ANALYSIS_MAX_COLUMN_INDEX,
                 hidden_by_user=True,
@@ -1239,6 +1348,13 @@ def _build_analysis_dashboard_layout_requests(
             200,
             author_category_matrix_start_column_index,
             author_category_matrix_end_column_index,
+            "SOLID_MEDIUM",
+        ),
+        (
+            author_category_title_row_index,
+            200,
+            duplicate_section_start_column_index,
+            duplicate_section_end_column_index,
             "SOLID_MEDIUM",
         ),
     ):
@@ -2228,6 +2344,12 @@ class GoogleWorkspaceClient:
                 category_timeline_row_count=max(category_timeline_row_count, 2),
             )
         )
+        _duplicate_candidate_column_count, duplicate_candidate_row_count = (
+            self._resolve_duplicate_candidates_shape_sync(
+                sheet_name=sheet_name,
+                category_timeline_row_count=max(category_timeline_row_count, 2),
+            )
+        )
         if category_chart_row_count is None:
             category_chart_row_count = self._resolve_category_dashboard_row_count_sync(
                 sheet_name=sheet_name,
@@ -2239,7 +2361,7 @@ class GoogleWorkspaceClient:
             category_timeline_series_count=max(category_timeline_column_count - 1, 1),
             category_timeline_row_count=max(category_timeline_row_count, 2),
             author_category_series_count=max(author_category_chart_column_count - 1, 1),
-            author_category_row_count=max(author_category_chart_row_count, 2),
+            author_category_row_count=max(author_category_chart_row_count, duplicate_candidate_row_count, 2),
         )
         if not requests:
             return
@@ -2351,6 +2473,43 @@ class GoogleWorkspaceClient:
             if _is_author_category_chart_placeholder(contiguous_values):
                 time.sleep(0.5)
                 continue
+            if len(contiguous_values) > 1 and len(contiguous_values[0]) > 1 and len(contiguous_values[1]) > 1:
+                return max(len(row) for row in contiguous_values), len(contiguous_values)
+            time.sleep(0.5)
+        return fallback_column_count, 2
+
+    def _resolve_duplicate_candidates_shape_sync(
+        self, *, sheet_name: str, category_timeline_row_count: int
+    ) -> tuple[int, int]:
+        fallback_column_count = ANALYSIS_DUPLICATE_SECTION_COLUMN_COUNT
+        section_start_row = _analysis_author_category_section_data_row(
+            category_timeline_row_count=category_timeline_row_count
+        )
+        section_end_column = _column_letter(
+            ANALYSIS_DUPLICATE_SECTION_COLUMN_INDEX + fallback_column_count - 1
+        )
+        section_range = (
+            f"'{sheet_name}'!{_column_letter(ANALYSIS_DUPLICATE_SECTION_COLUMN_INDEX)}{section_start_row}:{section_end_column}200"
+        )
+        for _ in range(10):
+            response = (
+                self._sheets.spreadsheets()
+                .values()
+                .get(
+                    spreadsheetId=self._spreadsheet_id,
+                    range=section_range,
+                    valueRenderOption="UNFORMATTED_VALUE",
+                )
+                .execute()
+            )
+            values = response.get("values", [])
+            contiguous_values: list[list[object]] = []
+            for row in values:
+                if any(cell not in ("", None) for cell in row):
+                    contiguous_values.append(row)
+                    continue
+                if contiguous_values:
+                    break
             if len(contiguous_values) > 1 and len(contiguous_values[0]) > 1 and len(contiguous_values[1]) > 1:
                 return max(len(row) for row in contiguous_values), len(contiguous_values)
             time.sleep(0.5)
@@ -2534,6 +2693,12 @@ def build_analysis_sheet_rows(
             ANALYSIS_AUTHOR_CATEGORY_MATRIX_COLUMN_INDEX,
             _build_author_category_chart_source_formula(author_category_breakdown_row_number=author_category_section_data_row),
         )
+        _set_grid_cell(rows, author_category_section_data_row, ANALYSIS_DUPLICATE_SECTION_COLUMN_INDEX, ANALYSIS_NO_DUPLICATE_DATA_LABEL)
+        _set_grid_cell(rows, author_category_section_data_row, ANALYSIS_DUPLICATE_SECTION_COLUMN_INDEX + 1, "")
+        _set_grid_cell(rows, author_category_section_data_row, ANALYSIS_DUPLICATE_SECTION_COLUMN_INDEX + 2, "")
+        _set_grid_cell(rows, author_category_section_data_row, ANALYSIS_DUPLICATE_SECTION_COLUMN_INDEX + 3, "")
+        _set_grid_cell(rows, author_category_section_data_row, ANALYSIS_DUPLICATE_SECTION_COLUMN_INDEX + 4, 0)
+        _set_grid_cell(rows, author_category_section_data_row, ANALYSIS_DUPLICATE_SECTION_COLUMN_INDEX + 5, "")
         return [_trim_trailing_blank_cells(row) for row in rows]
 
     source_formula = _build_analysis_source_formula(source_sheet_names)
@@ -2615,6 +2780,12 @@ def build_analysis_sheet_rows(
         author_category_section_data_row,
         ANALYSIS_AUTHOR_CATEGORY_MATRIX_COLUMN_INDEX,
         _build_author_category_chart_source_formula(author_category_breakdown_row_number=author_category_section_data_row),
+    )
+    _set_grid_cell(
+        rows,
+        author_category_section_data_row,
+        ANALYSIS_DUPLICATE_SECTION_COLUMN_INDEX,
+        _build_duplicate_candidates_formula(),
     )
 
     return [_trim_trailing_blank_cells(row) for row in rows]
@@ -2990,6 +3161,61 @@ def _build_author_category_chart_source_formula(*, author_category_breakdown_row
         "VSTACK(headerRow, matrixBody)"
         "), "
         f'{{"{ANALYSIS_AUTHOR_HEADER_LABEL}","{ANALYSIS_NO_CATEGORY_DATA_LABEL}","その他";"{ANALYSIS_NO_AUTHOR_DATA_LABEL}",0,0}})'
+    )
+
+
+def _build_duplicate_candidates_formula() -> str:
+    receipt_totals_range = f"${ANALYSIS_HELPER_RECEIPT_TOTALS_START_COLUMN}$2:${ANALYSIS_HELPER_RECEIPT_TOTALS_END_COLUMN}"
+    date_value_formula = _build_sheet_date_value_formula(receipt_totals_range, 3)
+    author_display_formula = (
+        "IF("
+        f"LEN(TRIM(TO_TEXT(INDEX({receipt_totals_range},,6)))),"
+        f"TRIM(TO_TEXT(INDEX({receipt_totals_range},,6))),"
+        "IF("
+        f"LEN(TRIM(TO_TEXT(INDEX({receipt_totals_range},,5)))),"
+        f"TRIM(TO_TEXT(INDEX({receipt_totals_range},,5))),"
+        f'"{ANALYSIS_UNKNOWN_AUTHOR_LABEL}"'
+        ")"
+        ")"
+    )
+    return (
+        "=IFERROR(LET("
+        f"attachments, INDEX({receipt_totals_range},,1),"
+        f"merchants, INDEX({receipt_totals_range},,2),"
+        f'dateKeys, IFERROR(IF(LEN(INDEX({receipt_totals_range},,3)), TEXT({date_value_formula}, "yyyy-mm-dd"), ""), ""),'
+        f"amounts, ROUND(N(INDEX({receipt_totals_range},,4)), 2),"
+        f"authors, {author_display_formula},"
+        "candidateRows, FILTER({dateKeys, merchants, amounts, authors, attachments}, "
+        "LEN(attachments), LEN(dateKeys), LEN(merchants), "
+        f'merchants<>"{ANALYSIS_UNKNOWN_MERCHANT_LABEL}", '
+        "amounts<>0),"
+        "grouped, QUERY("
+        "candidateRows, "
+        "\"select Col1, Col2, Col3, Col4, count(Col5) "
+        "where Col1 is not null and Col2 is not null and Col4 is not null "
+        "group by Col1, Col2, Col3, Col4 "
+        "having count(Col5) > 1 "
+        "order by count(Col5) desc, Col1 desc, Col2 asc, Col3 desc, Col4 asc "
+        "label Col1 '', Col2 '', Col3 '', Col4 '', count(Col5) ''\", "
+        "0"
+        "),"
+        "attachmentLists, MAP("
+        "SEQUENCE(ROWS(grouped)),"
+        "LAMBDA(rowIndex, TEXTJOIN(\", \", TRUE, UNIQUE(FILTER("
+        "INDEX(candidateRows,,5),"
+        "INDEX(candidateRows,,1)=INDEX(grouped,rowIndex,1),"
+        "INDEX(candidateRows,,2)=INDEX(grouped,rowIndex,2),"
+        "INDEX(candidateRows,,3)=INDEX(grouped,rowIndex,3),"
+        "INDEX(candidateRows,,4)=INDEX(grouped,rowIndex,4)"
+        "))))"
+        "),"
+        'VSTACK({"'
+        f'{ANALYSIS_DATE_HEADER_LABEL}","{ANALYSIS_MERCHANT_HEADER_LABEL}","{ANALYSIS_TOTAL_AMOUNT_HEADER_LABEL}","{ANALYSIS_AUTHOR_HEADER_LABEL}","{ANALYSIS_DUPLICATE_COUNT_HEADER_LABEL}","{ANALYSIS_DUPLICATE_ATTACHMENTS_HEADER_LABEL}'
+        '"},'
+        "HSTACK(INDEX(grouped,,1), INDEX(grouped,,2), INDEX(grouped,,3), INDEX(grouped,,4), INDEX(grouped,,5), attachmentLists))"
+        "), "
+        f'{{"{ANALYSIS_DATE_HEADER_LABEL}","{ANALYSIS_MERCHANT_HEADER_LABEL}","{ANALYSIS_TOTAL_AMOUNT_HEADER_LABEL}","{ANALYSIS_AUTHOR_HEADER_LABEL}","{ANALYSIS_DUPLICATE_COUNT_HEADER_LABEL}","{ANALYSIS_DUPLICATE_ATTACHMENTS_HEADER_LABEL}";'
+        f'"{ANALYSIS_NO_DUPLICATE_DATA_LABEL}","","","",0,""}})'
     )
 
 
